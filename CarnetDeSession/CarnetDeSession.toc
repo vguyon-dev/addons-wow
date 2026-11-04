@@ -1,0 +1,10 @@
+## Interface: 120105, 16001
+## Title: Carnet de session
+## Notes: Temps de jeu, or, expérience et monstres tués depuis la connexion, avec l'historique des sessions.
+## Author: Valentin
+## Version: 0.2.0
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+## SavedVariables: CarnetDeSessionDB
+## SavedVariablesPerCharacter: CarnetDeSessionPerso
+
+CarnetDeSession.lua

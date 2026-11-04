@@ -1,0 +1,9 @@
+# Archives de partage (refaites à la demande, jamais versionnées)
+*.zip
+
+# Système et éditeurs
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
