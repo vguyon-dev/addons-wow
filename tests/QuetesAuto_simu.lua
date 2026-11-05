@@ -1,11 +1,14 @@
 -- Simulation hors jeu de Quêtes auto : priorités chez le PNJ et choix de la récompense.
 -- Lancer depuis Windows :
 --   wsl lua5.1 tests/QuetesAuto_simu.lua QuetesAuto/QuetesAuto.lua
-local function bidon()
-  return setmetatable({}, { __index = function() return function() return bidon() end end })
+-- Un objet « bidon » accepte tout : n'importe quel champ, n'importe quel appel.
+local bidon
+bidon = function()
+  return setmetatable({}, { __index = function() return bidon() end, __call = function() return bidon() end })
 end
 function CreateFrame() return bidon() end
-UIParent, SlashCmdList = {}, {}
+UIParent, SlashCmdList, UISpecialFrames, Minimap = {}, {}, {}, bidon()
+tinsert = table.insert
 
 local ns = {}
 assert(loadfile(arg[1]))("QuetesAuto", ns)
@@ -44,4 +47,14 @@ verifie("plus grosse amélioration",
   2, (ns.choisirRecompense({ { gain = 3 }, { gain = 8 }, { gain = 1 } })))
 verifie("aucune amélioration : la plus chère",
   3, (ns.choisirRecompense({ { vente = 10 }, { vente = 50 }, { vente = 120 } })))
+-- Interrupteurs « rendre » et « accepter ».
+reglages.journalieres = false
+reglages.rendre = false
+verifie("rendre coupé : on accepte quand même la nouvelle",
+  "accepter:1", action({ { isComplete = true } }, { { questID = 10 } }))
+reglages.rendre, reglages.accepter = true, false
+verifie("accepter coupé : on rend quand même",
+  "rendre:1", action({ { isComplete = true } }, { { questID = 10 } }))
+verifie("accepter coupé, rien à rendre : rien",
+  "nil:nil", action({ { isComplete = false } }, { { questID = 10 } }))
 os.exit(ok and 0 or 1)

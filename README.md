@@ -8,7 +8,7 @@ Les deux versions partagent la même API : un seul addon sert aux deux.
 | Addon | Rôle | Commande |
 |---|---|---|
 | [CarnetDeSession](CarnetDeSession/) | Temps de jeu, or, niveaux, expérience (« niveau max » au plafond) et monstres tués depuis la connexion, dans une fenêtre déplaçable ; historique des 20 dernières sessions par personnage | `/carnet` (`raz`, `historique`, `centre`, `debug`, `aide`) |
-| [QuetesAuto](QuetesAuto/) | Accepte et rend les quêtes : rend d'abord les quêtes finies, puis accepte les autres (une quête en cours non finie ne bloque plus rien). Choisit la récompense (amélioration, sinon la plus chère), filtre les quêtes grises, journalières, payantes, et les PNJ ou quêtes ignorés, passe les cinématiques déjà vues. Bouton à l'écran et raccourci clavier ; Maj, Ctrl ou Alt met en pause | `/qa` (`recompense`, `grises`, `journalieres`, `payantes`, `cinematiques`, `bouton`, `ignorer`, `liste`) |
+| [QuetesAuto](QuetesAuto/) | Accepte et rend les quêtes : rend d'abord les quêtes finies, puis accepte les autres (une quête en cours non finie ne bloque plus rien). Choisit la récompense (amélioration, sinon la plus chère), filtre les quêtes grises, journalières, payantes, et les PNJ ou quêtes ignorés, passe les cinématiques déjà vues. Tout se règle dans une fenêtre à cases à cocher, sans `/reload` (acceptation et rendu se coupent séparément). Icône autour de la minimap, bouton à l'écran, raccourci clavier ; Maj, Ctrl ou Alt met en pause | `/qa` (ouvre les réglages), `on`, `off`, `ignorer` |
 
 ## Arborescence
 
