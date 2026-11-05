@@ -8,7 +8,8 @@ Les deux versions partagent la même API : un seul addon sert aux deux.
 | Addon | Rôle | Commande |
 |---|---|---|
 | [CarnetDeSession](CarnetDeSession/) | Temps de jeu, or, niveaux, expérience (« niveau max » au plafond) et monstres tués depuis la connexion, dans une fenêtre déplaçable ; historique des 20 dernières sessions par personnage | `/carnet` (`raz`, `historique`, `centre`, `debug`, `aide`) |
-| [QuetesAuto](QuetesAuto/) | Accepte et rend les quêtes : rend d'abord les quêtes finies, puis accepte les autres (une quête en cours non finie ne bloque plus rien). Choisit la récompense (amélioration, sinon la plus chère), filtre les quêtes grises, journalières, payantes, et les PNJ ou quêtes ignorés, passe les cinématiques déjà vues. Tout se règle dans une fenêtre à cases à cocher, sans `/reload` (acceptation et rendu se coupent séparément). Icône autour de la minimap, bouton à l'écran, raccourci clavier ; Maj, Ctrl ou Alt met en pause | `/qa` (ouvre les réglages), `on`, `off`, `ignorer` |
+| [QuetesAuto](QuetesAuto/) | Accepte et rend les quêtes : rend d'abord les quêtes finies, puis accepte les autres (une quête en cours non finie ne bloque plus rien). En groupe, partage tes quêtes et accepte celles du groupe. Choisit la récompense (amélioration, sinon la plus chère), filtre les quêtes grises, journalières, payantes, et les PNJ ou quêtes ignorés, passe les cinématiques déjà vues. Tout se règle dans une fenêtre à cases à cocher, sans `/reload` (acceptation et rendu se coupent séparément). Icône autour de la minimap, bouton à l'écran, raccourci clavier ; Maj, Ctrl ou Alt met en pause | `/qa` (ouvre les réglages), `on`, `off`, `ignorer` |
+| [MarchandAuto](MarchandAuto/) | Chez un marchand : vend les objets gris (sauf ceux à garder) et répare l'équipement, avec la banque de guilde si elle le permet ; bilan dans le chat. Fenêtre de réglages, icône de minimap ; Maj, Ctrl ou Alt met en pause | `/ma` (ouvre les réglages), `on`, `off`, `garder <objet>` |
 
 ## Arborescence
 
@@ -27,7 +28,9 @@ addons-wow/
     └── <ProchainAddon>.lua
 ```
 
-Chaque dossier d'addon se copie tel quel dans `Interface\AddOns\`. Un addon qui grossit peut
+Chaque dossier d'addon se copie tel quel dans `Interface\AddOns\`. `Reglages.lua` (fenêtre de réglages
+à cases à cocher et icône de minimap) est une copie identique dans chaque addon : le modifier dans
+l'un, puis le recopier dans les autres (la simulation de MarchandAuto vérifie qu'ils sont égaux). Un addon qui grossit peut
 avoir plusieurs `.lua`, listés dans son `.toc`, et son propre `README.md`.
 
 ## Développer
@@ -51,7 +54,8 @@ foreach ($v in "_retail_", "_forever_") {
 - Vérifier la syntaxe avant de lancer le jeu : `wsl luac5.1 -p <fichier>.lua` (WoW utilise Lua 5.1).
 - Simuler un addon hors du jeu, avec une fausse API WoW : `tests/` (exemple :
   `wsl lua5.1 tests/CarnetDeSession_simu.lua CarnetDeSession/CarnetDeSession.lua`, ou
-  `wsl lua5.1 tests/QuetesAuto_simu.lua QuetesAuto/QuetesAuto.lua`).
+  `wsl lua5.1 tests/QuetesAuto_simu.lua QuetesAuto/QuetesAuto.lua`,
+  `wsl lua5.1 tests/MarchandAuto_simu.lua MarchandAuto/MarchandAuto.lua`).
 - Le nom du dossier doit être identique au nom du `.toc`.
 
 ## Partager

@@ -11,6 +11,8 @@ UIParent, SlashCmdList, UISpecialFrames, Minimap = {}, {}, {}, bidon()
 tinsert = table.insert
 
 local ns = {}
+-- Le .toc charge Reglages.lua (rangé à côté) avant le fichier principal.
+assert(loadfile((arg[1]:gsub("[^/]+$", "Reglages.lua"))))("QuetesAuto", ns)
 assert(loadfile(arg[1]))("QuetesAuto", ns)
 
 local ok = true

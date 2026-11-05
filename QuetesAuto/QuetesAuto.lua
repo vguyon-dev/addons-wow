@@ -8,8 +8,10 @@
 --  2. Il choisit la récompense : une amélioration pour toi, sinon l'objet qui se
 --     revend le plus cher.
 --  3. Des filtres : quêtes grises, journalières, payantes, PNJ et quêtes ignorés.
---  4. Un bouton à l'écran et un raccourci clavier pour le couper.
+--  4. En groupe, il partage tes quêtes et accepte celles de tes frères.
 --  5. Il passe les cinématiques déjà vues une fois.
+--  6. Tout se règle dans une fenêtre (Reglages.lua) : icône de minimap, /qa,
+--     ou Échap > Options > AddOns. Bouton à l'écran et raccourci clavier.
 --
 -- Maintenir Maj, Ctrl ou Alt en parlant au PNJ met l'addon en pause.
 -- ============================================================================
@@ -31,6 +33,8 @@ local DEFAUTS = {
   payantes = true,         -- ne pas rendre une quête qui coûte de l'or
   cinematiques = true,     -- passer les cinématiques déjà vues
   bouton = true,           -- afficher le bouton
+  partager = true,         -- partager ses quêtes avec le groupe
+  accepterPartagees = true, -- accepter les quêtes partagées par le groupe
   pnjIgnores = {},         -- [idPNJ] = nom
   quetesIgnorees = {},     -- [idQuête] = titre
   vues = {},               -- cinématiques déjà vues
@@ -240,8 +244,31 @@ local function surAccueil()
   end
 end
 
+-- Quêtes reçues du groupe : on ne les repartage pas (sinon ping-pong entre frères).
+local recuesDuGroupe = {}
+
+-- La quête affichée vient-elle d'un joueur de ton groupe (quête partagée) ?
+-- Le jeu désigne celui qui te parle par « npc » ou « questnpc » : on regarde les deux.
+local function partageeParLeGroupe()
+  for _, unite in ipairs({ "questnpc", "npc" }) do
+    local joueur = UnitIsPlayer(unite)
+    if not estSecret(joueur) and joueur and (UnitInParty(unite) or UnitInRaid(unite)) then
+      return true
+    end
+  end
+  return false
+end
+
 -- Détail d'une quête proposée : on l'accepte si elle passe les filtres.
 local function surDetail()
+  if partageeParLeGroupe() then
+    -- Partagée par ton frère : il l'a choisie, donc pas de filtre.
+    if db.accepterPartagees then
+      recuesDuGroupe[GetQuestID() or 0] = true
+      AcceptQuest()
+    end
+    return
+  end
   if not db.accepter then return end
   if QuestGetAutoAccept and QuestGetAutoAccept() then
     -- Quête déjà acceptée d'office par le jeu : on referme simplement.
@@ -300,274 +327,103 @@ local function surFilm(idFilm)
 end
 
 -- ---------------------------------------------------------------------------
--- La liste des options. Elle sert à la fois à la fenêtre de réglages et à la
--- commande /qa : ajouter une option ici l'ajoute partout.
--- Tout s'applique tout de suite, sans /reload.
+-- En groupe : partager ses quêtes, accepter les escortes lancées par le groupe.
 -- ---------------------------------------------------------------------------
 
-local OPTIONS = {
-  { titre = "Automatisme" },
-  { cle = "actif", libelle = "Activer Quêtes auto",
-    aide = "Interrupteur général. L'icône, le bouton et le raccourci font la même chose." },
-  { cle = "accepter", libelle = "Accepter les quêtes tout seul",
-    aide = "Prend les nouvelles quêtes que les PNJ te proposent." },
-  { cle = "rendre", libelle = "Rendre les quêtes finies tout seul",
-    aide = "Toujours avant d'accepter les nouvelles. Une quête pas finie ne bloque rien." },
-  { cle = "recompenseAuto", libelle = "Choisir la récompense tout seul",
-    aide = "Une amélioration pour toi, sinon l'objet le plus cher à la revente." },
-  { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
-    aide = "Garde une de ces touches enfoncée en parlant au PNJ pour tout faire à la main." },
-  { titre = "Filtres" },
-  { cle = "grises", libelle = "Ignorer les quêtes grises",
-    aide = "Les quêtes trop faciles pour ton niveau." },
-  { cle = "journalieres", libelle = "Ignorer les journalières et hebdomadaires",
-    aide = "Elles restent proposées, tu les prends toi-même si tu veux." },
-  { cle = "payantes", libelle = "Ne pas rendre les quêtes qui coûtent de l'or",
-    aide = "L'addon te prévient et te laisse payer toi-même." },
-  { titre = "Confort" },
-  { cle = "cinematiques", libelle = "Passer les cinématiques déjà vues",
-    aide = "La première fois tu la regardes, les fois suivantes elle est passée." },
-  { cle = "minimap", libelle = "Icône autour de la minimap",
-    aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
-  { cle = "bouton", libelle = "Bouton à l'écran",
-    aide = "Un « ! » jaune à poser où tu veux. Clic : activer ou couper." },
-}
-
-local appliquer -- défini plus bas, appelé après chaque changement
-
-local function changer(cle, valeur)
-  db[cle] = valeur
-  appliquer()
+-- Une quête vient d'être acceptée : on la partage avec le groupe.
+local function surQueteAcceptee(a, b)
+  local id = b or a -- selon la version du jeu : (id) ou (index, id)
+  if not db.partager or not IsInGroup() or not id or recuesDuGroupe[id] then return end
+  C_Timer.After(0.5, function()
+    if C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id) then
+      C_QuestLog.SetSelectedQuest(id)
+      QuestLogPushQuest()
+      dire("quête partagée avec le groupe : " .. (C_QuestLog.GetTitleForQuestID(id) or id))
+    end
+  end)
 end
 
-function QuetesAuto_Basculer()
-  changer("actif", not db.actif)
-  dire(db.actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
+-- Un membre du groupe lance une escorte : on la rejoint.
+local function surConfirmation()
+  if not db.accepterPartagees then return end
+  ConfirmAcceptQuest()
+  StaticPopup_Hide("QUEST_ACCEPT")
 end
-BINDING_HEADER_QUETESAUTO = "Quêtes auto"
-BINDING_NAME_QUETESAUTO_BASCULER = "Activer ou couper Quêtes auto"
 
 -- ---------------------------------------------------------------------------
--- Fenêtre de réglages
+-- Les réglages (fenêtre, icône de minimap, page des options) : Reglages.lua.
+-- La liste ci-dessous sert à la fois à la fenêtre et à la commande /qa.
 -- ---------------------------------------------------------------------------
 
-local fenetre = CreateFrame("Frame", "QuetesAutoReglages", UIParent, "BasicFrameTemplateWithInset")
-fenetre:SetSize(430, 680)
-fenetre:SetPoint("CENTER")
-fenetre:SetFrameStrata("DIALOG")
-fenetre:SetMovable(true)
-fenetre:EnableMouse(true)
-fenetre:RegisterForDrag("LeftButton")
-fenetre:SetScript("OnDragStart", fenetre.StartMoving)
-fenetre:SetScript("OnDragStop", fenetre.StopMovingOrSizing)
-fenetre:Hide()
-tinsert(UISpecialFrames, "QuetesAutoReglages") -- Échap la ferme
--- Titre : celui du modèle de fenêtre s'il existe, sinon le nôtre.
-local titre = fenetre.TitleText or fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-if not fenetre.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Quêtes auto : réglages")
-
-local cases = {}
-local y = -34
-for _, opt in ipairs(OPTIONS) do
-  if opt.titre then
-    local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    t:SetPoint("TOPLEFT", 16, y - 6)
-    t:SetText(opt.titre)
-    y = y - 30
-  else
-    local c = CreateFrame("CheckButton", nil, fenetre, "UICheckButtonTemplate")
-    c:SetSize(26, 26)
-    c:SetPoint("TOPLEFT", 16, y)
-    local libelle = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    libelle:SetPoint("TOPLEFT", c, "TOPRIGHT", 4, -2)
-    libelle:SetText(opt.libelle)
-    local aide = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    aide:SetPoint("TOPLEFT", libelle, "BOTTOMLEFT", 0, -2)
-    aide:SetWidth(360)
-    aide:SetJustifyH("LEFT")
-    aide:SetText(opt.aide)
-    c:SetScript("OnClick", function(self) changer(opt.cle, self:GetChecked() and true or false) end)
-    cases[opt.cle] = c
-    y = y - 38
-  end
-end
-
--- Listes d'ignorés et cinématiques vues : un compteur et un bouton pour vider.
-local titreListes = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-titreListes:SetPoint("TOPLEFT", 16, y - 6)
-titreListes:SetText("Listes")
-y = y - 32
-local compteurs = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-compteurs:SetPoint("TOPLEFT", 20, y)
-compteurs:SetJustifyH("LEFT")
-y = y - 22
+local bouton, icone -- bouton à l'écran, créé plus bas
 
 local function compter(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 
-local function boutonVider(texte, x, cle, message)
-  local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-  b:SetSize(126, 24)
-  b:SetPoint("TOPLEFT", x, y)
-  b:SetText(texte)
-  b:SetScript("OnClick", function() db[cle] = {}; appliquer(); dire(message) end)
-end
-boutonVider("Vider les PNJ", 16, "pnjIgnores", "plus aucun PNJ ignoré.")
-boutonVider("Vider les quêtes", 148, "quetesIgnorees", "plus aucune quête ignorée.")
-boutonVider("Revoir les cinés", 280, "vues", "les cinématiques seront de nouveau montrées une fois.")
-
-local astuce = fenetre:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-astuce:SetPoint("BOTTOMLEFT", 16, 14)
-astuce:SetWidth(400)
-astuce:SetJustifyH("LEFT")
-astuce:SetText("Ignorer un PNJ : parle-lui puis tape /qa ignorer. Tout s'applique tout de suite, sans /reload.")
-
-local function majFenetre()
-  for cle, c in pairs(cases) do c:SetChecked(db[cle] and true or false) end
-  compteurs:SetText(string.format("PNJ ignorés : %d     Quêtes ignorées : %d     Cinématiques vues : %d",
-    compter(db.pnjIgnores), compter(db.quetesIgnorees), compter(db.vues)))
-end
-fenetre:SetScript("OnShow", majFenetre)
-
-function QuetesAuto_OuvrirReglages()
-  if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
-  fenetre:SetShown(not fenetre:IsShown())
-end
-
--- Une page dans Échap > Options > AddOns, avec un bouton qui ouvre la fenêtre.
-local page = CreateFrame("Frame")
-page.name = "Quêtes auto"
-local pageTexte = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-pageTexte:SetPoint("TOPLEFT", 16, -16)
-pageTexte:SetText("Tous les réglages de Quêtes auto sont dans sa fenêtre :")
-local pageBouton = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-pageBouton:SetSize(200, 26)
-pageBouton:SetPoint("TOPLEFT", pageTexte, "BOTTOMLEFT", 0, -12)
-pageBouton:SetText("Ouvrir les réglages")
-pageBouton:SetScript("OnClick", QuetesAuto_OuvrirReglages)
-if Settings and Settings.RegisterCanvasLayoutCategory then
-  Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(page, page.name))
-elseif InterfaceOptions_AddCategory then
-  InterfaceOptions_AddCategory(page)
-end
-
--- ---------------------------------------------------------------------------
--- Icône autour de la minimap (faite main, sans bibliothèque)
--- ---------------------------------------------------------------------------
-
-local mini = CreateFrame("Button", "QuetesAutoMinimap", Minimap)
-mini:SetSize(31, 31)
-mini:SetFrameStrata("MEDIUM")
-mini:SetFrameLevel(8)
-mini:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-mini:RegisterForDrag("LeftButton")
-mini:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-local fond = mini:CreateTexture(nil, "BACKGROUND")
-fond:SetSize(20, 20)
-fond:SetPoint("TOPLEFT", 7, -5)
-fond:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-local iconeMini = mini:CreateTexture(nil, "ARTWORK")
-iconeMini:SetSize(17, 17)
-iconeMini:SetPoint("TOPLEFT", 7, -6)
-iconeMini:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
-local cadre = mini:CreateTexture(nil, "OVERLAY")
-cadre:SetSize(53, 53)
-cadre:SetPoint("TOPLEFT")
-cadre:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-
--- Place l'icône sur le bord de la minimap, à l'angle donné (0° = à droite).
-local function placerMini()
-  local rayon = Minimap:GetWidth() / 2 + 5
-  local a = math.rad(db.angleMinimap)
-  mini:ClearAllPoints()
-  mini:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * rayon, math.sin(a) * rayon)
-end
-
--- Pendant qu'on la fait glisser, l'icône suit la souris autour de la minimap.
-local function suivreSouris()
-  local cx, cy = Minimap:GetCenter()
-  local sx, sy = GetCursorPosition()
-  local echelle = Minimap:GetEffectiveScale()
-  db.angleMinimap = math.deg(math.atan2(sy / echelle - cy, sx / echelle - cx))
-  placerMini()
-end
-mini:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", suivreSouris) end)
-mini:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-mini:SetScript("OnClick", function(_, souris)
-  if souris == "RightButton" then QuetesAuto_Basculer() else QuetesAuto_OuvrirReglages() end
-end)
-
--- ---------------------------------------------------------------------------
--- Bouton à l'écran
--- ---------------------------------------------------------------------------
-
-local bouton = CreateFrame("Button", "QuetesAutoBouton", UIParent)
-bouton:SetSize(30, 30)
-bouton:SetMovable(true)
-bouton:SetClampedToScreen(true)
-bouton:RegisterForDrag("LeftButton")
-bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-local icone = bouton:CreateTexture(nil, "ARTWORK")
-icone:SetAllPoints()
-icone:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
-bouton:SetScript("OnClick", function(_, souris)
-  if souris == "RightButton" then QuetesAuto_OuvrirReglages() else QuetesAuto_Basculer() end
-end)
-bouton:SetScript("OnDragStart", bouton.StartMoving)
-bouton:SetScript("OnDragStop", function(self)
-  self:StopMovingOrSizing()
-  local point, _, pointRelatif, x, y2 = self:GetPoint()
-  db.position = { point, pointRelatif, x, y2 }
-end)
-
--- Infobulle commune à l'icône et au bouton.
-local function infobulle(self, clics)
-  GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-  GameTooltip:AddLine("Quêtes auto")
-  GameTooltip:AddLine(db.actif and "|cff00ff00Activé|r" or "|cffff4040Coupé|r")
-  GameTooltip:AddLine(clics, 1, 1, 1)
-  GameTooltip:Show()
-end
-mini:SetScript("OnEnter", function(self)
-  infobulle(self, "Clic gauche : réglages\nClic droit : activer ou couper\nGlisser : déplacer")
-end)
-bouton:SetScript("OnEnter", function(self)
-  infobulle(self, "Clic gauche : activer ou couper\nClic droit : réglages\nGlisser : déplacer")
-end)
-mini:SetScript("OnLeave", function() GameTooltip:Hide() end)
-bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
--- Remet l'icône, le bouton et la fenêtre d'accord avec les réglages.
-function appliquer()
-  for _, t in ipairs({ icone, iconeMini }) do
-    t:SetDesaturated(not db.actif)
-  end
-  icone:SetAlpha(db.actif and 1 or 0.5)
-  bouton:SetShown(db.bouton)
-  mini:SetShown(db.minimap)
-  if fenetre:IsShown() then majFenetre() end
-end
-
--- ---------------------------------------------------------------------------
--- Événements
--- ---------------------------------------------------------------------------
-
-local ecouteur = CreateFrame("Frame")
-for _, e in ipairs({ "ADDON_LOADED", "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL",
-                     "QUEST_PROGRESS", "QUEST_COMPLETE", "CINEMATIC_START", "PLAY_MOVIE" }) do
-  ecouteur:RegisterEvent(e)
-end
-
-ecouteur:SetScript("OnEvent", function(_, evenement, ...)
-  if evenement == "ADDON_LOADED" then
-    if ... ~= NOM_ADDON then return end
-    QuetesAutoDB = QuetesAutoDB or {}
-    for cle, valeur in pairs(DEFAUTS) do
-      if QuetesAutoDB[cle] == nil then
-        QuetesAutoDB[cle] = type(valeur) == "table" and {} or valeur
-      end
+local reglages = ns.creerReglages({
+  titre = "Quêtes auto",
+  icone = "Interface\\GossipFrame\\AvailableQuestIcon",
+  nomDB = "QuetesAutoDB",
+  defauts = DEFAUTS,
+  options = {
+    { titre = "Automatisme" },
+    { cle = "actif", libelle = "Activer Quêtes auto",
+      aide = "Interrupteur général. L'icône, le bouton et le raccourci font la même chose." },
+    { cle = "accepter", libelle = "Accepter les quêtes tout seul",
+      aide = "Prend les nouvelles quêtes que les PNJ te proposent." },
+    { cle = "rendre", libelle = "Rendre les quêtes finies tout seul",
+      aide = "Toujours avant d'accepter les nouvelles. Une quête pas finie ne bloque rien." },
+    { cle = "recompenseAuto", libelle = "Choisir la récompense tout seul",
+      aide = "Une amélioration pour toi, sinon l'objet le plus cher à la revente." },
+    { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
+      aide = "Garde une de ces touches enfoncée en parlant au PNJ pour tout faire à la main." },
+    { titre = "En groupe" },
+    { cle = "partager", libelle = "Partager mes quêtes avec le groupe",
+      aide = "Chaque quête que tu acceptes est proposée aux autres membres du groupe." },
+    { cle = "accepterPartagees", libelle = "Accepter les quêtes partagées par le groupe",
+      aide = "Sans filtre : si ton frère la partage, tu la prends. Escortes comprises." },
+    { titre = "Filtres" },
+    { cle = "grises", libelle = "Ignorer les quêtes grises",
+      aide = "Les quêtes trop faciles pour ton niveau." },
+    { cle = "journalieres", libelle = "Ignorer les journalières et hebdomadaires",
+      aide = "Elles restent proposées, tu les prends toi-même si tu veux." },
+    { cle = "payantes", libelle = "Ne pas rendre les quêtes qui coûtent de l'or",
+      aide = "L'addon te prévient et te laisse payer toi-même." },
+    { titre = "Confort" },
+    { cle = "cinematiques", libelle = "Passer les cinématiques déjà vues",
+      aide = "La première fois tu la regardes, les fois suivantes elle est passée." },
+    { cle = "minimap", libelle = "Icône autour de la minimap",
+      aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
+    { cle = "bouton", libelle = "Bouton à l'écran",
+      aide = "Un « ! » jaune à poser où tu veux. Clic : activer ou couper." },
+  },
+  -- Zone « Listes » : compteurs et boutons pour vider.
+  contenu = function(fenetre, y, r)
+    local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("TOPLEFT", 16, y - 6)
+    t:SetText("Listes")
+    y = y - 32
+    local compteurs = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    compteurs:SetPoint("TOPLEFT", 20, y)
+    y = y - 22
+    local function vider(texte, x, cle, message)
+      local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
+      b:SetSize(130, 24)
+      b:SetPoint("TOPLEFT", x, y)
+      b:SetText(texte)
+      b:SetScript("OnClick", function() r.changer(cle, {}); dire(message) end)
     end
-    db = QuetesAutoDB
+    vider("Vider les PNJ", 16, "pnjIgnores", "plus aucun PNJ ignoré.")
+    vider("Vider les quêtes", 152, "quetesIgnorees", "plus aucune quête ignorée.")
+    vider("Revoir les cinés", 288, "vues", "les cinématiques seront de nouveau montrées une fois.")
+    y = y - 28
+    return y, function(d)
+      compteurs:SetText(string.format("PNJ ignorés : %d     Quêtes ignorées : %d     Cinématiques vues : %d",
+        compter(d.pnjIgnores), compter(d.quetesIgnorees), compter(d.vues)))
+    end
+  end,
+  astuce = "Ignorer un PNJ : parle-lui puis tape /qa ignorer. Tout s'applique tout de suite, sans /reload.",
+  auChargement = function(d)
+    db = d
     bouton:ClearAllPoints()
     if db.position then
       local p = db.position
@@ -575,19 +431,74 @@ ecouteur:SetScript("OnEvent", function(_, evenement, ...)
     else
       bouton:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -200, -200)
     end
-    placerMini()
-    appliquer()
-    return
-  end
+  end,
+  surChangement = function(d)
+    icone:SetDesaturated(not d.actif)
+    icone:SetAlpha(d.actif and 1 or 0.5)
+    bouton:SetShown(d.bouton)
+  end,
+})
+
+function QuetesAuto_Basculer() reglages.basculer() end
+BINDING_HEADER_QUETESAUTO = "Quêtes auto"
+BINDING_NAME_QUETESAUTO_BASCULER = "Activer ou couper Quêtes auto"
+BINDING_NAME_QUETESAUTO_REGLAGES = "Ouvrir les réglages de Quêtes auto"
+
+-- ---------------------------------------------------------------------------
+-- Bouton à l'écran
+-- ---------------------------------------------------------------------------
+
+bouton = CreateFrame("Button", "QuetesAutoBouton", UIParent)
+bouton:SetSize(30, 30)
+bouton:SetMovable(true)
+bouton:SetClampedToScreen(true)
+bouton:RegisterForDrag("LeftButton")
+bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+icone = bouton:CreateTexture(nil, "ARTWORK")
+icone:SetAllPoints()
+icone:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+bouton:SetScript("OnClick", function(_, souris)
+  if souris == "RightButton" then reglages.ouvrir() else reglages.basculer() end
+end)
+bouton:SetScript("OnDragStart", bouton.StartMoving)
+bouton:SetScript("OnDragStop", function(self)
+  self:StopMovingOrSizing()
+  local point, _, pointRelatif, x, y = self:GetPoint()
+  db.position = { point, pointRelatif, x, y }
+end)
+bouton:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+  GameTooltip:AddLine("Quêtes auto")
+  GameTooltip:AddLine(db.actif and "|cff00ff00Activé|r" or "|cffff4040Coupé|r")
+  GameTooltip:AddLine("Clic gauche : activer ou couper\nClic droit : réglages\nGlisser : déplacer", 1, 1, 1)
+  GameTooltip:Show()
+end)
+bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- ---------------------------------------------------------------------------
+-- Événements
+-- ---------------------------------------------------------------------------
+
+local ecouteur = CreateFrame("Frame")
+for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS",
+                     "QUEST_COMPLETE", "QUEST_ACCEPTED", "QUEST_ACCEPT_CONFIRM",
+                     "CINEMATIC_START", "PLAY_MOVIE" }) do
+  ecouteur:RegisterEvent(e)
+end
+
+ecouteur:SetScript("OnEvent", function(_, evenement, ...)
   if not db then return end
   if evenement == "CINEMATIC_START" then return surCinematique(...) end
   if evenement == "PLAY_MOVIE" then return surFilm(...) end
+  if not db.actif then return end
+  if evenement == "QUEST_ACCEPTED" then return surQueteAcceptee(...) end
   if enPause() then return end
   if evenement == "GOSSIP_SHOW" then surDialogue()
   elseif evenement == "QUEST_GREETING" then surAccueil()
   elseif evenement == "QUEST_DETAIL" then surDetail()
   elseif evenement == "QUEST_PROGRESS" then surProgression()
   elseif evenement == "QUEST_COMPLETE" and db.rendre then essais = 0; prendreRecompense()
+  elseif evenement == "QUEST_ACCEPT_CONFIRM" then surConfirmation()
   end
 end)
 
@@ -595,17 +506,15 @@ end)
 -- Commande /qa (la fenêtre fait la même chose, en plus simple)
 -- ---------------------------------------------------------------------------
 
-local function etat(v) return v and "|cff00ff00oui|r" or "|cffff4040non|r" end
-
 SLASH_QUETESAUTO1 = "/qa"
 SLASH_QUETESAUTO2 = "/quetesauto"
 SlashCmdList.QUETESAUTO = function(texte)
   local cmd, reste = strtrim(texte or ""):match("^(%S*)%s*(.-)$")
   cmd = cmd:lower()
   if cmd == "" or cmd == "options" or cmd == "reglages" then
-    QuetesAuto_OuvrirReglages()
+    reglages.ouvrir()
   elseif cmd == "on" or cmd == "off" then
-    if (cmd == "on") ~= (db.actif and true or false) then QuetesAuto_Basculer() end
+    if (cmd == "on") ~= (db.actif and true or false) then reglages.basculer() end
   elseif cmd == "ignorer" then
     local id = tonumber(reste)
     if id then
@@ -618,14 +527,8 @@ SlashCmdList.QUETESAUTO = function(texte)
     else
       dire("parle à un PNJ puis tape /qa ignorer, ou /qa ignorer <numéro de quête>.")
     end
-    appliquer()
-  else
-    for _, opt in ipairs(OPTIONS) do
-      if opt.cle and opt.cle:lower() == cmd then
-        changer(opt.cle, not db[opt.cle])
-        return dire(opt.libelle .. " : " .. etat(db[opt.cle]))
-      end
-    end
+    reglages.appliquer()
+  elseif not reglages.basculerOption(cmd) then
     dire("/qa : ouvrir les réglages     /qa on, /qa off : activer ou couper")
     dire("/qa ignorer : ignorer le PNJ en face (ou /qa ignorer <numéro de quête>)")
   end

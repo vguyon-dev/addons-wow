@@ -4,4 +4,7 @@
   <Binding name="QUETESAUTO_BASCULER" header="QUETESAUTO" category="ADDONS">
     QuetesAuto_Basculer()
   </Binding>
+  <Binding name="QUETESAUTO_REGLAGES" header="QUETESAUTO" category="ADDONS">
+    QuetesAuto_OuvrirReglages()
+  </Binding>
 </Bindings>

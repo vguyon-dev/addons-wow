@@ -1,10 +1,11 @@
 ## Interface: 120105, 16001
 ## Title: Quêtes auto
-## Notes: Rend d'abord les quêtes finies, puis accepte les autres, choisit la récompense, filtre et passe les cinématiques déjà vues.
+## Notes: Rend d'abord les quêtes finies, puis accepte les autres, choisit la récompense, partage les quêtes en groupe, filtre et passe les cinématiques déjà vues.
 ## Author: Valentin
-## Version: 0.2.0
+## Version: 0.3.0
 ## IconTexture: Interface\GossipFrame\AvailableQuestIcon
 ## SavedVariables: QuetesAutoDB
 ## AddonCompartmentFunc: QuetesAuto_OuvrirReglages
 
+Reglages.lua
 QuetesAuto.lua

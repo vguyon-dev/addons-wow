@@ -1,0 +1,11 @@
+## Interface: 120105, 16001
+## Title: Marchand auto
+## Notes: Chez un marchand : vend les objets gris et répare l'équipement, avec la banque de guilde si tu veux.
+## Author: Valentin
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## SavedVariables: MarchandAutoDB
+## AddonCompartmentFunc: MarchandAuto_OuvrirReglages
+
+Reglages.lua
+MarchandAuto.lua
