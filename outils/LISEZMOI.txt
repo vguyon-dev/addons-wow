@@ -1,0 +1,37 @@
+ADDONS DE VALENTIN : INSTALLATION
+=================================
+
+1. Ferme World of Warcraft.
+
+2. Ouvre le dossier du jeu. Le plus simple : dans l'application Battle.net,
+   choisis le jeu (WoW Forever ou Retail), clique sur la roue dentée à côté
+   de « Jouer », puis « Afficher dans l'explorateur ».
+
+3. Va dans le bon dossier :
+     - WoW Forever : _forever_\Interface\AddOns
+     - Retail      : _retail_\Interface\AddOns
+   (si « Interface » ou « AddOns » n'existe pas, crée-le avec ce nom exact)
+
+4. Copie dedans les dossiers du zip : CarnetDeSession, QuetesAuto,
+   MarchandAuto, MetiersAuto, ButinRapide. Copie les DOSSIERS eux-mêmes,
+   pas seulement ce qu'il y a dedans.
+   Pour une mise à jour : remplace les anciens dossiers (tes réglages sont
+   gardés, ils sont ailleurs).
+
+5. Lance le jeu. Sur l'écran des personnages, bouton « AddOns » en bas à
+   gauche : vérifie qu'ils sont cochés. Pour éviter les doublons, décoche
+   AutoQuests et SpeedyAutoLoot si tu les as.
+
+DANS LE JEU
+-----------
+Chaque addon a son icône autour de la minimap :
+  clic gauche = réglages, clic droit = activer ou couper, glisser = déplacer.
+
+  /carnet  Carnet de session (temps, or, XP, monstres)
+  /qa      Quêtes auto (rend puis accepte, partage en groupe)
+  /ma      Marchand auto (vend les gris, répare)
+  /mt      Métiers auto (pêche au double clic droit, récolte, liste de courses)
+  /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
+
+En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie à
+Valentin le message d'erreur.

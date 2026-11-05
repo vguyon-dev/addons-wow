@@ -22,6 +22,7 @@ addons-wow/
 ├── README.md            ce fichier : liste des addons et méthode
 ├── .gitignore
 ├── tests/               simulations hors jeu (jamais copiées dans AddOns)
+├── outils/              paquet.ps1 (zip à partager) et sa notice LISEZMOI.txt
 ├── CarnetDeSession/     un addon = un dossier, au même nom que son .toc
 │   ├── CarnetDeSession.toc
 │   └── CarnetDeSession.lua
@@ -64,5 +65,7 @@ foreach ($v in "_retail_", "_forever_") {
 
 ## Partager
 
-Zipper le dossier de l'addon (le dossier lui-même, pas seulement son contenu). La personne le dézippe
-dans `World of Warcraft\_retail_\Interface\AddOns\` ou `_forever_\Interface\AddOns\`.
+`pwsh -File outils\paquet.ps1` fabrique un zip avec tous les addons et une notice (`outils/LISEZMOI.txt`)
+dans `Téléchargements\@Claude\Telechargements\AddonsWow\`. On l'envoie (WhatsApp, Discord) ; la personne
+copie les dossiers du zip dans `World of Warcraft\_forever_\Interface\AddOns\` (ou `_retail_`). Les
+réglages sont gardés à chaque mise à jour : ils vivent dans `WTF\`, pas dans les dossiers des addons.
