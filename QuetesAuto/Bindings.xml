@@ -1,0 +1,7 @@
+<!-- Raccourci clavier : Échap > Options > Raccourcis > Quêtes auto.
+     Le jeu charge ce fichier tout seul, sans le citer dans le .toc. -->
+<Bindings>
+  <Binding name="QUETESAUTO_BASCULER" header="QUETESAUTO" category="ADDONS">
+    QuetesAuto_Basculer()
+  </Binding>
+</Bindings>

@@ -8,6 +8,7 @@ Les deux versions partagent la même API : un seul addon sert aux deux.
 | Addon | Rôle | Commande |
 |---|---|---|
 | [CarnetDeSession](CarnetDeSession/) | Temps de jeu, or, niveaux, expérience (« niveau max » au plafond) et monstres tués depuis la connexion, dans une fenêtre déplaçable ; historique des 20 dernières sessions par personnage | `/carnet` (`raz`, `historique`, `centre`, `debug`, `aide`) |
+| [QuetesAuto](QuetesAuto/) | Accepte et rend les quêtes : rend d'abord les quêtes finies, puis accepte les autres (une quête en cours non finie ne bloque plus rien). Choisit la récompense (amélioration, sinon la plus chère), filtre les quêtes grises, journalières, payantes, et les PNJ ou quêtes ignorés, passe les cinématiques déjà vues. Bouton à l'écran et raccourci clavier ; Maj, Ctrl ou Alt met en pause | `/qa` (`recompense`, `grises`, `journalieres`, `payantes`, `cinematiques`, `bouton`, `ignorer`, `liste`) |
 
 ## Arborescence
 
@@ -49,7 +50,8 @@ foreach ($v in "_retail_", "_forever_") {
   `SavedVariablesPerCharacter` dans `WTF\Account\<compte>\<royaume>\<personnage>\SavedVariables\`.
 - Vérifier la syntaxe avant de lancer le jeu : `wsl luac5.1 -p <fichier>.lua` (WoW utilise Lua 5.1).
 - Simuler un addon hors du jeu, avec une fausse API WoW : `tests/` (exemple :
-  `wsl lua5.1 tests/CarnetDeSession_simu.lua CarnetDeSession/CarnetDeSession.lua`).
+  `wsl lua5.1 tests/CarnetDeSession_simu.lua CarnetDeSession/CarnetDeSession.lua`, ou
+  `wsl lua5.1 tests/QuetesAuto_simu.lua QuetesAuto/QuetesAuto.lua`).
 - Le nom du dossier doit être identique au nom du `.toc`.
 
 ## Partager
