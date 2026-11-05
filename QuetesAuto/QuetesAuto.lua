@@ -32,6 +32,7 @@ local DEFAUTS = {
   journalieres = false,    -- ignorer les journalières et hebdomadaires
   payantes = true,         -- ne pas rendre une quête qui coûte de l'or
   cinematiques = true,     -- passer les cinématiques déjà vues
+  dialogueUnique = false,  -- cliquer seul la phrase quand un PNJ n'en a qu'une (coupé au départ)
   bouton = true,           -- afficher le bouton
   partager = true,         -- partager ses quêtes avec le groupe
   accepterPartagees = true, -- accepter les quêtes partagées par le groupe
@@ -85,6 +86,16 @@ function ns.choisirAction(actives, disponibles, reglages, ignorees)
     end
   end
   return nil
+end
+
+-- Dialogue unique : quelle phrase cliquer ? Seulement s'il n'y en a qu'UNE,
+-- et pas deux fois de suite la même (sinon on tournerait en rond).
+-- Renvoie le numéro de l'option, ou nil.
+function ns.optionUnique(options, derniere)
+  if #options ~= 1 then return nil end
+  local id = options[1].gossipOptionID
+  if not id or id == derniere then return nil end
+  return id
 end
 
 -- Quelle récompense prendre ? candidats : { gain = niveaux gagnés (ou nil si
@@ -213,6 +224,9 @@ local function enPause()
   return id and db.pnjIgnores[id] ~= nil
 end
 
+-- Dernière phrase de dialogue cliquée, oubliée 3 secondes après.
+local derniereOption
+
 -- PNJ moderne (fenêtre de dialogue « gossip »).
 local function surDialogue()
   local actives = C_GossipInfo.GetActiveQuests() or {}
@@ -222,6 +236,14 @@ local function surDialogue()
     C_GossipInfo.SelectActiveQuest(actives[i].questID)
   elseif action == "accepter" then
     C_GossipInfo.SelectAvailableQuest(disponibles[i].questID)
+  elseif db.dialogueUnique then
+    -- Plus de quête à rendre ni à prendre : s'il ne reste qu'une phrase, on la clique.
+    local id = ns.optionUnique(C_GossipInfo.GetOptions() or {}, derniereOption)
+    if id then
+      derniereOption = id
+      C_Timer.After(3, function() if derniereOption == id then derniereOption = nil end end)
+      C_GossipInfo.SelectOption(id)
+    end
   end
 end
 
@@ -376,6 +398,8 @@ local reglages = ns.creerReglages({
       aide = "Une amélioration pour toi, sinon l'objet le plus cher à la revente." },
     { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
       aide = "Garde une de ces touches enfoncée en parlant au PNJ pour tout faire à la main." },
+    { cle = "dialogueUnique", libelle = "Cliquer la phrase quand le PNJ n'en a qu'une",
+      aide = "Coupé au départ : certains PNJ demandent un vrai choix. Plusieurs phrases = rien." },
     { titre = "En groupe" },
     { cle = "partager", libelle = "Partager mes quêtes avec le groupe",
       aide = "Chaque quête que tu acceptes est proposée aux autres membres du groupe." },

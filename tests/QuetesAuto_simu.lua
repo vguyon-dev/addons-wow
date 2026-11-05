@@ -59,4 +59,8 @@ verifie("accepter coupé : on rend quand même",
   "rendre:1", action({ { isComplete = true } }, { { questID = 10 } }))
 verifie("accepter coupé, rien à rendre : rien",
   "nil:nil", action({ { isComplete = false } }, { { questID = 10 } }))
+-- Dialogue unique.
+verifie("une seule phrase : on la clique", 5, ns.optionUnique({ { gossipOptionID = 5 } }))
+verifie("deux phrases : rien", nil, ns.optionUnique({ { gossipOptionID = 5 }, { gossipOptionID = 6 } }))
+verifie("même phrase juste après : rien (pas de boucle)", nil, ns.optionUnique({ { gossipOptionID = 5 } }, 5))
 os.exit(ok and 0 or 1)
