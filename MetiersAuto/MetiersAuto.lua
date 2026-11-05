@@ -28,6 +28,7 @@ local DEFAUTS = {
   interaction = true,      -- la touche d'interaction vise filons, herbes et bouchon
   ramassage = true,        -- ramassage automatique du butin
   reperage = true,         -- remettre le repérage des minerais et herbes
+  filonPasFini = true,     -- prévenir quand un filon ou une herbe n'est pas fini
   courses = {},            -- liste de courses : { { recette = id, nombre = n, nom = "…" } }
   afficherCourses = true,  -- afficher la fenêtre de la liste de courses
   sonAvant = nil,          -- réglages du son avant le mode pêche, pour les remettre
@@ -214,6 +215,43 @@ local function toucheInteraction()
   return GetBindingKey and GetBindingKey("INTERACTTARGET")
 end
 
+-- « Filon pas fini » : un addon n'a pas le droit de continuer la récolte à ta
+-- place (ce serait un bot). Il peut en revanche te PRÉVENIR : après le butin,
+-- si l'objet récolté est toujours devant toi, c'est qu'il reste des coups.
+local estSecret = issecretvalue or function() return false end
+local objetRecolte -- GUID du filon ou de l'herbe dont le butin est ouvert
+
+local function guidSur(unite)
+  local g = UnitGUID(unite)
+  if estSecret(g) then return nil end
+  return g
+end
+
+local function surButinOuvert()
+  objetRecolte = nil
+  if not db.actif or not db.filonPasFini or not GetLootSourceInfo then return end
+  local g = GetLootSourceInfo(1)
+  if not estSecret(g) and g and g:find("^GameObject") then objetRecolte = g end
+end
+
+local function verifierFilon(essai)
+  local g = objetRecolte
+  if not g or UnitCastingInfo("player") or UnitChannelInfo("player") then return end
+  if guidSur("softinteract") ~= g then return end -- l'objet a disparu : récolte finie
+  local k = toucheInteraction()
+  local texte = "Pas fini ! Appuie encore" .. (k and (" sur " .. k) or "") .. " pour finir la récolte."
+  if RaidNotice_AddMessage and RaidWarningFrame then
+    RaidNotice_AddMessage(RaidWarningFrame, texte, ChatTypeInfo and ChatTypeInfo.RAID_WARNING or { r = 1, g = 0.5, b = 0 })
+  end
+  PlaySound(SOUNDKIT and SOUNDKIT.RAID_WARNING or 8959, "master")
+  -- Un rappel 4 secondes plus tard si tu n'as toujours rien fait.
+  if essai == 1 then C_Timer.After(4, function() verifierFilon(2) end) end
+end
+
+local function surButinFerme()
+  if objetRecolte then C_Timer.After(0.6, function() verifierFilon(1) end) end
+end
+
 -- ---------------------------------------------------------------------------
 -- 3. Liste de courses
 -- ---------------------------------------------------------------------------
@@ -330,6 +368,8 @@ ns.reglages = ns.creerReglages({
       aide = "Le butin va directement dans tes sacs." },
     { cle = "reperage", libelle = "Remettre le repérage des minerais et herbes",
       aide = "Après une mort ou une reconnexion, sur la minimap." },
+    { cle = "filonPasFini", libelle = "Prévenir quand un filon n'est pas fini",
+      aide = "Message et son s'il reste des coups à donner, pour qu'un autre joueur ne le finisse pas." },
     { titre = "Artisanat" },
     { cle = "afficherCourses", libelle = "Afficher la liste de courses",
       aide = "Ajouter une recette : /mt courses 5 puis Maj+clic sur la recette." },
@@ -392,7 +432,8 @@ ns.reglages = ns.creerReglages({
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_UNGHOST", "PLAYER_ALIVE", "PLAYER_REGEN_DISABLED",
-                     "UNIT_SPELLCAST_CHANNEL_START", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
+                     "UNIT_SPELLCAST_CHANNEL_START", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED",
+                     "LOOT_OPENED", "LOOT_CLOSED" }) do
   ecouteur:RegisterEvent(e)
 end
 ecouteur:SetScript("OnEvent", function(_, evenement, unite, _, idSort)
@@ -404,6 +445,10 @@ ecouteur:SetScript("OnEvent", function(_, evenement, unite, _, idSort)
       derniereActivite = GetTime()
       if db.actif and db.pecheAuto and not modePeche then changerModePeche(true) end
     end
+  elseif evenement == "LOOT_OPENED" then
+    surButinOuvert()
+  elseif evenement == "LOOT_CLOSED" then
+    surButinFerme()
   elseif evenement == "BAG_UPDATE_DELAYED" or evenement == "GET_ITEM_INFO_RECEIVED" then
     if #db.courses > 0 then majCourses() end
   else
