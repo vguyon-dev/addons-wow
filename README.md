@@ -42,6 +42,10 @@ foreach ($v in "_retail_", "_forever_") {
 ```
 
 - Erreurs Lua : BugSack + BugGrabber (installés par CurseForge sur les deux versions).
+  BugGrabber les écrit sur le disque à chaque `/reload` ou déconnexion, avec la pile d'appels,
+  dans `<version>\WTF\Account\<compte>\SavedVariables\!BugGrabber.lua` : on peut les lire sans capture.
+- Données d'un addon : `SavedVariables` (compte) dans `WTF\Account\<compte>\SavedVariables\`,
+  `SavedVariablesPerCharacter` dans `WTF\Account\<compte>\<royaume>\<personnage>\SavedVariables\`.
 - Vérifier la syntaxe avant de lancer le jeu : `wsl luac5.1 -p <fichier>.lua` (WoW utilise Lua 5.1).
 - Le nom du dossier doit être identique au nom du `.toc`.
 
