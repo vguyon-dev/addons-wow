@@ -1,0 +1,9 @@
+<!-- Raccourcis : Échap > Options > Raccourcis > Métiers auto. Chargé tout seul par le jeu. -->
+<Bindings>
+  <Binding name="METIERSAUTO_PECHE" header="METIERSAUTO" category="ADDONS">
+    MetiersAuto_ModePeche()
+  </Binding>
+  <Binding name="METIERSAUTO_REGLAGES" header="METIERSAUTO" category="ADDONS">
+    MetiersAuto_OuvrirReglages()
+  </Binding>
+</Bindings>

@@ -1,0 +1,11 @@
+## Interface: 120105, 16001
+## Title: Métiers auto
+## Notes: Pêche au double clic droit avec le son réglé, récolte d'une touche, repérage remis tout seul, liste de courses pour l'artisanat.
+## Author: Valentin
+## Version: 0.1.0
+## IconTexture: Interface\Icons\Trade_Fishing
+## SavedVariables: MetiersAutoDB
+## AddonCompartmentFunc: MetiersAuto_OuvrirReglages
+
+Reglages.lua
+MetiersAuto.lua
