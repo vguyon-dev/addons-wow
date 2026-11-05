@@ -178,7 +178,9 @@ end)
 local function noterFin()
   session.fin = time()
   session.orFin = GetMoney()
-  session.niveauFin = UnitLevel("player")
+  -- À la déconnexion, UnitLevel a déjà rendu un niveau périmé (test Forever du 05/11) :
+  -- le niveau suivi par l'addon fait foi.
+  session.niveauFin = math.max(UnitLevel("player"), niveau or 0)
 end
 
 -- Range la session terminée en tête de l'historique. Les sessions de moins
@@ -277,20 +279,29 @@ function evenements.PLAYER_XP_UPDATE(unite)
   if unite ~= "player" or not pret then
     return
   end
-  local xp, xpMax, nv = UnitXP("player"), UnitXPMax("player"), UnitLevel("player")
-  if nv == niveauXP then
+  -- UnitLevel peut encore donner l'ancien niveau juste après un passage de niveau :
+  -- on prend aussi celui reçu par PLAYER_LEVEL_UP, et une barre qui redescend
+  -- veut dire, elle aussi, qu'un niveau a été pris.
+  local xp, xpMax = UnitXP("player"), UnitXPMax("player")
+  local nv = math.max(UnitLevel("player"), niveau)
+  if nv == niveauXP and xp >= xpPrecedente then
     session.xpGagnee = session.xpGagnee + (xp - xpPrecedente)
-  elseif nv == niveauXP + 1 then
+  elseif nv <= niveauXP + 1 then
     -- Un niveau pris : la fin de l'ancienne barre, plus le début de la nouvelle.
     session.xpGagnee = session.xpGagnee + (xpMaxPrecedente - xpPrecedente) + xp
+    nv = niveauXP + 1
   end
   -- Plusieurs niveaux d'un coup : on ne devine pas, on repart de la barre actuelle.
   xpPrecedente, xpMaxPrecedente, niveauXP = xp, xpMax, nv
+  niveau = math.max(niveau, nv) -- au cas où PLAYER_LEVEL_UP ne serait pas arrivé
   rafraichir()
 end
 
 function evenements.PLAYER_LEVEL_UP(nouveauNiveau)
-  niveau = nouveauNiveau
+  if not pret then
+    return
+  end
+  niveau = math.max(niveau, nouveauNiveau)
   print(PREFIXE .. string.format("niveau %d atteint !", nouveauNiveau))
   rafraichir()
 end

@@ -17,6 +17,7 @@ Un seul dépôt pour tous les addons, un dossier par addon à la racine :
 addons-wow/
 ├── README.md            ce fichier : liste des addons et méthode
 ├── .gitignore
+├── tests/               simulations hors jeu (jamais copiées dans AddOns)
 ├── CarnetDeSession/     un addon = un dossier, au même nom que son .toc
 │   ├── CarnetDeSession.toc
 │   └── CarnetDeSession.lua
@@ -47,6 +48,8 @@ foreach ($v in "_retail_", "_forever_") {
 - Données d'un addon : `SavedVariables` (compte) dans `WTF\Account\<compte>\SavedVariables\`,
   `SavedVariablesPerCharacter` dans `WTF\Account\<compte>\<royaume>\<personnage>\SavedVariables\`.
 - Vérifier la syntaxe avant de lancer le jeu : `wsl luac5.1 -p <fichier>.lua` (WoW utilise Lua 5.1).
+- Simuler un addon hors du jeu, avec une fausse API WoW : `tests/` (exemple :
+  `wsl lua5.1 tests/CarnetDeSession_simu.lua CarnetDeSession/CarnetDeSession.lua`).
 - Le nom du dossier doit être identique au nom du `.toc`.
 
 ## Partager

@@ -2,7 +2,7 @@
 ## Title: Carnet de session
 ## Notes: Temps de jeu, or, expérience et monstres tués depuis la connexion, avec l'historique des sessions.
 ## Author: Valentin
-## Version: 0.2.0
+## Version: 0.2.1
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## SavedVariables: CarnetDeSessionDB
 ## SavedVariablesPerCharacter: CarnetDeSessionPerso
