@@ -1,5 +1,5 @@
 # Fabrique le zip à partager : tous les addons du dépôt + une notice d'installation.
-# Lancer depuis Windows :  pwsh -File outilspaquet.ps1   (pwsh lit bien les accents)
+# Lancer depuis Windows :  pwsh -File outils\paquet.ps1   (pwsh lit bien les accents)
 # Le zip part dans Téléchargements\@Claude\Telechargements\AddonsWow\.
 $ErrorActionPreference = "Stop"
 $racine = Split-Path $PSScriptRoot -Parent
