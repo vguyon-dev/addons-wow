@@ -29,6 +29,9 @@ local DEFAUTS = {
   ramassage = true,        -- ramassage automatique du butin
   reperage = true,         -- remettre le repérage des minerais et herbes
   filonPasFini = true,     -- prévenir quand un filon ou une herbe n'est pas fini
+  filonSon = true,         -- son et rappel de cette alerte (jamais avec la molette)
+  fleche = true,           -- flèche vers le filon ou l'herbe connu le plus proche
+  filons = {},             -- endroits récoltés : filons[carte] = { { x, y, nom } }
   courses = {},            -- liste de courses : { { recette = id, nombre = n, nom = "…" } }
   afficherCourses = true,  -- afficher la fenêtre de la liste de courses
   sonAvant = nil,          -- réglages du son avant le mode pêche, pour les remettre
@@ -46,6 +49,48 @@ function ns.lireRecette(texte)
   local id = texte:match("enchant:(%d+)") or texte:match("spell:(%d+)")
     or texte:match("^%s*%d+%s+(%d+)%s*$") or texte:match("^%s*(%d+)%s*$")
   return nombre, tonumber(id)
+end
+
+-- Distance en mètres entre deux points d'une carte. Les positions de carte vont
+-- de 0 à 1 ; largeur et hauteur sont la taille de la carte en mètres.
+function ns.distance(x1, y1, x2, y2, largeur, hauteur)
+  local dx, dy = (x2 - x1) * largeur, (y2 - y1) * hauteur
+  return math.sqrt(dx * dx + dy * dy)
+end
+
+-- Ajoute un endroit récolté à la liste d'une carte, sauf s'il y est déjà
+-- (même endroit à 15 m près). Renvoie true si c'est un nouvel endroit.
+function ns.memoriser(liste, x, y, nom, largeur, hauteur)
+  for _, p in ipairs(liste) do
+    if ns.distance(p[1], p[2], x, y, largeur, hauteur) < 15 then
+      p[3] = nom or p[3]
+      return false
+    end
+  end
+  liste[#liste + 1] = { x, y, nom }
+  if #liste > 400 then table.remove(liste, 1) end -- les plus anciens partent
+  return true
+end
+
+-- Le point connu le plus proche, en sautant ceux à moins de 20 m (celui que tu
+-- viens de finir) et ceux récoltés il y a peu (recent[point] = moment).
+function ns.plusProche(liste, x, y, largeur, hauteur, recent, maintenant)
+  local meilleur, dMin
+  for _, p in ipairs(liste) do
+    local d = ns.distance(x, y, p[1], p[2], largeur, hauteur)
+    local frais = recent and recent[p] and maintenant - recent[p] < 180
+    if d >= 20 and not frais and (not dMin or d < dMin) then meilleur, dMin = p, d end
+  end
+  return meilleur, dMin
+end
+
+-- Angle de la flèche (en radians, sens inverse des aiguilles d'une montre,
+-- 0 = tout droit) pour aller de (x, y) vers (cx, cy) quand on regarde vers
+-- « orientation » (GetPlayerFacing : 0 = nord, sens inverse des aiguilles).
+-- Sur la carte, x va vers l'est et y vers le sud.
+function ns.angleFleche(x, y, cx, cy, largeur, hauteur, orientation)
+  local est, nord = (cx - x) * largeur, (y - cy) * hauteur
+  return math.atan2(-est, nord) - orientation
 end
 
 -- Additionne les composants de toutes les recettes de la liste.
@@ -266,23 +311,120 @@ end
 
 local function surButinOuvert()
   objetRecolte = nil
-  if not db.actif or not db.filonPasFini or not GetLootSourceInfo then return end
+  if not db.actif or not GetLootSourceInfo then return end
   local g = GetLootSourceInfo(1)
   if not estSecret(g) and g and g:find("^GameObject") then objetRecolte = g end
 end
 
+-- ---------------------------------------------------------------------------
+-- Filons mémorisés et flèche
+-- ---------------------------------------------------------------------------
+-- Le jeu ne donne PAS aux addons les points jaunes de la minimap. L'addon retient
+-- donc lui-même chaque endroit où tu as récolté : les filons et les herbes
+-- réapparaissent aux mêmes endroits, et la flèche te mène au plus proche connu.
+
+local recent = {} -- point -> moment de sa dernière récolte (pour le sauter un moment)
+
+-- Où suis-je ? Renvoie la carte, x, y, largeur et hauteur de la carte en mètres.
+-- Rien en donjon, ni si le jeu cache la position (valeurs secrètes).
+local function ici()
+  if IsInInstance() or not C_Map or not C_Map.GetBestMapForUnit then return nil end
+  local carte = C_Map.GetBestMapForUnit("player")
+  if not carte or estSecret(carte) then return nil end
+  local ok, pos = pcall(C_Map.GetPlayerMapPosition, carte, "player")
+  if not ok or not pos then return nil end
+  local x, y = pos:GetXY()
+  if not x or estSecret(x) or estSecret(y) or (x == 0 and y == 0) then return nil end
+  local largeur, hauteur = 1000, 1000
+  if C_Map.GetMapWorldSize then
+    local okT, l, h = pcall(C_Map.GetMapWorldSize, carte)
+    if okT and l and l > 0 and not estSecret(l) then largeur, hauteur = l, h end
+  end
+  return carte, x, y, largeur, hauteur
+end
+
+local function memoriserIci()
+  local carte, x, y, l, h = ici()
+  if not carte then return end
+  local nom = UnitName and UnitName("softinteract")
+  if estSecret(nom) then nom = nil end
+  db.filons[carte] = db.filons[carte] or {}
+  local liste = db.filons[carte]
+  ns.memoriser(liste, x, y, nom, l, h)
+  -- Le point qu'on vient de récolter est « frais » : la flèche le saute 3 minutes.
+  for _, q in ipairs(liste) do
+    if ns.distance(q[1], q[2], x, y, l, h) < 20 then recent[q] = GetTime() end
+  end
+end
+
+local fleche = CreateFrame("Frame", "MetiersAutoFleche", UIParent)
+fleche:SetSize(56, 70)
+fleche:SetPoint("TOP", UIParent, "TOP", 0, -120)
+fleche:SetMovable(true)
+fleche:SetClampedToScreen(true)
+fleche:EnableMouse(true)
+fleche:RegisterForDrag("LeftButton")
+fleche:SetScript("OnDragStart", fleche.StartMoving)
+fleche:SetScript("OnDragStop", function(self)
+  self:StopMovingOrSizing()
+  local point, _, pointRelatif, x, y = self:GetPoint()
+  db.positionFleche = { point, pointRelatif, x, y }
+end)
+fleche:Hide()
+local image = fleche:CreateTexture(nil, "ARTWORK")
+image:SetSize(42, 42)
+image:SetPoint("TOP")
+image:SetTexture("Interface\\Minimap\\MiniMap-QuestArrow")
+local legende = fleche:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+legende:SetPoint("TOP", image, "BOTTOM", 0, -2)
+legende:SetWidth(180)
+
+-- Un petit moteur invisible recalcule la flèche 10 fois par seconde. La flèche
+-- elle-même n'apparaît que s'il y a un endroit connu sur la carte où tu es.
+local moteur = CreateFrame("Frame")
+local attente = 0
+moteur:SetScript("OnUpdate", function(_, ecoule)
+  attente = attente + ecoule
+  if attente < 0.1 then return end
+  attente = 0
+  if not db or not db.actif or not db.fleche or InCombatLockdown() then fleche:Hide() return end
+  local carte, x, y, l, h = ici()
+  local orientation = GetPlayerFacing and GetPlayerFacing()
+  local liste = carte and db.filons[carte]
+  local p, d
+  if liste and orientation and not estSecret(orientation) then
+    p, d = ns.plusProche(liste, x, y, l, h, recent, GetTime())
+  end
+  if not p then fleche:Hide() return end
+  image:SetRotation(ns.angleFleche(x, y, p[1], p[2], l, h, orientation))
+  legende:SetText((p[3] or "Endroit connu") .. "\n" .. math.floor(d + 0.5) .. " m")
+  fleche:Show()
+end)
+
 local function verifierFilon(essai)
   local g = objetRecolte
+  if not db.filonPasFini then return end
   if not g or UnitCastingInfo("player") or UnitChannelInfo("player") then return end
   if guidSur("softinteract") ~= g then return end -- l'objet a disparu : récolte finie
+  -- Récolte à la molette : tu roules de toute façon, donc l'alerte reste
+  -- discrète (pas de son, pas de rappel).
+  local brute = GetBindingKey and GetBindingKey("INTERACTTARGET")
+  local molette = brute and brute:find("MOUSEWHEEL") ~= nil
   local k = toucheInteraction()
-  local texte = "Pas fini ! Appuie encore" .. (k and (" sur " .. k) or "") .. " pour finir la récolte."
+  local texte = molette and "Pas fini !"
+    or ("Pas fini ! Appuie encore" .. (k and (" sur " .. k) or "") .. " pour finir la récolte.")
   if RaidNotice_AddMessage and RaidWarningFrame then
     RaidNotice_AddMessage(RaidWarningFrame, texte, ChatTypeInfo and ChatTypeInfo.RAID_WARNING or { r = 1, g = 0.5, b = 0 })
   end
+  if molette or not db.filonSon then return end
   PlaySound(SOUNDKIT and SOUNDKIT.RAID_WARNING or 8959, "master")
   -- Un rappel 4 secondes plus tard si tu n'as toujours rien fait.
   if essai == 1 then C_Timer.After(4, function() verifierFilon(2) end) end
+end
+
+local function surButinRecolte()
+  -- Seulement un objet du monde (filon, herbe), pas un monstre ni la pêche.
+  if objetRecolte and not modePeche then memoriserIci() end
 end
 
 local function surButinFerme()
@@ -407,6 +549,10 @@ ns.reglages = ns.creerReglages({
       aide = "Après une mort ou une reconnexion, sur la minimap." },
     { cle = "filonPasFini", libelle = "Prévenir quand un filon n'est pas fini",
       aide = "Message et son s'il reste des coups à donner, pour qu'un autre joueur ne le finisse pas." },
+    { cle = "filonSon", libelle = "Son et rappel de cette alerte",
+      aide = "Jamais si ta touche de récolte est la molette : l'alerte reste discrète." },
+    { cle = "fleche", libelle = "Flèche vers le filon ou l'herbe connu le plus proche",
+      aide = "L'addon retient chaque endroit où tu récoltes. Déplace la flèche en la glissant. /mt filons : combien." },
     { titre = "Artisanat" },
     { cle = "afficherCourses", libelle = "Afficher la liste de courses",
       aide = "Ajouter une recette : /mt courses 5 puis Maj+clic sur la recette." },
@@ -461,6 +607,11 @@ ns.reglages = ns.creerReglages({
     else
       fenetreCourses:SetPoint("RIGHT", UIParent, "RIGHT", -60, 80)
     end
+    if db.positionFleche then
+      local p = db.positionFleche
+      fleche:ClearAllPoints()
+      fleche:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+    end
   end,
   surChangement = function(d)
     if not d.actif and modePeche then changerModePeche(false) end
@@ -494,6 +645,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement, unite, _, idSort)
     end
   elseif evenement == "LOOT_OPENED" then
     surButinOuvert()
+    surButinRecolte()
   elseif evenement == "LOOT_CLOSED" then
     surButinFerme()
   elseif evenement == "BAG_UPDATE_DELAYED" or evenement == "GET_ITEM_INFO_RECEIVED" then
@@ -521,6 +673,16 @@ SlashCmdList.METIERSAUTO = function(texte)
     MetiersAuto_ModePeche()
   elseif cmd == "on" or cmd == "off" then
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
+  elseif cmd == "filons" then
+    local carte = ici()
+    if reste:lower() == "oublier" then
+      if carte then db.filons[carte] = nil end
+      return r.dire("endroits oubliés pour cette carte.")
+    end
+    local total, cartes = 0, 0
+    for _, liste in pairs(db.filons) do total, cartes = total + #liste, cartes + 1 end
+    r.dire(string.format("%d endroits connus ici, %d en tout sur %d cartes. /mt filons oublier : vider cette carte.",
+      carte and db.filons[carte] and #db.filons[carte] or 0, total, cartes))
   elseif cmd == "courses" then
     if reste:lower() == "vider" then
       r.changer("courses", {})
@@ -541,5 +703,6 @@ SlashCmdList.METIERSAUTO = function(texte)
   elseif not r.basculerOption(cmd) then
     r.dire("/mt : réglages     /mt peche : mode pêche     /mt on, /mt off")
     r.dire("/mt courses 5 <recette> : ajouter (Maj+clic sur la recette)     /mt courses vider")
+    r.dire("/mt filons : endroits de récolte connus     /mt filons oublier")
   end
 end

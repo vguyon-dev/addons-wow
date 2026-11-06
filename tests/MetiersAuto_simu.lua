@@ -46,4 +46,22 @@ local a, manque = ns.manque(b[1], function(i) return stock[i] end)
 verifie("minerai possédé (deux qualités additionnées)", 7, a)
 verifie("minerai manquant", 9, manque)
 verifie("rien ne manque", 0, select(2, ns.manque(b[2], function(i) return stock[i] end)))
+
+-- Filons mémorisés et flèche (carte de 1000 m sur 1000 m).
+local liste = {}
+verifie("filon : nouvel endroit", true, ns.memoriser(liste, 0.5, 0.5, "Cuivre", 1000, 1000))
+verifie("filon : même endroit à 10 m près", false, ns.memoriser(liste, 0.505, 0.5, "Cuivre", 1000, 1000))
+verifie("filon : deux endroits retenus", true, ns.memoriser(liste, 0.6, 0.5, "Étain", 1000, 1000))
+verifie("distance : 100 m vers l'est", 100, math.floor(ns.distance(0.5, 0.5, 0.6, 0.5, 1000, 1000) + 0.5))
+local p, d = ns.plusProche(liste, 0.5, 0.5, 1000, 1000, {}, 0)
+verifie("plus proche : saute celui où je suis", "Étain", p and p[3])
+local recent = { [liste[2]] = 100 }
+verifie("plus proche : saute celui récolté il y a peu", nil, (ns.plusProche(liste, 0.5, 0.5, 1000, 1000, recent, 150)))
+verifie("plus proche : revient après 3 minutes", "Étain", (ns.plusProche(liste, 0.5, 0.5, 1000, 1000, recent, 400) or {})[3])
+local function arrondi(a) a = a % (2 * math.pi) return math.floor(a * 100 + 0.5) / 100 end
+verifie("flèche : cible au nord, je regarde au nord", 0, arrondi(ns.angleFleche(0.5, 0.5, 0.5, 0.4, 1000, 1000, 0)))
+verifie("flèche : cible à l'est, je regarde au nord", arrondi(-math.pi / 2), arrondi(ns.angleFleche(0.5, 0.5, 0.6, 0.5, 1000, 1000, 0)))
+verifie("flèche : cible à l'est, je regarde à l'est", 0, arrondi(ns.angleFleche(0.5, 0.5, 0.6, 0.5, 1000, 1000, -math.pi / 2)))
+verifie("flèche : cible derrière moi", arrondi(math.pi), arrondi(ns.angleFleche(0.5, 0.5, 0.5, 0.6, 1000, 1000, 0)))
+
 os.exit(ok and 0 or 1)

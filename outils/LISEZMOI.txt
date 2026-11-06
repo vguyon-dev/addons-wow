@@ -32,7 +32,8 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /carnet  Carnet de session (temps, or, XP, monstres)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
   /ma      Marchand auto (vend les gris, répare, rachète ton stock)
-  /mt      Métiers auto (pêche au double clic droit, récolte, liste de courses)
+  /mt      Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
+           Astuce : récolte sur la molette (bouton « Choisir la touche », puis roule la molette)
   /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
   /ef      Entre frères (en groupe : les quêtes de chacun)
 
