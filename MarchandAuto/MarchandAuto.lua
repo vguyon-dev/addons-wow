@@ -17,7 +17,7 @@ local DEFAUTS = {
   banqueGuilde = true,   -- payer la réparation avec la banque de guilde si possible
   pauseTouches = true,   -- Maj, Ctrl ou Alt enfoncé en ouvrant le marchand = pause
   bilan = true,          -- écrire dans le chat ce qui a été vendu et réparé
-  minimap = true,        -- icône autour de la minimap
+  minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 200,    -- position de l'icône autour de la minimap
   gardes = {},           -- [idObjet] = lien : gris à ne jamais vendre
 }
@@ -140,8 +140,8 @@ ns.reglages = ns.creerReglages({
     { titre = "Affichage" },
     { cle = "bilan", libelle = "Écrire le bilan dans le chat",
       aide = "Ce que la vente a rapporté et ce que la réparation a coûté." },
-    { cle = "minimap", libelle = "Icône autour de la minimap",
-      aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

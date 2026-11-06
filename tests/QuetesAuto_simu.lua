@@ -49,6 +49,18 @@ verifie("plus grosse amélioration",
   2, (ns.choisirRecompense({ { gain = 3 }, { gain = 8 }, { gain = 1 } })))
 verifie("aucune amélioration : la plus chère",
   3, (ns.choisirRecompense({ { vente = 10 }, { vente = 50 }, { vente = 120 } })))
+-- Récompenses de métier (164 forge, 171 alchimie, 197 couture).
+local herbe, tissu, metal = ns.metiersPour(7, 9), ns.metiersPour(7, 5), ns.metiersPour(7, 7)
+verifie("herbe : sert à l'alchimie", true, herbe ~= nil and herbe[1] == 171)
+verifie("arme : rien à voir avec les métiers", nil, ns.metiersPour(2, 7))
+verifie("métier : celle de mon métier (couture)",
+  2, (ns.choisirRecompense({ { metiers = herbe, vente = 50 }, { metiers = tissu, vente = 5 } }, { [197] = true })))
+verifie("métier : aucune pour moi, à moi de choisir",
+  nil, (ns.choisirRecompense({ { metiers = herbe }, { metiers = metal } }, { [197] = true })))
+verifie("métier : métiers inconnus, à moi de choisir",
+  nil, (ns.choisirRecompense({ { metiers = herbe }, { metiers = tissu } }, nil)))
+verifie("amélioration avant récompense de métier",
+  2, (ns.choisirRecompense({ { metiers = tissu }, { gain = 4 } }, { [197] = true })))
 -- Interrupteurs « rendre » et « accepter ».
 reglages.journalieres = false
 reglages.rendre = false

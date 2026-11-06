@@ -28,7 +28,7 @@ function GetMoney() return etat.argent end
 function print() end
 
 local chunk = assert(loadfile(arg[1]))
-chunk("CarnetDeSession")
+chunk("CarnetDeSession", {})
 local function evt(nom, ...) ecouteur._scripts.OnEvent(ecouteur, nom, ...) end
 
 evt("ADDON_LOADED", "CarnetDeSession")

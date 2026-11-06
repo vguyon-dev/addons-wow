@@ -25,7 +25,7 @@ local DEFAUTS = {
   accepter = true,         -- accepter les quêtes tout seul
   rendre = true,           -- rendre les quêtes finies tout seul
   pauseTouches = true,     -- Maj, Ctrl ou Alt enfoncé = pause
-  minimap = true,          -- icône autour de la minimap
+  minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 225,      -- position de l'icône sur le tour de la minimap, en degrés
   recompenseAuto = true,   -- choisir la récompense seul (sinon te laisser choisir)
   grises = true,           -- ignorer les quêtes grises (trop faciles)
@@ -98,19 +98,74 @@ function ns.optionUnique(options, derniere)
   return id
 end
 
+-- Métiers (numéros « skillLine » du jeu) qui se servent d'un objet, d'après sa
+-- classe et sa sous-classe. nil = l'objet n'a rien à voir avec les métiers.
+local FORGE, CUIR, ALCHI, HERBO, CUISINE, MINAGE, COUTURE, INGE, ENCHANT, PECHE, DEPECE, JOAILLE, CALLI =
+  164, 165, 171, 182, 185, 186, 197, 202, 333, 356, 393, 755, 773
+local ARTISANS = { FORGE, CUIR, ALCHI, COUTURE, INGE, ENCHANT, JOAILLE, CALLI }
+local METIERS_OBJET = {
+  -- 7 = composants d'artisanat
+  [7] = { [1] = { INGE }, [4] = { JOAILLE }, [5] = { COUTURE }, [6] = { CUIR, DEPECE },
+          [7] = { FORGE, INGE, JOAILLE, MINAGE }, [8] = { CUISINE }, [9] = { ALCHI, CALLI, HERBO },
+          [10] = ARTISANS, [11] = ARTISANS, [12] = { ENCHANT }, [16] = { CALLI },
+          [18] = ARTISANS, [19] = ARTISANS },
+  -- 9 = recettes
+  [9] = { [1] = { CUIR }, [2] = { COUTURE }, [3] = { INGE }, [4] = { FORGE }, [5] = { CUISINE },
+          [6] = { ALCHI }, [8] = { ENCHANT }, [9] = { PECHE }, [10] = { JOAILLE }, [11] = { CALLI } },
+  -- 19 = outils et équipement de métier
+  [19] = { [0] = { FORGE }, [1] = { CUIR }, [2] = { ALCHI }, [3] = { HERBO }, [4] = { CUISINE },
+           [5] = { MINAGE }, [6] = { COUTURE }, [7] = { INGE }, [8] = { ENCHANT }, [9] = { PECHE },
+           [10] = { DEPECE }, [11] = { JOAILLE }, [12] = { CALLI } },
+}
+function ns.metiersPour(classe, sousClasse)
+  local t = METIERS_OBJET[classe]
+  if not t then return nil end
+  return t[sousClasse] or (classe == 7 and ARTISANS) or nil
+end
+
 -- Quelle récompense prendre ? candidats : { gain = niveaux gagnés (ou nil si
--- pas une amélioration), vente = prix de revente }. Renvoie l'index choisi.
-function ns.choisirRecompense(candidats)
+-- pas une amélioration), vente = prix de revente, metiers = liste ou nil }.
+-- mesMetiers : { [skillLine] = true }, ou nil si le jeu ne sait pas les donner.
+-- Renvoie l'index choisi et la raison, ou nil quand c'est au joueur de choisir.
+function ns.choisirRecompense(candidats, mesMetiers)
+  -- 1) Une vraie amélioration d'équipement passe avant tout.
   local meilleur, meilleurGain = nil, 0
   for i, c in ipairs(candidats) do
     if c.gain and c.gain > meilleurGain then meilleur, meilleurGain = i, c.gain end
   end
   if meilleur then return meilleur, "amélioration" end
+  -- 2) Des récompenses de métier : celle d'un de tes métiers (la plus chère s'il y en a
+  --    plusieurs). Aucune ne te sert, ou métiers inconnus : c'est à toi de choisir.
+  local metierTrouve, pourMoi, prixMoi = false, nil, -1
+  for i, c in ipairs(candidats) do
+    if c.metiers then
+      metierTrouve = true
+      for _, m in ipairs(c.metiers) do
+        if mesMetiers and mesMetiers[m] and (c.vente or 0) > prixMoi then
+          pourMoi, prixMoi = i, c.vente or 0
+        end
+      end
+    end
+  end
+  if pourMoi then return pourMoi, "métier" end
+  if metierTrouve then return nil, "métier" end
+  -- 3) Sinon, la plus chère à la revente.
   local plusCher, prix = 1, -1
   for i, c in ipairs(candidats) do
     if (c.vente or 0) > prix then plusCher, prix = i, c.vente or 0 end
   end
   return plusCher, "revente"
+end
+
+-- Tes métiers, sous la forme { [skillLine] = true }. nil si le jeu ne les donne pas.
+local function mesMetiers()
+  if not (GetProfessions and GetProfessionInfo) then return nil end
+  local t = {}
+  for _, index in pairs({ GetProfessions() }) do
+    local skillLine = select(7, GetProfessionInfo(index))
+    if skillLine then t[skillLine] = true end
+  end
+  return t
 end
 
 -- ---------------------------------------------------------------------------
@@ -190,12 +245,21 @@ local function prendreRecompense()
       dire("infos des récompenses introuvables, à toi de choisir.")
       return
     end
-    candidats[i] = { lien = lien, gain = gainPour(lien), vente = select(11, infoObjet(lien)) }
+    local classe, sousClasse = select(12, infoObjet(lien))
+    candidats[i] = { lien = lien, gain = gainPour(lien), vente = select(11, infoObjet(lien)),
+                     metiers = ns.metiersPour(classe, sousClasse) }
   end
   essais = 0
-  local index, raison = ns.choisirRecompense(candidats)
+  local index, raison = ns.choisirRecompense(candidats, mesMetiers())
+  if not index then
+    dire("récompenses de métier, mais aucune pour tes métiers : à toi de choisir.")
+    PlaySound(5274, "master")
+    return
+  end
   local c = candidats[index]
-  if raison == "amélioration" then
+  if raison == "métier" then
+    dire("récompense " .. c.lien .. " (pour ton métier).")
+  elseif raison == "amélioration" then
     dire("récompense " .. c.lien .. " (+" .. c.gain .. " niveaux d'objet).")
   else
     dire("récompense " .. c.lien .. " (la plus chère à la revente).")
@@ -415,8 +479,8 @@ local reglages = ns.creerReglages({
     { titre = "Confort" },
     { cle = "cinematiques", libelle = "Passer les cinématiques déjà vues",
       aide = "La première fois tu la regardes, les fois suivantes elle est passée." },
-    { cle = "minimap", libelle = "Icône autour de la minimap",
-      aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
     { cle = "bouton", libelle = "Bouton à l'écran",
       aide = "Un second « ! » jaune à poser où tu veux, en plus de l'icône de la minimap. Clic : activer ou couper." },
   },

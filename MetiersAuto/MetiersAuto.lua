@@ -20,7 +20,7 @@ local NOM_ADDON, ns = ...
 
 local DEFAUTS = {
   actif = true,
-  minimap = true,
+  minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 250,
   pecheDoubleClic = true,  -- double clic droit = lancer la ligne (en mode pêche)
   pecheSon = true,         -- son des effets à fond, musique coupée, en mode pêche
@@ -373,8 +373,8 @@ ns.reglages = ns.creerReglages({
     { titre = "Artisanat" },
     { cle = "afficherCourses", libelle = "Afficher la liste de courses",
       aide = "Ajouter une recette : /mt courses 5 puis Maj+clic sur la recette." },
-    { cle = "minimap", libelle = "Icône autour de la minimap",
-      aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

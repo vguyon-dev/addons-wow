@@ -4,7 +4,7 @@
 
 -- WoW passe deux valeurs à chaque fichier : le nom de l'addon et une table
 -- partagée entre ses fichiers (inutile ici, il n'y en a qu'un).
-local NOM_ADDON = ...
+local NOM_ADDON, ns = ...
 
 local PREFIXE = "|cff33ff99Carnet|r : "
 local TAILLE_HISTORIQUE = 20 -- sessions gardées par personnage
@@ -249,6 +249,15 @@ function evenements.ADDON_LOADED(nom)
     local point, pointRelatif, x, y = unpack(db.position)
     fenetre:ClearAllPoints()
     fenetre:SetPoint(point, UIParent, pointRelatif, x, y)
+  end
+
+  -- Une ligne dans l'icône commune des addons de Valentin (Reglages.lua) :
+  -- un clic affiche ou masque la fenêtre du carnet.
+  if ns and ns.inscrireAuHub then
+    ns.inscrireAuHub({
+      titre = "Carnet de session", icone = "Interface/Icons/INV_Misc_Book_09", db = db,
+      ouvrir = function() afficher(not fenetre:IsShown()) end,
+    })
   end
 end
 

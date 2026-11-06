@@ -17,9 +17,153 @@
 --     surChangement = function(db) … end,       -- après chaque changement
 --   })
 -- Tout s'applique tout de suite, sans /reload.
+--
+-- Icône commune : tous les addons de Valentin passent par UNE seule icône
+-- autour de la minimap (ns.inscrireAuHub). Le premier addon chargé la crée, les
+-- autres s'y ajoutent. Chaque addon peut en plus garder son icône à part.
 -- ============================================================================
 
 local NOM_ADDON, ns = ...
+
+-- ============================================================ icône commune
+-- Une entrée : { titre, icone, db, ouvrir = fonction, basculer = fonction ou nil,
+--               actif = fonction qui renvoie vrai/faux, ou nil }.
+-- La position de l'icône est gardée dans le db de chaque addon inscrit (angleHub),
+-- comme ça elle survit même si on n'installe qu'une partie des addons.
+function ns.inscrireAuHub(e)
+  local hub = _G.ValentinAddons
+  if not hub then
+    hub = { entrees = {} }
+    _G.ValentinAddons = hub
+
+    local bouton = CreateFrame("Button", "ValentinAddonsMinimap", Minimap)
+    bouton:SetSize(31, 31)
+    bouton:SetFrameStrata("MEDIUM")
+    bouton:SetFrameLevel(8)
+    bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    bouton:RegisterForDrag("LeftButton")
+    bouton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    local fond = bouton:CreateTexture(nil, "BACKGROUND")
+    fond:SetSize(20, 20)
+    fond:SetPoint("TOPLEFT", 7, -5)
+    fond:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    local icone = bouton:CreateTexture(nil, "ARTWORK")
+    icone:SetSize(17, 17)
+    icone:SetPoint("TOPLEFT", 7, -6)
+    icone:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")
+    local cadre = bouton:CreateTexture(nil, "OVERLAY")
+    cadre:SetSize(53, 53)
+    cadre:SetPoint("TOPLEFT")
+    cadre:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    -- Angle gardé : celui du premier addon inscrit qui en a un.
+    local function angle()
+      for _, x in ipairs(hub.entrees) do
+        if x.db and x.db.angleHub then return x.db.angleHub end
+      end
+      return 200
+    end
+    function hub.placer()
+      local rayon = Minimap:GetWidth() / 2 + 5
+      local a = math.rad(angle())
+      bouton:ClearAllPoints()
+      bouton:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * rayon, math.sin(a) * rayon)
+    end
+    local function suivreSouris()
+      local cx, cy = Minimap:GetCenter()
+      local sx, sy = GetCursorPosition()
+      local echelle = Minimap:GetEffectiveScale()
+      local a = math.deg(math.atan2(sy / echelle - cy, sx / echelle - cx))
+      for _, x in ipairs(hub.entrees) do if x.db then x.db.angleHub = a end end
+      hub.placer()
+    end
+    bouton:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", suivreSouris) end)
+    bouton:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+
+    -- Le menu : une ligne par addon. Clic gauche = réglages, clic droit = activer ou couper.
+    local menu = CreateFrame("Frame", "ValentinAddonsMenu", UIParent, "BasicFrameTemplateWithInset")
+    menu:SetFrameStrata("DIALOG")
+    menu:SetClampedToScreen(true)
+    menu:Hide()
+    tinsert(UISpecialFrames, menu:GetName()) -- Échap le ferme
+    local titreMenu = menu.TitleText or menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    if not menu.TitleText then titreMenu:SetPoint("TOP", 0, -5) end
+    titreMenu:SetText("Addons de Valentin")
+    local aideMenu = menu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    aideMenu:SetText("Clic gauche : réglages     Clic droit : activer ou couper")
+    local lignes = {}
+
+    function hub.majMenu()
+      table.sort(hub.entrees, function(a, b) return a.titre < b.titre end)
+      local y = -30
+      for i, x in ipairs(hub.entrees) do
+        local l = lignes[i]
+        if not l then
+          l = CreateFrame("Button", nil, menu)
+          l:SetSize(236, 24)
+          l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+          l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+          l.icone = l:CreateTexture(nil, "ARTWORK")
+          l.icone:SetSize(20, 20)
+          l.icone:SetPoint("LEFT", 4, 0)
+          l.nom = l:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+          l.nom:SetPoint("LEFT", l.icone, "RIGHT", 6, 0)
+          l.etat = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+          l.etat:SetPoint("RIGHT", -6, 0)
+          lignes[i] = l
+        end
+        l:SetPoint("TOPLEFT", 12, y)
+        l.icone:SetTexture(x.icone)
+        l.nom:SetText(x.titre)
+        local actif = x.actif and x.actif()
+        if actif == nil then l.etat:SetText("")
+        elseif actif then l.etat:SetText("|cff00ff00activé|r")
+        else l.etat:SetText("|cffff4040coupé|r") end
+        l.icone:SetDesaturated(actif == false)
+        l:SetScript("OnClick", function(_, souris)
+          if souris == "RightButton" and x.basculer then
+            x.basculer()
+            hub.majMenu()
+          else
+            menu:Hide()
+            x.ouvrir()
+          end
+        end)
+        l:Show()
+        y = y - 26
+      end
+      for i = #hub.entrees + 1, #lignes do lignes[i]:Hide() end
+      aideMenu:ClearAllPoints()
+      aideMenu:SetPoint("TOPLEFT", 16, y - 6)
+      menu:SetSize(260, -y + 30)
+    end
+
+    bouton:SetScript("OnClick", function(self)
+      if menu:IsShown() then menu:Hide() return end
+      hub.majMenu()
+      menu:ClearAllPoints()
+      menu:SetPoint("TOPRIGHT", self, "BOTTOMLEFT", 0, 0)
+      menu:Show()
+    end)
+    bouton:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      GameTooltip:AddLine("Addons de Valentin")
+      for _, x in ipairs(hub.entrees) do
+        local actif = x.actif and x.actif()
+        local etat = actif == nil and "" or (actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
+        GameTooltip:AddDoubleLine(x.titre, etat, 1, 1, 1)
+      end
+      GameTooltip:AddLine("Clic : la liste des addons\nGlisser : déplacer", 0.7, 0.7, 0.7)
+      GameTooltip:Show()
+    end)
+    bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+  table.insert(hub.entrees, e)
+  hub.placer()
+  -- Un réglage change ailleurs (commande, raccourci) : le menu ouvert se remet à jour.
+  e.maj = function() if ValentinAddonsMenu and ValentinAddonsMenu:IsShown() then hub.majMenu() end end
+  return e
+end
 
 function ns.creerReglages(p)
   local r = {}
@@ -167,8 +311,9 @@ function ns.creerReglages(p)
   -- ------------------------------------------------------- changements
   function r.appliquer()
     iconeMini:SetDesaturated(not db.actif)
-    mini:SetShown(db.minimap ~= false)
+    mini:SetShown(db.minimap == true)
     if fenetre:IsShown() then majFenetre() end
+    if r.hub then r.hub.maj() end
     if p.surChangement then p.surChangement(db) end
   end
 
@@ -206,6 +351,12 @@ function ns.creerReglages(p)
     end
     db = sauve
     r.db = db
+    -- Une seule fois : l'icône à part laisse la place à l'icône commune.
+    if not db.iconeCommune then db.minimap = false; db.iconeCommune = true end
+    r.hub = ns.inscrireAuHub({
+      titre = p.titre, icone = p.icone, db = db, ouvrir = r.ouvrir, basculer = r.basculer,
+      actif = function() return db.actif and true or false end,
+    })
     placerMini()
     if p.auChargement then p.auChargement(db) end
     r.appliquer()

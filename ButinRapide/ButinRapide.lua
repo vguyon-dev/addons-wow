@@ -17,7 +17,7 @@ local NOM_ADDON, ns = ...
 
 local DEFAUTS = {
   actif = true,
-  minimap = true,
+  minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 160,
   sacsPleins = true,      -- alerte et bouton quand les sacs sont pleins
   sonSacsPleins = true,   -- un son en plus
@@ -335,8 +335,8 @@ ns.reglages = ns.creerReglages({
     { titre = "Affichage" },
     { cle = "bilan", libelle = "Afficher le bilan de farm",
       aide = "Objets, or, valeur et gain par heure de la session de ce personnage." },
-    { cle = "minimap", libelle = "Icône autour de la minimap",
-      aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
