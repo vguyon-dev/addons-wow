@@ -134,21 +134,23 @@ function ns.choisirRecompense(candidats, mesMetiers)
     if c.gain and c.gain > meilleurGain then meilleur, meilleurGain = i, c.gain end
   end
   if meilleur then return meilleur, "amélioration" end
-  -- 2) Des récompenses de métier : celle d'un de tes métiers (la plus chère s'il y en a
-  --    plusieurs). Aucune ne te sert, ou métiers inconnus : c'est à toi de choisir.
-  local metierTrouve, pourMoi, prixMoi = false, nil, -1
+  -- 2) Des récompenses de métier : s'il y en a UNE SEULE pour tes métiers, on la
+  --    prend. Plusieurs (même métier ou métiers différents), aucune, ou métiers
+  --    inconnus : c'est à toi de choisir.
+  local metierTrouve, pourMoi, combien = false, nil, 0
   for i, c in ipairs(candidats) do
     if c.metiers then
       metierTrouve = true
       for _, m in ipairs(c.metiers) do
-        if mesMetiers and mesMetiers[m] and (c.vente or 0) > prixMoi then
-          pourMoi, prixMoi = i, c.vente or 0
+        if mesMetiers and mesMetiers[m] then
+          pourMoi, combien = i, combien + 1
+          break -- une récompense ne compte qu'une fois
         end
       end
     end
   end
-  if pourMoi then return pourMoi, "métier" end
-  if metierTrouve then return nil, "métier" end
+  if combien == 1 then return pourMoi, "métier" end
+  if metierTrouve then return nil, combien > 1 and "plusieurs" or "métier" end
   -- 3) Sinon, la plus chère à la revente.
   local plusCher, prix = 1, -1
   for i, c in ipairs(candidats) do
@@ -252,7 +254,11 @@ local function prendreRecompense()
   essais = 0
   local index, raison = ns.choisirRecompense(candidats, mesMetiers())
   if not index then
-    dire("récompenses de métier, mais aucune pour tes métiers : à toi de choisir.")
+    if raison == "plusieurs" then
+      dire("plusieurs récompenses pour tes métiers : à toi de choisir.")
+    else
+      dire("récompenses de métier, mais aucune pour tes métiers : à toi de choisir.")
+    end
     PlaySound(5274, "master")
     return
   end

@@ -55,6 +55,10 @@ verifie("herbe : sert à l'alchimie", true, herbe ~= nil and herbe[1] == 171)
 verifie("arme : rien à voir avec les métiers", nil, ns.metiersPour(2, 7))
 verifie("métier : celle de mon métier (couture)",
   2, (ns.choisirRecompense({ { metiers = herbe, vente = 50 }, { metiers = tissu, vente = 5 } }, { [197] = true })))
+verifie("métier : deux pour deux de mes métiers, à moi de choisir",
+  nil, (ns.choisirRecompense({ { metiers = herbe }, { metiers = tissu } }, { [197] = true, [171] = true })))
+verifie("métier : deux pour le même métier, à moi de choisir",
+  nil, (ns.choisirRecompense({ { metiers = tissu, vente = 1 }, { metiers = tissu, vente = 9 } }, { [197] = true })))
 verifie("métier : aucune pour moi, à moi de choisir",
   nil, (ns.choisirRecompense({ { metiers = herbe }, { metiers = metal } }, { [197] = true })))
 verifie("métier : métiers inconnus, à moi de choisir",
