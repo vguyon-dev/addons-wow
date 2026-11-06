@@ -79,4 +79,15 @@ verifie("accepter coupé, rien à rendre : rien",
 verifie("une seule phrase : on la clique", 5, ns.optionUnique({ { gossipOptionID = 5 } }))
 verifie("deux phrases : rien", nil, ns.optionUnique({ { gossipOptionID = 5 }, { gossipOptionID = 6 } }))
 verifie("même phrase juste après : rien (pas de boucle)", nil, ns.optionUnique({ { gossipOptionID = 5 } }, 5))
+
+-- Objets qui commencent une quête.
+local objets = {
+  { sac = 0, case = 3, questID = 10, isActive = true },   -- quête déjà prise
+  { sac = 1, case = 5, questID = 11, isActive = false },  -- à commencer
+  { sac = 2, case = 1, questID = 12, isActive = false },
+}
+verifie("objet de quête : saute la quête déjà prise", 11, (ns.objetDeQuete(objets, {}) or {}).questID)
+verifie("objet de quête : saute celle écartée", 12, (ns.objetDeQuete(objets, { [11] = true }) or {}).questID)
+verifie("objet de quête : rien à commencer", nil, ns.objetDeQuete({ objets[1] }, {}))
+
 os.exit(ok and 0 or 1)

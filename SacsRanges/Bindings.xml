@@ -1,0 +1,7 @@
+<!-- Raccourci clavier : Échap > Options > Raccourcis > Sacs rangés.
+     Le jeu charge ce fichier tout seul, sans le citer dans le .toc. -->
+<Bindings>
+  <Binding name="SACSRANGES_RANGER" header="SACSRANGES" category="ADDONS">
+    SacsRanges_Ranger()
+  </Binding>
+</Bindings>

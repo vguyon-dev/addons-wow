@@ -36,6 +36,7 @@ local DEFAUTS = {
   bouton = false,          -- bouton « ! » à l'écran (coupé : l'icône de la minimap fait pareil)
   partager = true,         -- partager ses quêtes avec le groupe
   accepterPartagees = true, -- accepter les quêtes partagées par le groupe
+  objetsQuete = true,      -- bouton pour commencer la quête d'un objet ramassé
   pnjIgnores = {},         -- [idPNJ] = nom
   quetesIgnorees = {},     -- [idQuête] = titre
   vues = {},               -- cinématiques déjà vues
@@ -84,6 +85,16 @@ function ns.choisirAction(actives, disponibles, reglages, ignorees)
     for i, q in ipairs(disponibles) do
       if ns.accepteQuete(q, reglages, ignorees) then return "accepter", i end
     end
+  end
+  return nil
+end
+
+-- Objets qui commencent une quête : parmi les objets des sacs
+-- ({ sac, case, questID, isActive }), le premier dont la quête n'est pas encore
+-- prise (isActive faux) et que tu n'as pas écarté (ecartees[questID]).
+function ns.objetDeQuete(objets, ecartees)
+  for _, o in ipairs(objets) do
+    if o.questID and not o.isActive and not ecartees[o.questID] then return o end
   end
   return nil
 end
@@ -339,6 +350,10 @@ end
 -- Quêtes reçues du groupe : on ne les repartage pas (sinon ping-pong entre frères).
 local recuesDuGroupe = {}
 
+-- Moment du dernier clic sur le bouton « objet de quête » (plus bas) : la quête
+-- qui s'ouvre juste après vient de là, tu l'as choisie, donc pas de filtre.
+local clicObjet = 0
+
 -- La quête affichée vient-elle d'un joueur de ton groupe (quête partagée) ?
 -- Le jeu désigne celui qui te parle par « npc » ou « questnpc » : on regarde les deux.
 local function partageeParLeGroupe()
@@ -361,6 +376,7 @@ local function surDetail()
     end
     return
   end
+  if GetTime() - clicObjet < 5 then AcceptQuest() return end
   if not db.accepter then return end
   if QuestGetAutoAccept and QuestGetAutoAccept() then
     -- Quête déjà acceptée d'office par le jeu : on referme simplement.
@@ -496,6 +512,9 @@ local reglages = ns.creerReglages({
       aide = "Chaque quête que tu acceptes est proposée aux autres membres du groupe." },
     { cle = "accepterPartagees", libelle = "Accepter les quêtes partagées par le groupe",
       aide = "Sans filtre : si ton frère la partage, tu la prends. Escortes comprises." },
+    { titre = "Objets" },
+    { cle = "objetsQuete", libelle = "Bouton pour les objets qui commencent une quête",
+      aide = "Un objet ramassé lance une quête : un clic sur le bouton qui apparaît, et la quête est acceptée. La croix l'écarte." },
     { titre = "Filtres" },
     { cle = "grises", libelle = "Ignorer les quêtes grises",
       aide = "Les quêtes trop faciles pour ton niveau." },
@@ -553,6 +572,7 @@ local reglages = ns.creerReglages({
     icone:SetDesaturated(not d.actif)
     icone:SetAlpha(d.actif and 1 or 0.5)
     bouton:SetShown(d.bouton)
+    if ns.majObjetQuete then ns.majObjetQuete() end
   end,
 })
 
@@ -593,13 +613,106 @@ end)
 bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- ---------------------------------------------------------------------------
+-- Objets qui commencent une quête
+-- ---------------------------------------------------------------------------
+-- Un addon n'a pas le droit d'utiliser un objet à ta place (c'est protégé par
+-- le jeu). Il peut en revanche te tendre un bouton « sécurisé » : UN clic de
+-- toi sur ce bouton utilise l'objet, la quête s'ouvre, et Quêtes auto
+-- l'accepte. Le bouton ne peut pas changer pendant un combat : on attend la fin.
+
+local ecartees = {}   -- [questID] = true : croix cliquée, on n'insiste plus (jusqu'au /reload)
+local boutonObjet = CreateFrame("Button", "QuetesAutoObjetQuete", UIParent, "SecureActionButtonTemplate")
+boutonObjet:SetSize(40, 40)
+boutonObjet:SetPoint("CENTER", UIParent, "CENTER", 0, 180)
+boutonObjet:RegisterForClicks("AnyUp", "AnyDown")
+boutonObjet:SetAttribute("type1", "item") -- clic gauche seulement
+boutonObjet:Hide()
+local imageObjet = boutonObjet:CreateTexture(nil, "ARTWORK")
+imageObjet:SetAllPoints()
+local lueur = boutonObjet:CreateTexture(nil, "OVERLAY")
+lueur:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+lueur:SetBlendMode("ADD")
+lueur:SetSize(76, 76)
+lueur:SetPoint("CENTER")
+local texteObjet = boutonObjet:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+texteObjet:SetPoint("TOP", boutonObjet, "BOTTOM", 0, -4)
+texteObjet:SetText("Nouvelle quête ! Clic pour la commencer")
+local croix = CreateFrame("Button", nil, boutonObjet, "UIPanelCloseButton")
+croix:SetSize(20, 20)
+croix:SetPoint("TOPRIGHT", 14, 14)
+boutonObjet:HookScript("PreClick", function() clicObjet = GetTime() end)
+boutonObjet:SetScript("OnEnter", function(self)
+  if self.sac then
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetBagItem(self.sac, self.case)
+    GameTooltip:Show()
+  end
+end)
+boutonObjet:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local function infoQueteObjet(sac, case)
+  if C_Container and C_Container.GetContainerItemQuestInfo then
+    local info = C_Container.GetContainerItemQuestInfo(sac, case)
+    if info then return info.questID, info.isActive end
+  elseif GetContainerItemQuestInfo then
+    local _, id, actif = GetContainerItemQuestInfo(sac, case)
+    return id, actif
+  end
+end
+
+local function nbCases(sac)
+  if C_Container and C_Container.GetContainerNumSlots then return C_Container.GetContainerNumSlots(sac) end
+  return GetContainerNumSlots and GetContainerNumSlots(sac) or 0
+end
+
+local function iconeCase(sac, case)
+  if C_Container and C_Container.GetContainerItemInfo then
+    local info = C_Container.GetContainerItemInfo(sac, case)
+    return info and info.iconFileID
+  end
+  return GetContainerItemInfo and (GetContainerItemInfo(sac, case))
+end
+
+local majPrevue = false
+local function majObjetQuete()
+  majPrevue = false
+  if InCombatLockdown() then majPrevue = true return end -- refait à la fin du combat
+  local objets = {}
+  if db and db.actif and db.objetsQuete then
+    local dernier = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+    for sac = 0, dernier do
+      for case = 1, nbCases(sac) do
+        local id, actif = infoQueteObjet(sac, case)
+        if id then objets[#objets + 1] = { sac = sac, case = case, questID = id, isActive = actif } end
+      end
+    end
+  end
+  local o = ns.objetDeQuete(objets, ecartees)
+  if not o then boutonObjet:Hide() return end
+  boutonObjet.sac, boutonObjet.case, boutonObjet.quete = o.sac, o.case, o.questID
+  boutonObjet:SetAttribute("item", o.sac .. " " .. o.case)
+  imageObjet:SetTexture(iconeCase(o.sac, o.case) or "Interface\\Icons\\INV_Misc_Note_01")
+  if not boutonObjet:IsShown() then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_OPEN or 875) end
+  boutonObjet:Show()
+end
+
+ns.majObjetQuete = majObjetQuete
+
+croix:SetScript("OnClick", function()
+  if InCombatLockdown() then return end
+  if boutonObjet.quete then ecartees[boutonObjet.quete] = true end
+  majObjetQuete()
+end)
+
+-- ---------------------------------------------------------------------------
 -- Événements
 -- ---------------------------------------------------------------------------
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS",
                      "QUEST_COMPLETE", "QUEST_ACCEPTED", "QUEST_ACCEPT_CONFIRM",
-                     "CINEMATIC_START", "PLAY_MOVIE" }) do
+                     "CINEMATIC_START", "PLAY_MOVIE", "BAG_UPDATE_DELAYED", "PLAYER_REGEN_ENABLED",
+                     "PLAYER_ENTERING_WORLD" }) do
   ecouteur:RegisterEvent(e)
 end
 
@@ -607,8 +720,16 @@ ecouteur:SetScript("OnEvent", function(_, evenement, ...)
   if not db then return end
   if evenement == "CINEMATIC_START" then return surCinematique(...) end
   if evenement == "PLAY_MOVIE" then return surFilm(...) end
+  if evenement == "BAG_UPDATE_DELAYED" or evenement == "PLAYER_ENTERING_WORLD" then return majObjetQuete() end
+  if evenement == "PLAYER_REGEN_ENABLED" then
+    if majPrevue then majObjetQuete() end
+    return
+  end
   if not db.actif then return end
-  if evenement == "QUEST_ACCEPTED" then return surQueteAcceptee(...) end
+  if evenement == "QUEST_ACCEPTED" then
+    C_Timer.After(0.5, majObjetQuete) -- la quête de l'objet est prise : le bouton passe au suivant
+    return surQueteAcceptee(...)
+  end
   if enPause() then return end
   if evenement == "GOSSIP_SHOW" then surDialogue()
   elseif evenement == "QUEST_GREETING" then surAccueil()
