@@ -354,7 +354,8 @@ function ns.creerReglages(p)
     -- Une seule fois : l'icône à part laisse la place à l'icône commune.
     if not db.iconeCommune then db.minimap = false; db.iconeCommune = true end
     r.hub = ns.inscrireAuHub({
-      titre = p.titre, icone = p.icone, db = db, ouvrir = r.ouvrir, basculer = r.basculer,
+      -- p.ouvrirHub : ce que fait le clic dans le menu, si ce n'est pas la fenêtre de réglages.
+      titre = p.titre, icone = p.icone, db = db, ouvrir = p.ouvrirHub or r.ouvrir, basculer = r.basculer,
       actif = function() return db.actif and true or false end,
     })
     placerMini()

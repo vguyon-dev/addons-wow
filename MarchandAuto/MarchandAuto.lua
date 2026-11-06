@@ -20,6 +20,8 @@ local DEFAUTS = {
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 200,    -- position de l'icône autour de la minimap
   gardes = {},           -- [idObjet] = lien : gris à ne jamais vendre
+  acheter = true,        -- racheter le stock voulu
+  stock = {},            -- [idObjet] = { lien = …, qte = quantité voulue dans les sacs }
 }
 
 local db
@@ -53,11 +55,85 @@ function ns.payeur(cout, argent, dispoGuilde, banqueGuilde)
   return nil
 end
 
+-- Combien d'exemplaires acheter pour revenir au stock voulu ?
+-- cible : quantité voulue, possede : déjà dans les sacs, lot : vendus par N,
+-- prix : prix d'un lot, argent : ton or. Renvoie un nombre de LOTS (0 = rien).
+function ns.lotsAAcheter(cible, possede, lot, prix, argent)
+  local manque = (cible or 0) - (possede or 0)
+  if manque <= 0 then return 0 end
+  lot = (lot and lot > 0) and lot or 1
+  local lots = math.ceil(manque / lot)
+  if prix and prix > 0 then lots = math.min(lots, math.floor((argent or 0) / prix)) end
+  return math.max(lots, 0)
+end
+
+-- ---------------------------------------------------------------------------
+-- Achat automatique : remettre le stock (nourriture, eau, réactifs…)
+-- ---------------------------------------------------------------------------
+
+local ouvert = false -- le marchand est-il encore ouvert ?
+
+local function compterObjet(id)
+  local f = (C_Item and C_Item.GetItemCount) or GetItemCount
+  return f and f(id) or 0
+end
+
+local function acheterStock()
+  local achats = {} -- { index, nombre d'appels, quantité par appel, lien, total }
+  local argent = GetMoney()
+  for i = 1, GetMerchantNumItems() do
+    local id = GetMerchantItemID and GetMerchantItemID(i)
+    local voulu = id and db.stock[id]
+    if voulu then
+      -- Retail récent : C_MerchantFrame.GetItemInfo (une table) ; ailleurs l'ancienne fonction.
+      local prix, lot, dispo, achetable, coutSpecial
+      if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+        local info = C_MerchantFrame.GetItemInfo(i) or {}
+        prix, lot, dispo = info.price, info.stackCount, info.numAvailable
+        achetable, coutSpecial = info.isPurchasable, info.hasExtendedCost
+      else
+        local _
+        _, _, prix, lot, dispo, achetable, _, coutSpecial = GetMerchantItemInfo(i)
+      end
+      -- On n'achète qu'avec de l'or (pas de monnaies spéciales), et si le marchand en a.
+      if achetable ~= false and not coutSpecial and dispo ~= 0 then
+        local lots = ns.lotsAAcheter(voulu.qte, compterObjet(id), lot, prix, argent)
+        if dispo and dispo > 0 then lots = math.min(lots, dispo) end
+        if lots > 0 then
+          argent = argent - lots * (prix or 0)
+          achats[#achats + 1] = { i = i, lots = lots, lot = lot or 1, lien = GetMerchantItemLink(i) or voulu.lien,
+                                  cout = lots * (prix or 0) }
+        end
+      end
+    end
+  end
+  if #achats == 0 then return end
+  -- Un lot à la fois, toutes les 0,2 s : le serveur suit mieux qu'avec tout d'un coup.
+  local file = {}
+  for _, a in ipairs(achats) do
+    for _ = 1, a.lots do file[#file + 1] = a.i end
+  end
+  local n = 0
+  local function suivant()
+    n = n + 1
+    if not ouvert or n > #file then
+      if db.bilan then
+        for _, a in ipairs(achats) do
+          ns.reglages.dire(string.format("acheté %d × %s : %s", a.lots * a.lot, a.lien, texteOr(a.cout)))
+        end
+      end
+      return
+    end
+    BuyMerchantItem(file[n])
+    C_Timer.After(0.2, suivant)
+  end
+  suivant()
+end
+
 -- ---------------------------------------------------------------------------
 -- Vente des gris
 -- ---------------------------------------------------------------------------
 
-local ouvert = false -- le marchand est-il encore ouvert ?
 local DERNIER_SAC = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
 
 local function vendreGris()
@@ -135,6 +211,8 @@ ns.reglages = ns.creerReglages({
       aide = "Seulement chez les marchands qui savent réparer (enclume dans leur fenêtre)." },
     { cle = "banqueGuilde", libelle = "Payer avec la banque de guilde",
       aide = "Si ta guilde te le permet et qu'il y a assez ; sinon avec ton or." },
+    { cle = "acheter", libelle = "Racheter mon stock",
+      aide = "Nourriture, eau, réactifs… jusqu'à la quantité voulue. Liste : /ma stock." },
     { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
       aide = "Garde une de ces touches enfoncée en ouvrant le marchand pour tout faire à la main." },
     { titre = "Affichage" },
@@ -154,12 +232,19 @@ ns.reglages = ns.creerReglages({
     local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
     b:SetSize(160, 24)
     b:SetPoint("TOPLEFT", 16, y)
-    b:SetText("Vider la liste")
+    b:SetText("Vider les gris gardés")
     b:SetScript("OnClick", function() r.changer("gardes", {}); r.dire("plus aucun gris gardé.") end)
+    local b2 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
+    b2:SetSize(160, 24)
+    b2:SetPoint("TOPLEFT", 184, y)
+    b2:SetText("Vider le stock")
+    b2:SetScript("OnClick", function() r.changer("stock", {}); r.dire("plus rien à racheter.") end)
     y = y - 28
-    return y, function(d) compteur:SetText("Objets gris gardés : " .. compter(d.gardes)) end
+    return y, function(d)
+      compteur:SetText("Gris gardés : " .. compter(d.gardes) .. "     Objets en stock : " .. compter(d.stock))
+    end
   end,
-  astuce = "Garder un gris : tape /ma garder puis Maj+clic sur l'objet. Tout s'applique sans /reload.",
+  astuce = "Garder un gris : /ma garder puis Maj+clic sur l'objet. Stock : /ma stock 20 puis Maj+clic sur l'objet.",
   auChargement = function(d) db = d end,
 })
 
@@ -177,6 +262,8 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
   if db.pauseTouches and (IsShiftKeyDown() or IsControlKeyDown() or IsAltKeyDown()) then return end
   if db.reparer then reparer() end
   if db.vendreGris then vendreGris() end
+  -- Un peu après la vente, pour que l'or des gris compte dans le budget.
+  if db.acheter and next(db.stock) then C_Timer.After(0.5, function() if ouvert then acheterStock() end end) end
 end)
 
 SLASH_MARCHANDAUTO1 = "/ma"
@@ -195,8 +282,29 @@ SlashCmdList.MARCHANDAUTO = function(texte)
     if db.gardes[id] then db.gardes[id] = nil else db.gardes[id] = reste end
     r.dire(reste .. (db.gardes[id] and " sera gardé." or " sera de nouveau vendu."))
     r.appliquer()
+  elseif cmd == "stock" then
+    -- /ma stock 20 [objet] : en garder 20 ; /ma stock 0 [objet] : retirer ; /ma stock : la liste.
+    local qte = tonumber(reste:match("^(%d+)"))
+    local id = tonumber(reste:match("item:(%d+)"))
+    if not (qte and id) then
+      if next(db.stock) then
+        r.dire("stock voulu :")
+        for _, v in pairs(db.stock) do r.dire(string.format("  %d × %s", v.qte, v.lien)) end
+      end
+      return r.dire("tape /ma stock 20 puis Maj+clic sur l'objet (0 pour le retirer).")
+    end
+    local lien = reste:match("|c.-|r") or ("objet " .. id)
+    if qte == 0 then
+      db.stock[id] = nil
+      r.dire(lien .. " n'est plus racheté.")
+    else
+      db.stock[id] = { lien = lien, qte = qte }
+      r.dire(string.format("chez un marchand qui en vend, je rachète %s jusqu'à %d.", lien, qte))
+    end
+    r.appliquer()
   elseif not r.basculerOption(cmd) then
     r.dire("/ma : ouvrir les réglages     /ma on, /ma off : activer ou couper")
     r.dire("/ma garder <objet> : ne jamais vendre ce gris (Maj+clic sur l'objet)")
+    r.dire("/ma stock 20 <objet> : en garder 20 dans tes sacs, racheté chez le marchand")
   end
 end

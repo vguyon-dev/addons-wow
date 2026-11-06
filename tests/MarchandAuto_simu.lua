@@ -26,6 +26,13 @@ local function lire(p) local f = assert(io.open(p, "rb")) local s = f:read("*a")
 verifie("Reglages.lua identique dans QuetesAuto", true,
   lire(reglagesLua) == lire((reglagesLua:gsub("MarchandAuto/Reglages", "QuetesAuto/Reglages"))))
 
+-- Achat du stock.
+verifie("stock : il en manque 15, vendus à l'unité", 15, ns.lotsAAcheter(20, 5, 1, 10, 100000))
+verifie("stock : déjà assez", 0, ns.lotsAAcheter(20, 25, 1, 10, 100000))
+verifie("stock : vendus par 5, il en manque 12 → 3 lots", 3, ns.lotsAAcheter(20, 8, 5, 10, 100000))
+verifie("stock : pas assez d'or → ce qu'on peut", 4, ns.lotsAAcheter(20, 0, 1, 25, 100))
+verifie("stock : pas d'or du tout", 0, ns.lotsAAcheter(20, 0, 1, 25, 0))
+
 verifie("gris : vendu", true, ns.aVendre({ quality = 0, itemID = 1 }, {}))
 verifie("blanc : gardé", false, ns.aVendre({ quality = 1, itemID = 1 }, {}))
 verifie("gris sans valeur : gardé", false, ns.aVendre({ quality = 0, hasNoValue = true }, {}))
