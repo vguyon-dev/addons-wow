@@ -1,6 +1,7 @@
 -- ============================================================================
 -- Alerte rare : un message et un son quand un monstre rare (ou élite, en
--- option) apparaît près de toi, avec une balise sur la carte pour y aller.
+-- option) ou un coffre au trésor apparaît près de toi, avec une balise sur la
+-- carte pour y aller.
 -- COUPÉ AU DÉPART : à activer dans les réglages (/ar options) ou par /ar on.
 --
 -- Deux façons de le voir arriver :
@@ -16,6 +17,8 @@ local NOM_ADDON, ns = ...
 
 local DEFAUTS = {
   actif = false,      -- coupé au départ, à la demande de Valentin
+  rares = true,       -- prévenir pour les monstres rares
+  coffres = true,     -- prévenir pour les coffres et trésors de la minimap
   elites = false,     -- prévenir aussi pour les élites (hors donjon)
   son = true,         -- jouer un son
   balise = true,      -- poser une balise sur la carte vers le rare
@@ -30,10 +33,12 @@ local estSecret = issecretvalue or function() return false end
 -- Partie « logique pure », testée hors jeu (tests/AlerteRare_simu.lua).
 -- ---------------------------------------------------------------------------
 
--- Vignette du jeu -> « rare », « élite » ou nil. Les noms d'images (atlas)
--- des vignettes de monstre commencent par « VignetteKill ».
+-- Vignette du jeu -> « rare », « élite », « coffre » ou nil. Les noms d'images
+-- (atlas) des vignettes de monstre commencent par « VignetteKill », ceux des
+-- trésors par « VignetteLoot » (ou contiennent « Treasure »).
 function ns.typeVignette(atlas)
   if type(atlas) ~= "string" then return nil end
+  if atlas:find("^VignetteLoot") or atlas:lower():find("treasure") then return "coffre" end
   if atlas:find("^VignetteKillElite") then return "élite" end
   if atlas:find("^VignetteKill") then return "rare" end
   return nil
@@ -51,6 +56,8 @@ end
 function ns.doitPrevenir(cle, typ, reglages, vus, maintenant)
   if not typ or not cle then return false end
   if typ == "élite" and not reglages.elites then return false end
+  if typ == "rare" and reglages.rares == false then return false end
+  if typ == "coffre" and not reglages.coffres then return false end
   if vus[cle] and maintenant - vus[cle] < 300 then return false end
   vus[cle] = maintenant
   return true
@@ -73,8 +80,9 @@ local function poserBalise(guidVignette)
 end
 
 local function annoncer(nom, typ, guidVignette)
-  local couleur = typ == "rare" and "|cff66bbff" or "|cffffd200"
-  local texte = couleur .. (typ == "rare" and "Rare" or "Élite") .. " : " .. (nom or "?") .. "|r"
+  local couleurs = { rare = "|cff66bbff", ["élite"] = "|cffffd200", coffre = "|cffffaa33" }
+  local libelles = { rare = "Rare", ["élite"] = "Élite", coffre = "Coffre" }
+  local texte = couleurs[typ] .. libelles[typ] .. " : " .. (nom or "?") .. "|r"
   if RaidNotice_AddMessage and RaidWarningFrame then
     RaidNotice_AddMessage(RaidWarningFrame, texte, ChatTypeInfo and ChatTypeInfo.RAID_WARNING or { r = 1, g = 1, b = 1 })
   end
@@ -122,6 +130,10 @@ ns.reglages = ns.creerReglages({
     { titre = "Alerte" },
     { cle = "actif", libelle = "Activer Alerte rare",
       aide = "Coupé au départ. Jamais en donjon ni en raid." },
+    { cle = "rares", libelle = "Monstres rares",
+      aide = "La tête de mort ou l'étoile de la minimap, ou une barre de vie « rare »." },
+    { cle = "coffres", libelle = "Coffres et trésors",
+      aide = "Le coffre qui apparaît sur la minimap quand un trésor est proche." },
     { cle = "elites", libelle = "Prévenir aussi pour les élites",
       aide = "Hors donjon seulement. Peut être bavard dans certaines zones." },
     { cle = "son", libelle = "Jouer un son",
@@ -132,7 +144,7 @@ ns.reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
-  astuce = "Chaque monstre n'est annoncé qu'une fois toutes les 5 minutes. Commande : /ar.",
+  astuce = "Chaque monstre ou coffre n'est annoncé qu'une fois toutes les 5 minutes. Commande : /ar.",
   auChargement = function(d) db = d end,
 })
 

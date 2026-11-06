@@ -32,7 +32,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /carnet  Carnet de session (temps, or, XP, monstres)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
   /ma      Marchand auto (vend les gris, répare, rachète ton stock)
-  /ar      Alerte rare (coupée au départ : /ar on pour l'activer)
+  /ar      Alerte rare et coffres (coupée au départ : /ar on pour l'activer)
   /sr      Sacs rangés (ranger les sacs, équipement en double ou moins bon)
   /mt      Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
            Astuce : récolte sur la molette (bouton « Choisir la touche », puis roule la molette)

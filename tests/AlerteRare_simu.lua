@@ -27,7 +27,8 @@ verifie("Reglages.lua identique dans QuetesAuto", true,
 
 verifie("vignette : rare", "rare", ns.typeVignette("VignetteKill"))
 verifie("vignette : élite", "élite", ns.typeVignette("VignetteKillElite"))
-verifie("vignette : trésor ignoré", nil, ns.typeVignette("VignetteLoot"))
+verifie("vignette : coffre", "coffre", ns.typeVignette("VignetteLoot"))
+verifie("vignette : autre image ignorée", nil, ns.typeVignette("VignetteEvent"))
 verifie("barre de vie : rare élite = rare", "rare", ns.typeClassement("rareelite"))
 verifie("barre de vie : normal ignoré", nil, ns.typeClassement("normal"))
 
@@ -37,4 +38,7 @@ verifie("rare : pas deux fois", false, ns.doitPrevenir("A", "rare", { elites = f
 verifie("rare : de nouveau après 5 min", true, ns.doitPrevenir("A", "rare", { elites = false }, vus, 401))
 verifie("élite : option coupée", false, ns.doitPrevenir("B", "élite", { elites = false }, vus, 100))
 verifie("élite : option activée", true, ns.doitPrevenir("B", "élite", { elites = true }, vus, 100))
+verifie("coffre : option activée", true, ns.doitPrevenir("C", "coffre", { coffres = true }, vus, 100))
+verifie("coffre : option coupée", false, ns.doitPrevenir("D", "coffre", { coffres = false }, vus, 100))
+verifie("rare : option coupée", false, ns.doitPrevenir("E", "rare", { rares = false }, vus, 100))
 os.exit(ok and 0 or 1)

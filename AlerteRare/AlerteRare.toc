@@ -1,9 +1,9 @@
 ## Interface: 120105, 16001
 ## Title: Alerte rare
-## Notes: Message, son et balise quand un monstre rare (ou élite, en option) apparaît près de toi. Coupé au départ.
+## Notes: Message, son et balise quand un monstre rare (ou élite, en option) ou un coffre apparaît près de toi. Coupé au départ.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.2.0
 ## IconTexture: Interface\Icons\Ability_Hunter_MasterMarksman
 ## SavedVariables: AlerteRareDB
 ## AddonCompartmentFunc: AlerteRare_OuvrirReglages
