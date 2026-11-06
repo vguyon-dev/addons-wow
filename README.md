@@ -65,7 +65,11 @@ foreach ($v in "_retail_", "_forever_") {
 
 ## Partager
 
-`pwsh -File outils\paquet.ps1` fabrique un zip avec tous les addons et une notice (`outils/LISEZMOI.txt`)
+Le dépôt est public : le plus simple est d'envoyer le lien https://github.com/vguyon-dev/addons-wow.
+La personne clique sur **Code > Download ZIP**, ouvre le dossier `addons-wow-main` et copie seulement les
+dossiers d'addons (pas `tests` ni `outils`), puis suit `outils/LISEZMOI.txt`.
+
+`pwsh -File outils\paquet.ps1` fabrique aussi un zip avec tous les addons et une notice (`outils/LISEZMOI.txt`)
 dans `Téléchargements\@Claude\Telechargements\AddonsWow\`. On l'envoie (WhatsApp, Discord) ; la personne
 copie les dossiers du zip dans `World of Warcraft\_forever_\Interface\AddOns\` (ou `_retail_`). Les
 réglages sont gardés à chaque mise à jour : ils vivent dans `WTF\`, pas dans les dossiers des addons.
