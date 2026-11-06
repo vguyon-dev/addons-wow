@@ -1,6 +1,7 @@
 ## Interface: 120105, 16001
 ## Title: Métiers auto
 ## Notes: Pêche au double clic droit avec le son réglé, récolte d'une touche, repérage remis tout seul, liste de courses pour l'artisanat.
+## Category: Addons de Valentin
 ## Author: Valentin
 ## Version: 0.2.0
 ## IconTexture: Interface\Icons\Trade_Fishing

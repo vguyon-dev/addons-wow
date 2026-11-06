@@ -1,6 +1,7 @@
 ## Interface: 120105, 16001
 ## Title: Butin rapide
 ## Notes: Ramasse le butin très vite, gère les sacs pleins, filtre ce qui est ramassé et fait le bilan du farm.
+## Category: Addons de Valentin
 ## Author: Valentin
 ## Version: 0.1.0
 ## IconTexture: Interface\Icons\INV_Misc_Bag_10

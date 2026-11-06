@@ -33,7 +33,7 @@ local DEFAUTS = {
   payantes = true,         -- ne pas rendre une quête qui coûte de l'or
   cinematiques = true,     -- passer les cinématiques déjà vues
   dialogueUnique = false,  -- cliquer seul la phrase quand un PNJ n'en a qu'une (coupé au départ)
-  bouton = true,           -- afficher le bouton
+  bouton = false,          -- bouton « ! » à l'écran (coupé : l'icône de la minimap fait pareil)
   partager = true,         -- partager ses quêtes avec le groupe
   accepterPartagees = true, -- accepter les quêtes partagées par le groupe
   pnjIgnores = {},         -- [idPNJ] = nom
@@ -418,7 +418,7 @@ local reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône autour de la minimap",
       aide = "Clic gauche : réglages. Clic droit : activer ou couper. Glisser : déplacer." },
     { cle = "bouton", libelle = "Bouton à l'écran",
-      aide = "Un « ! » jaune à poser où tu veux. Clic : activer ou couper." },
+      aide = "Un second « ! » jaune à poser où tu veux, en plus de l'icône de la minimap. Clic : activer ou couper." },
   },
   -- Zone « Listes » : compteurs et boutons pour vider.
   contenu = function(fenetre, y, r)
@@ -448,6 +448,8 @@ local reglages = ns.creerReglages({
   astuce = "Ignorer un PNJ : parle-lui puis tape /qa ignorer. Tout s'applique tout de suite, sans /reload.",
   auChargement = function(d)
     db = d
+    -- Une seule fois : le bouton à l'écran faisait doublon avec l'icône de la minimap.
+    if not db.boutonRange then db.bouton = false; db.boutonRange = true end
     bouton:ClearAllPoints()
     if db.position then
       local p = db.position

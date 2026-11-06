@@ -19,7 +19,8 @@ ADDONS DE VALENTIN : INSTALLATION
    gardés, ils sont ailleurs).
 
 5. Lance le jeu. Sur l'écran des personnages, bouton « AddOns » en bas à
-   gauche : vérifie qu'ils sont cochés. Pour éviter les doublons, décoche
+   gauche : ils sont rangés ensemble dans la catégorie « Addons de Valentin ».
+   Vérifie qu'ils sont cochés. Pour éviter les doublons, décoche
    AutoQuests et SpeedyAutoLoot si tu les as.
 
 DANS LE JEU
