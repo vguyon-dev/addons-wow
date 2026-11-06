@@ -1,0 +1,12 @@
+## Interface: 120105, 16001
+## Title: Entre frères
+## Notes: En groupe, montre les quêtes de chacun : en commun (avec la progression de chacun), les siennes et les tiennes.
+## Category: Addons de Valentin
+## Author: Valentin
+## Version: 0.1.0
+## IconTexture: Interface\Icons\Achievement_GuildPerk_EverybodysFriend
+## SavedVariables: EntreFreresDB
+## AddonCompartmentFunc: EntreFreres_OuvrirReglages
+
+Reglages.lua
+EntreFreres.lua

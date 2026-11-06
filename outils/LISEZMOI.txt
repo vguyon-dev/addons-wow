@@ -13,7 +13,7 @@ ADDONS DE VALENTIN : INSTALLATION
    (si « Interface » ou « AddOns » n'existe pas, crée-le avec ce nom exact)
 
 4. Copie dedans les dossiers du zip : CarnetDeSession, QuetesAuto,
-   MarchandAuto, MetiersAuto, ButinRapide. Copie les DOSSIERS eux-mêmes,
+   MarchandAuto, MetiersAuto, ButinRapide, EntreFreres. Copie les DOSSIERS eux-mêmes,
    pas seulement ce qu'il y a dedans.
    Pour une mise à jour : remplace les anciens dossiers (tes réglages sont
    gardés, ils sont ailleurs).
@@ -31,9 +31,10 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
 
   /carnet  Carnet de session (temps, or, XP, monstres)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
-  /ma      Marchand auto (vend les gris, répare)
+  /ma      Marchand auto (vend les gris, répare, rachète ton stock)
   /mt      Métiers auto (pêche au double clic droit, récolte, liste de courses)
   /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
+  /ef      Entre frères (en groupe : les quêtes de chacun)
 
 En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie à
 Valentin le message d'erreur.
