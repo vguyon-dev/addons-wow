@@ -14,6 +14,7 @@ Les deux versions partagent la même API : un seul addon sert aux deux.
 | [MetiersAuto](MetiersAuto/) | Pêche : en mode pêche, double clic droit pour lancer, son des effets à fond et musique coupée (remis comme avant ensuite). Récolte : la touche « Interagir avec la cible » vise seule filon, herbe ou bouchon, ramassage automatique, repérage minerais et herbes remis tout seul, alerte « pas fini » quand un filon demande encore des coups (discrète si la touche est la molette), bouton pour choisir la touche de récolte. Flèche vers le filon ou l'herbe connu le plus proche : l'addon retient chaque endroit récolté, car le jeu ne donne pas aux addons les points de la minimap. Liste de courses d'artisanat (sacs et banque). Jamais d'action sans appui du joueur : un addon ne peut pas, et ne doit pas, récolter à sa place | `/mt` (réglages), `peche`, `courses 5 <recette>`, `courses vider`, `filons`, `filons oublier`, `on`, `off` |
 | [ButinRapide](ButinRapide/) | Notre SpeedyAutoLoot : ramassage très rapide sans fenêtre de butin (elle revient s'il reste quelque chose). Sacs pleins : alerte avec ce qui reste au sol et bouton qui jette le gris le moins cher (jamais un composant d'artisanat ni un objet de quête), puis ramasse. Gris laissés au sol en option, liste d'objets à ne jamais ramasser. Bilan de farm par personnage : objets, or, revente, hôtel des ventes (Auctionator), gain par heure | `/br` (réglages), `ignorer <objet>`, `bilan`, `on`, `off` |
 | [SacsRanges](SacsRanges/) | Range les sacs par type (le tri du jeu), et la banque quand elle est ouverte ; en option, tout seul en refermant un marchand. Panneau : équipement en double, et équipement moins bon que ce que tu portes (à vendre ou en banque ?). Raccourci clavier pour ranger | `/sr` (le panneau), `ranger`, `options` |
+| [AlerteRare](AlerteRare/) | **Coupé au départ.** Message, son et balise sur la carte quand un monstre rare apparaît près de toi (vignette de la minimap, ou barre de vie « rare ») ; élites en option. Une annonce par monstre toutes les 5 minutes, jamais en donjon | `/ar` (réglages), `on`, `off` |
 
 ## Arborescence
 
@@ -64,7 +65,7 @@ foreach ($v in "_retail_", "_forever_") {
   `wsl lua5.1 tests/MarchandAuto_simu.lua MarchandAuto/MarchandAuto.lua`,
   `wsl lua5.1 tests/MetiersAuto_simu.lua MetiersAuto/MetiersAuto.lua`,
   `wsl lua5.1 tests/ButinRapide_simu.lua ButinRapide/ButinRapide.lua`,
-  `wsl lua5.1 tests/SacsRanges_simu.lua SacsRanges/SacsRanges.lua`, `tests/EntreFreres_simu.lua`).
+  `wsl lua5.1 tests/SacsRanges_simu.lua SacsRanges/SacsRanges.lua`, `tests/EntreFreres_simu.lua`, `tests/AlerteRare_simu.lua`).
 - Le nom du dossier doit être identique au nom du `.toc`.
 
 ## Partager
