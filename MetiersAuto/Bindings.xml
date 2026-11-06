@@ -3,7 +3,7 @@
   <Binding name="METIERSAUTO_PECHE" header="METIERSAUTO" category="ADDONS">
     MetiersAuto_ModePeche()
   </Binding>
-  <Binding name="METIERSAUTO_REGLAGES" header="METIERSAUTO" category="ADDONS">
+  <Binding name="METIERSAUTO_REGLAGES" category="ADDONS">
     MetiersAuto_OuvrirReglages()
   </Binding>
 </Bindings>

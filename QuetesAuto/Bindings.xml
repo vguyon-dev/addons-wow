@@ -1,10 +1,11 @@
 <!-- Raccourci clavier : Échap > Options > Raccourcis > Quêtes auto.
-     Le jeu charge ce fichier tout seul, sans le citer dans le .toc. -->
+     Le jeu charge ce fichier tout seul, sans le citer dans le .toc.
+     header= seulement sur le premier raccourci, sinon le jeu avertit « loaded more than once ». -->
 <Bindings>
   <Binding name="QUETESAUTO_BASCULER" header="QUETESAUTO" category="ADDONS">
     QuetesAuto_Basculer()
   </Binding>
-  <Binding name="QUETESAUTO_REGLAGES" header="QUETESAUTO" category="ADDONS">
+  <Binding name="QUETESAUTO_REGLAGES" category="ADDONS">
     QuetesAuto_OuvrirReglages()
   </Binding>
 </Bindings>
