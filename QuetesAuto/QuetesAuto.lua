@@ -423,15 +423,36 @@ end
 -- ---------------------------------------------------------------------------
 
 -- Une quête vient d'être acceptée : on la partage avec le groupe.
+-- Partager seulement ce qui peut l'être, et une seule fois par quête :
+--  - le jeu dit si la quête est partageable (les quêtes de classe, de métier,
+--    d'histoire perso ne le sont pas) : on lui fait confiance, sans réessayer ;
+--  - jamais les quêtes mondiales ni les objectifs bonus (acceptés tout seuls en
+--    entrant dans la zone) ;
+--  - jamais une quête reçue du groupe (sinon on se la renverrait en boucle) ;
+--  - jamais deux fois la même quête dans la session.
+local dejaPartagees = {}
+local function partageable(id)
+  local q = C_QuestLog
+  if not (q and q.IsPushableQuest and q.SetSelectedQuest and QuestLogPushQuest) then return false end
+  if q.IsWorldQuest and q.IsWorldQuest(id) then return false end
+  if q.IsQuestTask and q.IsQuestTask(id) then return false end
+  local ok, oui = pcall(q.IsPushableQuest, id)
+  return ok and not estSecret(oui) and oui == true
+end
+
 local function surQueteAcceptee(a, b)
   local id = b or a -- selon la version du jeu : (id) ou (index, id)
-  if not db.partager or not IsInGroup() or not id or recuesDuGroupe[id] then return end
+  if not db.partager or not IsInGroup() or type(id) ~= "number" then return end
+  if recuesDuGroupe[id] or dejaPartagees[id] then return end
+  dejaPartagees[id] = true -- même si le partage échoue : on ne réessaie pas
   C_Timer.After(0.5, function()
-    if C_QuestLog.IsPushableQuest and C_QuestLog.IsPushableQuest(id) then
-      C_QuestLog.SetSelectedQuest(id)
-      QuestLogPushQuest()
-      dire("quête partagée avec le groupe : " .. (C_QuestLog.GetTitleForQuestID(id) or id))
-    end
+    if not IsInGroup() or not partageable(id) then return end
+    -- On remet ensuite la quête qui était sélectionnée dans ton journal.
+    local avant = C_QuestLog.GetSelectedQuest and C_QuestLog.GetSelectedQuest()
+    C_QuestLog.SetSelectedQuest(id)
+    QuestLogPushQuest()
+    if avant and avant ~= 0 then C_QuestLog.SetSelectedQuest(avant) end
+    dire("quête partagée avec le groupe : " .. (C_QuestLog.GetTitleForQuestID(id) or id))
   end)
 end
 
