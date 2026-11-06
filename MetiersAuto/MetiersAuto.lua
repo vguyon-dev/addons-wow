@@ -212,7 +212,44 @@ local function remettreReperage()
 end
 
 local function toucheInteraction()
-  return GetBindingKey and GetBindingKey("INTERACTTARGET")
+  local k = GetBindingKey and GetBindingKey("INTERACTTARGET")
+  if not k or k == "" then return nil end
+  -- GetBindingText traduit le code de la touche (« SHIFT-E » devient « Maj-E »,
+  -- « BUTTON4 » un bouton de souris). Certaines touches (², <) sortent en « ? »
+  -- avec la police du jeu : on garde alors le code brut.
+  local texte = GetBindingText and GetBindingText(k, "KEY_") or k
+  if not texte or texte == "" or texte:find("?", 1, true) then texte = k end
+  return texte
+end
+
+-- Choisir la touche depuis les réglages : on écoute la prochaine touche
+-- appuyée, puis on la relie à « Interagir avec la cible » comme le ferait
+-- Échap > Options > Raccourcis. Échap annule. Interdit en combat par le jeu.
+local MODIFICATEURS = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true,
+  LALT = true, RALT = true, LMETA = true, RMETA = true }
+local capture = CreateFrame("Frame", nil, UIParent)
+capture:Hide()
+capture:EnableKeyboard(true)
+capture:SetScript("OnKeyDown", function(self, key)
+  if MODIFICATEURS[key] then return end
+  self:Hide()
+  if key == "ESCAPE" then ns.reglages.dire("choix de la touche annulé.") return end
+  local combo = (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "")
+    .. (IsShiftKeyDown() and "SHIFT-" or "") .. key
+  if SetBinding(combo, "INTERACTTARGET") then
+    SaveBindings(GetCurrentBindingSet())
+    ns.reglages.dire("« Interagir avec la cible » est maintenant sur |cff00ff00" .. (toucheInteraction() or combo) .. "|r.")
+  else
+    ns.reglages.dire("|cffff4040impossible d'utiliser cette touche.|r")
+  end
+  if self.apres then self.apres() end
+end)
+
+local function choisirTouche(apres)
+  if InCombatLockdown() then ns.reglages.dire("|cffff4040pas en combat.|r") return end
+  capture.apres = apres
+  capture:Show()
+  ns.reglages.dire("appuie sur la touche voulue pour récolter (Échap pour annuler).")
 end
 
 -- « Filon pas fini » : un addon n'a pas le droit de continuer la récolte à ta
@@ -381,10 +418,19 @@ ns.reglages = ns.creerReglages({
     t:SetPoint("TOPLEFT", 16, y - 6)
     t:SetText("Touches et liste")
     y = y - 32
-    local touche = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    touche:SetPoint("TOPLEFT", 20, y)
-    touche:SetWidth(400)
+    local touche = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    touche:SetPoint("TOPLEFT", 20, y - 5)
+    touche:SetWidth(240)
     touche:SetJustifyH("LEFT")
+    local maj -- fonction de mise à jour, définie plus bas
+    local b0 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
+    b0:SetSize(150, 24)
+    b0:SetPoint("TOPLEFT", 254, y)
+    b0:SetText("Choisir la touche")
+    b0:SetScript("OnClick", function()
+      b0:SetText("Appuie sur une touche…")
+      choisirTouche(function() maj() end)
+    end)
     y = y - 34
     local b1 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
     b1:SetSize(190, 24)
@@ -396,12 +442,13 @@ ns.reglages = ns.creerReglages({
     b2:SetText("Vider la liste de courses")
     b2:SetScript("OnClick", function() r.changer("courses", {}); r.dire("liste de courses vidée.") end)
     y = y - 28
-    return y, function()
+    maj = function()
       local k = toucheInteraction()
-      touche:SetText("Touche « Interagir avec la cible » : " .. (k and ("|cff00ff00" .. k .. "|r")
-        or "|cffff4040aucune|r, à choisir dans Échap > Options > Raccourcis"))
+      touche:SetText("Touche pour récolter : " .. (k and ("|cff00ff00" .. k .. "|r") or "|cffff4040aucune|r"))
+      b0:SetText(k and "Changer la touche" or "Choisir la touche")
       b1:SetText(modePeche and "Arrêter le mode pêche" or "Démarrer le mode pêche")
     end
+    return y, maj
   end,
   astuce = "Tout s'applique tout de suite, sans /reload. Commande : /mt.",
   auChargement = function(d)
