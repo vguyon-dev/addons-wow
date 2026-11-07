@@ -185,8 +185,16 @@ end
 -- Choix de la récompense en jeu
 -- ---------------------------------------------------------------------------
 
+-- Numéro d'interface : 120105 sur Retail, 16001 sur Forever.
+local RETAIL = GetBuildInfo ~= nil and (tonumber((select(4, GetBuildInfo()))) or 0) >= 100000
+
+-- Sur Forever, arc, fusil, arbalète, baguette, arme de jet et relique ont leur
+-- propre emplacement (18) ; sur Retail, une arme à distance se tient en main (16).
+local DISTANCE = RETAIL and 16 or 18
+
 -- Emplacements d'équipement par type d'objet.
 local EMPLACEMENTS = {
+  INVTYPE_THROWN = { DISTANCE }, INVTYPE_RELIC = { DISTANCE },
   INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 },
   INVTYPE_CHEST = { 5 }, INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 },
   INVTYPE_LEGS = { 7 }, INVTYPE_FEET = { 8 }, INVTYPE_WRIST = { 9 },
@@ -194,7 +202,7 @@ local EMPLACEMENTS = {
   INVTYPE_CLOAK = { 15 }, INVTYPE_WEAPON = { 16, 17 }, INVTYPE_2HWEAPON = { 16 },
   INVTYPE_WEAPONMAINHAND = { 16 }, INVTYPE_WEAPONOFFHAND = { 17 },
   INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 },
-  INVTYPE_RANGED = { 16 }, INVTYPE_RANGEDRIGHT = { 16 },
+  INVTYPE_RANGED = { DISTANCE }, INVTYPE_RANGEDRIGHT = { DISTANCE },
 }
 
 -- Type d'armure de chaque classe : 1 tissu, 2 cuir, 3 mailles, 4 plaques.
@@ -205,46 +213,118 @@ local ARMURE = {
   WARRIOR = 4, PALADIN = 4, DEATHKNIGHT = 4,
 }
 
--- Sur WoW Forever (règles d'origine), chasseurs et chamans portent du cuir
--- jusqu'à ce qu'ils apprennent les mailles (niveau 40, chez le maître), et
--- guerriers et paladins des mailles jusqu'aux plaques. Sort « Mailles » 8737,
--- sort « Plaques » 750 : le jeu les donne quand la compétence est apprise.
-local SORT_ARMURE = { [3] = 8737, [4] = 750 }
+-- Sur WoW Forever (règles d'origine), se servir d'une arme ou porter une armure
+-- s'apprend : chaque type d'arme chez le maître d'armes ou le maître de classe,
+-- les mailles (chasseur, chaman) et les plaques (guerrier, paladin) au niveau 40.
+-- Chaque compétence est un sort que le jeu te donne une fois apprise.
+-- COMPETENCES[classe d'objet][sous-classe] = sort de la compétence.
+local COMPETENCES = {
+  [2] = { -- armes
+    [0] = 196,   -- haches à une main
+    [1] = 197,   -- haches à deux mains
+    [2] = 264,   -- arcs
+    [3] = 266,   -- armes à feu
+    [4] = 198,   -- masses à une main
+    [5] = 199,   -- masses à deux mains
+    [6] = 200,   -- armes d'hast
+    [7] = 201,   -- épées à une main
+    [8] = 202,   -- épées à deux mains
+    [10] = 227,  -- bâtons
+    [13] = 15590, -- armes de pugilat
+    [15] = 1180, -- dagues
+    [16] = 2567, -- armes de jet
+    [18] = 5011, -- arbalètes
+    [19] = 5009, -- baguettes
+  },
+  [4] = { -- armures
+    [1] = 9078,  -- tissu
+    [2] = 9077,  -- cuir
+    [3] = 8737,  -- mailles
+    [4] = 750,   -- plaques
+    [6] = 9116,  -- boucliers
+  },
+}
+ns.COMPETENCES = COMPETENCES
 
--- Type d'armure que tu peux porter aujourd'hui. Fonction pure, testée hors jeu :
--- `retail` vrai sur Retail (chaque classe porte son armure dès le niveau 1),
--- `connait(sort)` dit si tu as appris la compétence d'armure.
-function ns.armureDe(classe, retail, connait)
-  local type = ARMURE[classe]
-  if not type or retail or type < 3 then return type end
-  if connait(SORT_ARMURE[type]) then return type end
-  return type - 1
+-- Peux-tu te servir de cet objet ? Fonction pure, testée hors jeu.
+-- `connait(sort)` : compétence apprise (nil = on ne sait pas le demander au jeu) ;
+-- `rouge` : la bulle de l'objet affiche une ligne en rouge, la façon dont le jeu
+-- dit « tu ne peux pas » (classe, niveau, compétence, race, réputation…).
+function ns.utilisable(classeObjet, sousClasse, connait, rouge)
+  if rouge then return false end
+  local sort = connait and COMPETENCES[classeObjet] and COMPETENCES[classeObjet][sousClasse]
+  if sort and not connait(sort) then return false end
+  return true
 end
 
--- Numéro d'interface : 120105 sur Retail, 16001 sur Forever.
-local RETAIL = GetBuildInfo ~= nil and (tonumber((select(4, GetBuildInfo()))) or 0) >= 100000
+-- Type d'armure à viser : la plus lourde que tu as apprise (Forever), sinon
+-- celle de ta classe (Retail, où chaque classe porte la sienne dès le niveau 1).
+function ns.armureDe(classe, retail, connait)
+  if not retail and connait then
+    for t = 4, 1, -1 do
+      if connait(COMPETENCES[4][t]) then return t end
+    end
+  end
+  return ARMURE[classe]
+end
 
 local function connaitSort(id)
   if IsPlayerSpell then return IsPlayerSpell(id) end
   return IsSpellKnown and IsSpellKnown(id) or false
 end
 
--- Combien de niveaux d'objet cette récompense ferait-elle gagner ? nil si ce
--- n'est pas une amélioration utilisable par ta classe.
-local function gainPour(lien)
+-- La liste des compétences ne sert que sur Forever, et seulement si le jeu
+-- répond : tout le monde connaît le tissu, sinon la question ne marche pas.
+local function competences()
+  if RETAIL or not connaitSort(COMPETENCES[4][1]) then return nil end
+  return connaitSort
+end
+
+-- Lit la bulle de la récompense n° i dans une bulle cachée : vrai si une ligne
+-- est en rouge. nil si la bulle n'a pas pu être lue.
+local bulle
+local function ligneRouge(i)
+  if not bulle then
+    bulle = CreateFrame("GameTooltip", "QuetesAutoBulle", nil, "GameTooltipTemplate")
+  end
+  bulle:SetOwner(WorldFrame, "ANCHOR_NONE")
+  bulle:ClearLines()
+  bulle:SetQuestItem("choice", i)
+  local n = bulle:NumLines() or 0
+  local rouge = n > 0 and false or nil
+  for l = 2, n do -- la ligne 1 est le nom de l'objet
+    for _, cote in ipairs({ "Left", "Right" }) do
+      local texte = _G["QuetesAutoBulleText" .. cote .. l]
+      if texte and texte:IsShown() and texte:GetText() then
+        local r, g, b = texte:GetTextColor()
+        if r > 0.9 and g < 0.2 and b < 0.2 then rouge = true end
+      end
+    end
+  end
+  bulle:Hide()
+  return rouge
+end
+
+-- Combien de niveaux d'objet cette récompense (n° i) ferait-elle gagner ? nil si
+-- ce n'est pas une amélioration dont ton personnage peut se servir.
+local function gainPour(lien, i)
   local _, _, _, _, _, _, _, _, equipLoc, _, _, classeObjet, sousClasse = infoObjet(lien)
   local slots = equipLoc and EMPLACEMENTS[equipLoc]
   if not slots then return nil end
-  -- Armure de corps (classe d'objet 4, sous-classes 1 à 4) : seulement celle
-  -- que tu peux porter aujourd'hui (un chasseur de niveau 20 sur Forever : cuir).
+  local connait = competences()
+  local lu, rouge = pcall(ligneRouge, i)
+  if not ns.utilisable(classeObjet, sousClasse, connait, lu and rouge or nil) then return nil end
+  -- Armure de corps (classe d'objet 4, sous-classes 1 à 4) : seulement le type
+  -- que tu vises (un chasseur de niveau 20 sur Forever : cuir).
   if classeObjet == 4 and sousClasse and sousClasse >= 1 and sousClasse <= 4
      and equipLoc ~= "INVTYPE_CLOAK" then
     local _, classe = UnitClass("player")
-    local mienne = ns.armureDe(classe, RETAIL, connaitSort)
+    local mienne = ns.armureDe(classe, RETAIL, connait)
     if mienne and mienne ~= sousClasse then return nil end
   end
-  -- Armes et boucliers : seulement si le jeu dit que tu peux t'en servir.
-  if classeObjet == 2 or (classeObjet == 4 and sousClasse == 6) then
+  -- Armes et boucliers, quand la liste des compétences ne sert pas (Retail) :
+  -- seulement si le jeu dit que tu peux t'en servir.
+  if not connait and (classeObjet == 2 or (classeObjet == 4 and sousClasse == 6)) then
     local id = C_Item and C_Item.GetItemInfoInstant and C_Item.GetItemInfoInstant(lien)
     if not (id and C_PlayerInfo and C_PlayerInfo.CanUseItem and C_PlayerInfo.CanUseItem(id)) then
       return nil
@@ -285,7 +365,7 @@ local function prendreRecompense()
       return
     end
     local classe, sousClasse = select(12, infoObjet(lien))
-    candidats[i] = { lien = lien, gain = gainPour(lien), vente = select(11, infoObjet(lien)),
+    candidats[i] = { lien = lien, gain = gainPour(lien, i), vente = select(11, infoObjet(lien)),
                      metiers = ns.metiersPour(classe, sousClasse) }
   end
   essais = 0

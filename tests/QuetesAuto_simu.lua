@@ -91,12 +91,29 @@ verifie("objet de quête : saute celle écartée", 12, (ns.objetDeQuete(objets, 
 verifie("objet de quête : rien à commencer", nil, ns.objetDeQuete({ objets[1] }, {}))
 
 -- Armure portable : un chasseur de Forever porte du cuir tant qu'il n'a pas appris les mailles.
-local rien = function() return false end
-local tout = function() return true end
-verifie("Forever : chasseur sans les mailles = cuir", 2, ns.armureDe("HUNTER", false, rien))
-verifie("Forever : chasseur qui a appris les mailles = mailles", 3, ns.armureDe("HUNTER", false, tout))
-verifie("Forever : guerrier sans les plaques = mailles", 3, ns.armureDe("WARRIOR", false, rien))
-verifie("Forever : mage = tissu", 1, ns.armureDe("MAGE", false, rien))
-verifie("Retail : chasseur = mailles dès le niveau 1", 3, ns.armureDe("HUNTER", true, rien))
+local C = ns.COMPETENCES
+local function apprises(...)
+  local t = {}
+  for _, s in ipairs({ ... }) do t[s] = true end
+  return function(s) return t[s] == true end
+end
+-- Chasseur de niveau 20 : tissu, cuir, arcs, haches à une main.
+local chasseur20 = apprises(C[4][1], C[4][2], C[2][2], C[2][0])
+local chasseur40 = apprises(C[4][1], C[4][2], C[4][3], C[2][2], C[2][0])
+verifie("Forever : chasseur sans les mailles = cuir", 2, ns.armureDe("HUNTER", false, chasseur20))
+verifie("Forever : chasseur qui a appris les mailles = mailles", 3, ns.armureDe("HUNTER", false, chasseur40))
+verifie("Forever : guerrier sans les plaques = mailles", 3,
+  ns.armureDe("WARRIOR", false, apprises(C[4][1], C[4][2], C[4][3])))
+verifie("Forever : mage = tissu", 1, ns.armureDe("MAGE", false, apprises(C[4][1])))
+verifie("Retail : chasseur = mailles dès le niveau 1", 3, ns.armureDe("HUNTER", true, chasseur20))
+verifie("compétences illisibles : armure de la classe", 3, ns.armureDe("HUNTER", false, nil))
+-- Armes et armures : seulement ce que le personnage a appris.
+verifie("chasseur : arc appris, utilisable", true, ns.utilisable(2, 2, chasseur20))
+verifie("chasseur : épée pas apprise, non", false, ns.utilisable(2, 7, chasseur20))
+verifie("chasseur : bouclier jamais appris, non", false, ns.utilisable(4, 6, chasseur20))
+verifie("chasseur niveau 20 : mailles, non", false, ns.utilisable(4, 3, chasseur20))
+verifie("bijou ou bague (sans compétence) : oui", true, ns.utilisable(4, 0, chasseur20))
+verifie("ligne rouge dans la bulle : non", false, ns.utilisable(4, 0, chasseur20, true))
+verifie("Retail (pas de liste) : la bulle décide", true, ns.utilisable(2, 7, nil, false))
 
 os.exit(ok and 0 or 1)
