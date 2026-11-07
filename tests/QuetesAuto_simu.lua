@@ -90,4 +90,13 @@ verifie("objet de quête : saute la quête déjà prise", 11, (ns.objetDeQuete(o
 verifie("objet de quête : saute celle écartée", 12, (ns.objetDeQuete(objets, { [11] = true }) or {}).questID)
 verifie("objet de quête : rien à commencer", nil, ns.objetDeQuete({ objets[1] }, {}))
 
+-- Armure portable : un chasseur de Forever porte du cuir tant qu'il n'a pas appris les mailles.
+local rien = function() return false end
+local tout = function() return true end
+verifie("Forever : chasseur sans les mailles = cuir", 2, ns.armureDe("HUNTER", false, rien))
+verifie("Forever : chasseur qui a appris les mailles = mailles", 3, ns.armureDe("HUNTER", false, tout))
+verifie("Forever : guerrier sans les plaques = mailles", 3, ns.armureDe("WARRIOR", false, rien))
+verifie("Forever : mage = tissu", 1, ns.armureDe("MAGE", false, rien))
+verifie("Retail : chasseur = mailles dès le niveau 1", 3, ns.armureDe("HUNTER", true, rien))
+
 os.exit(ok and 0 or 1)

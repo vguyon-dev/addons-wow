@@ -205,17 +205,43 @@ local ARMURE = {
   WARRIOR = 4, PALADIN = 4, DEATHKNIGHT = 4,
 }
 
+-- Sur WoW Forever (règles d'origine), chasseurs et chamans portent du cuir
+-- jusqu'à ce qu'ils apprennent les mailles (niveau 40, chez le maître), et
+-- guerriers et paladins des mailles jusqu'aux plaques. Sort « Mailles » 8737,
+-- sort « Plaques » 750 : le jeu les donne quand la compétence est apprise.
+local SORT_ARMURE = { [3] = 8737, [4] = 750 }
+
+-- Type d'armure que tu peux porter aujourd'hui. Fonction pure, testée hors jeu :
+-- `retail` vrai sur Retail (chaque classe porte son armure dès le niveau 1),
+-- `connait(sort)` dit si tu as appris la compétence d'armure.
+function ns.armureDe(classe, retail, connait)
+  local type = ARMURE[classe]
+  if not type or retail or type < 3 then return type end
+  if connait(SORT_ARMURE[type]) then return type end
+  return type - 1
+end
+
+-- Numéro d'interface : 120105 sur Retail, 16001 sur Forever.
+local RETAIL = GetBuildInfo ~= nil and (tonumber((select(4, GetBuildInfo()))) or 0) >= 100000
+
+local function connaitSort(id)
+  if IsPlayerSpell then return IsPlayerSpell(id) end
+  return IsSpellKnown and IsSpellKnown(id) or false
+end
+
 -- Combien de niveaux d'objet cette récompense ferait-elle gagner ? nil si ce
 -- n'est pas une amélioration utilisable par ta classe.
 local function gainPour(lien)
   local _, _, _, _, _, _, _, _, equipLoc, _, _, classeObjet, sousClasse = infoObjet(lien)
   local slots = equipLoc and EMPLACEMENTS[equipLoc]
   if not slots then return nil end
-  -- Armure de corps (classe d'objet 4, sous-classes 1 à 4) : seulement la tienne.
+  -- Armure de corps (classe d'objet 4, sous-classes 1 à 4) : seulement celle
+  -- que tu peux porter aujourd'hui (un chasseur de niveau 20 sur Forever : cuir).
   if classeObjet == 4 and sousClasse and sousClasse >= 1 and sousClasse <= 4
      and equipLoc ~= "INVTYPE_CLOAK" then
     local _, classe = UnitClass("player")
-    if ARMURE[classe] and ARMURE[classe] ~= sousClasse then return nil end
+    local mienne = ns.armureDe(classe, RETAIL, connaitSort)
+    if mienne and mienne ~= sousClasse then return nil end
   end
   -- Armes et boucliers : seulement si le jeu dit que tu peux t'en servir.
   if classeObjet == 2 or (classeObjet == 4 and sousClasse == 6) then
