@@ -24,33 +24,80 @@ local db
 -- Partie « logique pure », testée hors jeu (tests/SacsRanges_simu.lua).
 -- ---------------------------------------------------------------------------
 
+-- Numéro d'interface : 120105 sur Retail, 16001 sur Forever.
+local RETAIL = GetBuildInfo ~= nil and (tonumber((select(4, GetBuildInfo()))) or 0) >= 100000
+-- Sur Forever, arc, fusil, arbalète, baguette, arme de jet et relique ont leur
+-- propre emplacement (18) ; sur Retail, une arme à distance se tient en main (16).
+local DISTANCE = RETAIL and 16 or 18
+
 -- Emplacements du personnage où va chaque type d'objet (numéros du jeu).
 local EMPLACEMENTS = {
+  INVTYPE_THROWN = { DISTANCE }, INVTYPE_RELIC = { DISTANCE },
   INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 },
   INVTYPE_CHEST = { 5 }, INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 },
   INVTYPE_FEET = { 8 }, INVTYPE_WRIST = { 9 }, INVTYPE_HAND = { 10 },
   INVTYPE_FINGER = { 11, 12 }, INVTYPE_TRINKET = { 13, 14 }, INVTYPE_CLOAK = { 15 },
   INVTYPE_WEAPON = { 16, 17 }, INVTYPE_2HWEAPON = { 16 }, INVTYPE_WEAPONMAINHAND = { 16 },
-  INVTYPE_RANGED = { 16 }, INVTYPE_RANGEDRIGHT = { 16 },
+  INVTYPE_RANGED = { DISTANCE }, INVTYPE_RANGEDRIGHT = { DISTANCE },
   INVTYPE_WEAPONOFFHAND = { 17 }, INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 },
 }
 ns.EMPLACEMENTS = EMPLACEMENTS
 
--- objets : { { id, lien, niveau, type } } (type = « INVTYPE_… » du jeu)
+-- Sur WoW Forever, se servir d'une arme ou porter une armure s'apprend (maître
+-- d'armes, maître de classe ; mailles et plaques au niveau 40). Chaque
+-- compétence est un sort que le jeu te donne une fois apprise. Même table que
+-- dans QuetesAuto : COMPETENCES[classe d'objet][sous-classe] = sort.
+local COMPETENCES = {
+  [2] = { -- armes
+    [0] = 196, [1] = 197,       -- haches à une main, à deux mains
+    [2] = 264, [3] = 266,       -- arcs, armes à feu
+    [4] = 198, [5] = 199,       -- masses à une main, à deux mains
+    [6] = 200,                  -- armes d'hast
+    [7] = 201, [8] = 202,       -- épées à une main, à deux mains
+    [10] = 227, [13] = 15590,   -- bâtons, armes de pugilat
+    [15] = 1180, [16] = 2567,   -- dagues, armes de jet
+    [18] = 5011, [19] = 5009,   -- arbalètes, baguettes
+  },
+  [4] = { -- armures
+    [1] = 9078, [2] = 9077, [3] = 8737, [4] = 750, -- tissu, cuir, mailles, plaques
+    [6] = 9116,                                    -- boucliers
+  },
+}
+ns.COMPETENCES = COMPETENCES
+
+-- Peux-tu te servir de cet objet ? Fonction pure, testée hors jeu.
+-- `connait(sort)` : compétence apprise (nil = on ne sait pas le demander au jeu) ;
+-- `rouge` : la bulle de l'objet affiche une ligne en rouge, la façon dont le jeu
+-- dit « tu ne peux pas » (classe, niveau, compétence, race, réputation…).
+function ns.utilisable(classeObjet, sousClasse, connait, rouge)
+  if rouge then return false end
+  local sort = connait and COMPETENCES[classeObjet] and COMPETENCES[classeObjet][sousClasse]
+  if sort and not connait(sort) then return false end
+  return true
+end
+
+-- objets : { { id, lien, niveau, type, utilisable } } (type = « INVTYPE_… » du
+-- jeu ; utilisable = false si ton personnage ne peut pas s'en servir)
 -- porte : [emplacement] = niveau de ce que tu portes
--- Renvoie deux listes :
+-- Renvoie trois listes :
 --  doublons : { { lien, nombre } } même objet d'équipement au moins deux fois ;
 --  moinsBons : { { lien, niveau, porte } } plus bas que le plus faible de tes
---    emplacements pour ce type (une bague est comparée à ta bague la plus faible).
+--    emplacements pour ce type (une bague est comparée à ta bague la plus faible) ;
+--  inutilisables : { { lien, niveau } } équipement que tu ne peux pas porter
+--    (pas appris, autre classe, niveau trop haut…), quel que soit son niveau.
 function ns.analyser(objets, porte, ecart)
   ecart = ecart or 0
   local compte, premier = {}, {}
-  local moinsBons = {}
+  local moinsBons, inutilisables = {}, {}
   for _, o in ipairs(objets) do
     local places = EMPLACEMENTS[o.type or ""]
     if places then
       compte[o.id] = (compte[o.id] or 0) + 1
       premier[o.id] = premier[o.id] or o
+    end
+    if places and o.utilisable == false then
+      inutilisables[#inutilisables + 1] = { lien = o.lien, niveau = o.niveau or 0 }
+    elseif places then
       local minPorte
       for _, e in ipairs(places) do
         local n = porte[e]
@@ -67,7 +114,8 @@ function ns.analyser(objets, porte, ecart)
   end
   table.sort(doublons, function(a, b) return (a.lien or "") < (b.lien or "") end)
   table.sort(moinsBons, function(a, b) return a.niveau < b.niveau end)
-  return doublons, moinsBons
+  table.sort(inutilisables, function(a, b) return a.niveau < b.niveau end)
+  return doublons, moinsBons, inutilisables
 end
 
 -- ---------------------------------------------------------------------------
@@ -98,20 +146,66 @@ local function lienCase(sac, case)
   return lien, lien and tonumber(lien:match("item:(%d+)"))
 end
 
+local function connaitSort(id)
+  if IsPlayerSpell then return IsPlayerSpell(id) end
+  return IsSpellKnown and IsSpellKnown(id) or false
+end
+
+-- La liste des compétences ne sert que sur Forever, et seulement si le jeu
+-- répond : tout le monde connaît le tissu, sinon la question ne marche pas.
+local function competences()
+  if RETAIL or not connaitSort(COMPETENCES[4][1]) then return nil end
+  return connaitSort
+end
+
+-- Lit la bulle de l'objet du sac dans une bulle cachée : vrai si une ligne est
+-- en rouge, nil si la bulle n'a pas pu être lue.
+local bulle
+local function ligneRouge(sac, case)
+  if not bulle then
+    bulle = CreateFrame("GameTooltip", "SacsRangesBulle", nil, "GameTooltipTemplate")
+  end
+  bulle:SetOwner(WorldFrame, "ANCHOR_NONE")
+  bulle:ClearLines()
+  bulle:SetBagItem(sac, case)
+  local n = bulle:NumLines() or 0
+  local rouge = n > 0 and false or nil
+  for l = 2, n do -- la ligne 1 est le nom de l'objet
+    for _, cote in ipairs({ "Left", "Right" }) do
+      local t = _G["SacsRangesBulleText" .. cote .. l]
+      local mot = t and t:IsShown() and t:GetText()
+      -- Une pièce cassée affiche sa durabilité en rouge : elle se répare, on l'ignore.
+      if mot and not mot:find("%d+%s*/%s*%d+") then
+        local r, g, b = t:GetTextColor()
+        if r > 0.9 and g < 0.2 and b < 0.2 then rouge = true end
+      end
+    end
+  end
+  bulle:Hide()
+  return rouge
+end
+
 local function lireSacs()
   local objets = {}
+  local connait = competences()
   local dernier = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
   for sac = 0, dernier do
     for case = 1, nbCases(sac) do
       local lien, id = lienCase(sac, case)
       if lien and id then
-        local typ = select(9, infoObjet(lien))
-        if typ then objets[#objets + 1] = { id = id, lien = lien, niveau = niveau(lien), type = typ } end
+        local typ, _, _, classeObjet, sousClasse = select(9, infoObjet(lien))
+        if typ and EMPLACEMENTS[typ] then
+          local lu, rouge = pcall(ligneRouge, sac, case)
+          objets[#objets + 1] = { id = id, lien = lien, niveau = niveau(lien), type = typ,
+            utilisable = ns.utilisable(classeObjet, sousClasse, connait, lu and rouge or nil) }
+        elseif typ then
+          objets[#objets + 1] = { id = id, lien = lien, niveau = niveau(lien), type = typ }
+        end
       end
     end
   end
   local porte = {}
-  for e = 1, 17 do
+  for e = 1, 18 do
     local lien = GetInventoryItemLink("player", e)
     if lien then porte[e] = niveau(lien) end
   end
@@ -179,7 +273,7 @@ texte:SetSpacing(2)
 local function rafraichir()
   if not panneau:IsShown() then return end
   local objets, porte = lireSacs()
-  local doublons, moinsBons = ns.analyser(objets, porte, db.ecart)
+  local doublons, moinsBons, inutilisables = ns.analyser(objets, porte, db.ecart)
   local t = {}
   t[#t + 1] = "|cffffd200Équipement en double (" .. #doublons .. ")|r"
   for _, d in ipairs(doublons) do t[#t + 1] = "  " .. d.lien .. "  ×" .. d.nombre end
@@ -190,6 +284,12 @@ local function rafraichir()
     t[#t + 1] = string.format("  %s  |cffaaaaaaniv. %d, tu portes %d|r", m.lien, m.niveau, m.porte)
   end
   if #moinsBons == 0 then t[#t + 1] = "  |cffaaaaaarien|r" end
+  t[#t + 1] = " "
+  t[#t + 1] = "|cffff4040Tu ne peux pas le porter (" .. #inutilisables .. ")|r : pas appris, autre classe ou niveau trop haut"
+  for _, m in ipairs(inutilisables) do
+    t[#t + 1] = string.format("  %s  |cffaaaaaaniv. %d|r", m.lien, m.niveau)
+  end
+  if #inutilisables == 0 then t[#t + 1] = "  |cffaaaaaarien|r" end
   texte:SetText(table.concat(t, "\n"))
   contenu:SetHeight(texte:GetStringHeight() + 10)
 end

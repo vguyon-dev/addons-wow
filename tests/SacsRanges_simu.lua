@@ -43,4 +43,37 @@ verifie("moins bons : le plus faible d'abord", 150, moinsBons[1] and moinsBons[1
 verifie("bague comparée à la plus faible portée", 190, moinsBons[1] and moinsBons[1].porte)
 local _, avecEcart = ns.analyser(objets, porte, 25)
 verifie("écart de 25 niveaux : seule la bague faible", 2, #avecEcart)
+
+-- Équipement que le personnage ne peut pas porter : sa propre liste, même s'il est meilleur.
+local mailles = { { id = 6, lien = "Cotte de mailles", niveau = 250, type = "INVTYPE_CHEST", utilisable = false },
+  { id = 7, lien = "Casque de cuir", niveau = 150, type = "INVTYPE_HEAD", utilisable = true } }
+local _, mb, inut = ns.analyser(mailles, porte)
+verifie("inutilisable : listé à part", 1, #inut)
+verifie("inutilisable : c'est la cotte de mailles", "Cotte de mailles", inut[1] and inut[1].lien)
+verifie("inutilisable : pas aussi dans « moins bon »", 1, #mb)
+
+local C = ns.COMPETENCES
+local chasseur20 = function(s) return s == C[4][1] or s == C[4][2] or s == C[2][2] end
+verifie("chasseur niveau 20 : mailles, non", false, ns.utilisable(4, 3, chasseur20))
+verifie("chasseur : épée pas apprise, non", false, ns.utilisable(2, 7, chasseur20))
+verifie("chasseur : arc appris, oui", true, ns.utilisable(2, 2, chasseur20))
+verifie("ligne rouge dans la bulle : non", false, ns.utilisable(4, 0, chasseur20, true))
+
+-- La table des compétences doit rester la même que celle de QuetesAuto.
+local qa = {}
+local bidonQA
+bidonQA = function()
+  return setmetatable({}, { __index = function() return bidonQA() end, __call = function() return bidonQA() end })
+end
+local quetes = (reglagesLua:gsub("SacsRanges/Reglages.lua", "QuetesAuto/"))
+assert(loadfile(quetes .. "Reglages.lua"))("QuetesAuto", qa)
+assert(loadfile(quetes .. "QuetesAuto.lua"))("QuetesAuto", qa)
+local pareil = true
+for classe, t in pairs(C) do
+  for sc, sort in pairs(t) do if qa.COMPETENCES[classe][sc] ~= sort then pareil = false end end
+end
+for classe, t in pairs(qa.COMPETENCES) do
+  for sc, sort in pairs(t) do if C[classe][sc] ~= sort then pareil = false end end
+end
+verifie("compétences identiques à QuetesAuto", true, pareil)
 os.exit(ok and 0 or 1)
