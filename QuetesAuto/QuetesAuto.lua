@@ -162,8 +162,15 @@ function ns.choisirRecompense(candidats, mesMetiers)
   end
   if combien == 1 then return pourMoi, "métier" end
   if metierTrouve then return nil, combien > 1 and "plusieurs" or "métier" end
-  -- 3) Sinon, la plus chère à la revente.
-  local plusCher, prix = 1, -1
+  -- 3) Sinon, la plus chère à la revente, prise d'abord parmi ce que tu peux
+  --    porter (pas d'arc pour un paladin) ; si rien ne t'est utilisable, la plus
+  --    chère de toutes.
+  local plusCher, prix = nil, -1
+  for i, c in ipairs(candidats) do
+    if not c.inutilisable and (c.vente or 0) > prix then plusCher, prix = i, c.vente or 0 end
+  end
+  if plusCher then return plusCher, "revente" end
+  plusCher, prix = 1, -1
   for i, c in ipairs(candidats) do
     if (c.vente or 0) > prix then plusCher, prix = i, c.vente or 0 end
   end
@@ -306,14 +313,16 @@ local function ligneRouge(i)
 end
 
 -- Combien de niveaux d'objet cette récompense (n° i) ferait-elle gagner ? nil si
--- ce n'est pas une amélioration dont ton personnage peut se servir.
+-- ce n'est pas une amélioration dont ton personnage peut se servir. Second
+-- résultat : vrai si c'est de l'équipement que ton personnage ne peut pas porter
+-- du tout (un arc pour un paladin), pour ne pas le prendre non plus à la revente.
 local function gainPour(lien, i)
   local _, _, _, _, _, _, _, _, equipLoc, _, _, classeObjet, sousClasse = infoObjet(lien)
   local slots = equipLoc and EMPLACEMENTS[equipLoc]
   if not slots then return nil end
   local connait = competences()
   local lu, rouge = pcall(ligneRouge, i)
-  if not ns.utilisable(classeObjet, sousClasse, connait, lu and rouge or nil) then return nil end
+  if not ns.utilisable(classeObjet, sousClasse, connait, lu and rouge or nil) then return nil, true end
   -- Armure de corps (classe d'objet 4, sous-classes 1 à 4) : seulement le type
   -- que tu vises (un chasseur de niveau 20 sur Forever : cuir).
   if classeObjet == 4 and sousClasse and sousClasse >= 1 and sousClasse <= 4
@@ -327,7 +336,7 @@ local function gainPour(lien, i)
   if not connait and (classeObjet == 2 or (classeObjet == 4 and sousClasse == 6)) then
     local id = C_Item and C_Item.GetItemInfoInstant and C_Item.GetItemInfoInstant(lien)
     if not (id and C_PlayerInfo and C_PlayerInfo.CanUseItem and C_PlayerInfo.CanUseItem(id)) then
-      return nil
+      return nil, true
     end
   end
   local niveau = niveauObjet(lien)
@@ -365,8 +374,9 @@ local function prendreRecompense()
       return
     end
     local classe, sousClasse = select(12, infoObjet(lien))
-    candidats[i] = { lien = lien, gain = gainPour(lien, i), vente = select(11, infoObjet(lien)),
-                     metiers = ns.metiersPour(classe, sousClasse) }
+    local gain, inutilisable = gainPour(lien, i)
+    candidats[i] = { lien = lien, gain = gain, inutilisable = inutilisable,
+                     vente = select(11, infoObjet(lien)), metiers = ns.metiersPour(classe, sousClasse) }
   end
   essais = 0
   local index, raison = ns.choisirRecompense(candidats, mesMetiers())
@@ -380,6 +390,17 @@ local function prendreRecompense()
     return
   end
   local c = candidats[index]
+  -- Journal des 20 derniers choix, écrit dans SavedVariables au /reload ou à la
+  -- déconnexion : il permet de comprendre après coup pourquoi un objet a été pris.
+  local detail = {}
+  for i, k in ipairs(candidats) do
+    detail[i] = string.format("%s gain=%s inutilisable=%s vente=%s",
+      (k.lien or "?"):match("%[(.-)%]") or "?", tostring(k.gain), tostring(k.inutilisable == true), tostring(k.vente))
+  end
+  db.journal = db.journal or {}
+  table.insert(db.journal, 1, { quete = GetTitleText and GetTitleText() or "?", choix = index,
+    raison = raison, candidats = detail, competencesLues = competences() ~= nil })
+  while #db.journal > 20 do table.remove(db.journal) end
   if raison == "métier" then
     dire("récompense " .. c.lien .. " (pour ton métier).")
   elseif raison == "amélioration" then

@@ -90,7 +90,13 @@ verifie("objet de quête : saute la quête déjà prise", 11, (ns.objetDeQuete(o
 verifie("objet de quête : saute celle écartée", 12, (ns.objetDeQuete(objets, { [11] = true }) or {}).questID)
 verifie("objet de quête : rien à commencer", nil, ns.objetDeQuete({ objets[1] }, {}))
 
--- Armure portable : un chasseur de Forever porte du cuir tant qu'il n'a pas appris les mailles.
+-- Revente : jamais un objet que le personnage ne peut pas porter, s'il y a mieux.
+verifie("revente : l'arc d'un paladin écarté, même plus cher", 2,
+  (ns.choisirRecompense({ { inutilisable = true, vente = 500 }, { vente = 100 }, { vente = 50 } })))
+verifie("revente : rien d'utilisable, la plus chère quand même", 2,
+  (ns.choisirRecompense({ { inutilisable = true, vente = 5 }, { inutilisable = true, vente = 80 } })))
+
+-- Armure portable :un chasseur de Forever porte du cuir tant qu'il n'a pas appris les mailles.
 local C = ns.COMPETENCES
 local function apprises(...)
   local t = {}
