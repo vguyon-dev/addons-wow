@@ -93,7 +93,7 @@ verifie("objet de quête : rien à commencer", nil, ns.objetDeQuete({ objets[1] 
 -- Revente : jamais un objet que le personnage ne peut pas porter, s'il y a mieux.
 verifie("revente : l'arc d'un paladin écarté, même plus cher", 2,
   (ns.choisirRecompense({ { inutilisable = true, vente = 500 }, { vente = 100 }, { vente = 50 } })))
-verifie("revente : rien d'utilisable, la plus chère quand même", 2,
+verifie("revente : rien de portable, c'est au joueur de choisir", nil,
   (ns.choisirRecompense({ { inutilisable = true, vente = 5 }, { inutilisable = true, vente = 80 } })))
 
 -- Armure portable :un chasseur de Forever porte du cuir tant qu'il n'a pas appris les mailles.

@@ -3,7 +3,7 @@
 ## Notes: Rend d'abord les quêtes finies, puis accepte les autres, choisit la récompense, partage les quêtes en groupe, filtre et passe les cinématiques déjà vues.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.5.3
+## Version: 0.5.4
 ## IconTexture: Interface\GossipFrame\AvailableQuestIcon
 ## SavedVariables: QuetesAutoDB
 ## AddonCompartmentFunc: QuetesAuto_OuvrirReglages

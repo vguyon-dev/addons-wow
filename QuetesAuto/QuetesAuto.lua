@@ -162,19 +162,15 @@ function ns.choisirRecompense(candidats, mesMetiers)
   end
   if combien == 1 then return pourMoi, "métier" end
   if metierTrouve then return nil, combien > 1 and "plusieurs" or "métier" end
-  -- 3) Sinon, la plus chère à la revente, prise d'abord parmi ce que tu peux
-  --    porter (pas d'arc pour un paladin) ; si rien ne t'est utilisable, la plus
-  --    chère de toutes.
+  -- 3) Sinon, la plus chère à la revente, mais jamais un objet que tu ne peux
+  --    pas porter (un arc pour un paladin). Si aucune récompense n'est pour toi,
+  --    c'est à toi de choisir.
   local plusCher, prix = nil, -1
   for i, c in ipairs(candidats) do
     if not c.inutilisable and (c.vente or 0) > prix then plusCher, prix = i, c.vente or 0 end
   end
   if plusCher then return plusCher, "revente" end
-  plusCher, prix = 1, -1
-  for i, c in ipairs(candidats) do
-    if (c.vente or 0) > prix then plusCher, prix = i, c.vente or 0 end
-  end
-  return plusCher, "revente"
+  return nil, "inutilisable"
 end
 
 -- Tes métiers, sous la forme { [skillLine] = true }. nil si le jeu ne les donne pas.
@@ -381,7 +377,9 @@ local function prendreRecompense()
   essais = 0
   local index, raison = ns.choisirRecompense(candidats, mesMetiers())
   if not index then
-    if raison == "plusieurs" then
+    if raison == "inutilisable" then
+      dire("aucune récompense que tu peux porter : à toi de choisir.")
+    elseif raison == "plusieurs" then
       dire("plusieurs récompenses pour tes métiers : à toi de choisir.")
     else
       dire("récompenses de métier, mais aucune pour tes métiers : à toi de choisir.")
