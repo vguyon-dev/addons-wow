@@ -27,7 +27,8 @@ addons-wow/
 ├── README.md            ce fichier : liste des addons et méthode
 ├── .gitignore
 ├── tests/               simulations hors jeu (jamais copiées dans AddOns)
-├── outils/              paquet.ps1 (zip à partager) et sa notice LISEZMOI.txt
+├── .github/workflows/   publier.yml : tests puis version publiée à chaque push sur main
+├── outils/              publier.py (paquets pour WowUp), paquet.ps1 (zip à la main), LISEZMOI.txt
 ├── CarnetDeSession/     un addon = un dossier, au même nom que son .toc
 │   ├── CarnetDeSession.toc
 │   ├── Reglages.lua     copie du module commun (réglages, icône commune)
@@ -72,11 +73,23 @@ foreach ($v in "_retail_", "_forever_") {
 
 ## Partager
 
-Le dépôt est public : le plus simple est d'envoyer le lien https://github.com/vguyon-dev/addons-wow.
-La personne clique sur **Code > Download ZIP**, ouvre le dossier `addons-wow-main` et copie seulement les
-dossiers d'addons (pas `tests` ni `outils`), puis suit `outils/LISEZMOI.txt`.
+**Mises à jour automatiques avec WowUp (conseillé).** À chaque push sur `main` qui touche un addon,
+l'action GitHub `.github/workflows/publier.yml` lance les tests hors jeu. S'ils passent, elle publie une version
+(onglet *Releases*, numérotée `AAAA.MM.JJ.<n° du run>`) avec deux paquets fabriqués par
+`outils/publier.py` : `addons-wow-<version>.zip` pour Retail et `addons-wow-<version>-forever.zip` pour
+Forever (LivresBiblio n'est que dans celui-ci), plus `release.json`, la fiche au format du packager BigWigs
+que WowUp lit pour choisir le bon paquet. Un test qui échoue bloque la publication.
 
-`pwsh -File outils\paquet.ps1` fabrique aussi un zip avec tous les addons et une notice (`outils/LISEZMOI.txt`)
-dans `Téléchargements\@Claude\Telechargements\AddonsWow\`. On l'envoie (WhatsApp, Discord) ; la personne
-copie les dossiers du zip dans `World of Warcraft\_forever_\Interface\AddOns\` (ou `_retail_`). Les
-réglages sont gardés à chaque mise à jour : ils vivent dans `WTF\`, pas dans les dossiers des addons.
+Installation chez la personne, une seule fois :
+1. Installer WowUp (https://wowup.io, gratuit) et le laisser trouver WoW ; choisir Forever ou Retail en haut.
+2. *Get Addons* > *Install from URL*, coller `https://github.com/vguyon-dev/addons-wow`, puis *Install*.
+3. Si elle avait copié les addons à la main avant, WowUp les remplace : les réglages sont gardés,
+   ils vivent dans `WTF\`, pas dans les dossiers des addons.
+
+Ensuite WowUp propose chaque nouvelle version (ou la pose seule si la mise à jour automatique est
+cochée dans ses options) ; un `/reload` ou une relance du jeu la charge.
+
+**À la main.** Le dépôt est public : la personne clique sur **Code > Download ZIP**, ouvre le dossier
+`addons-wow-main` et copie seulement les dossiers d'addons (pas `tests`, `outils` ni `.github`), puis suit
+`outils/LISEZMOI.txt`. `pwsh -File outils\paquet.ps1` fabrique aussi un zip avec tous les addons et la notice
+dans `Téléchargements\@Claude\Telechargements\AddonsWow\`.

@@ -1,0 +1,58 @@
+# Publie une version des addons à chaque push sur main, pour que WowUp la propose
+# en mise à jour à ceux qui ont installé le dépôt (« Installer depuis une URL »).
+# Les tests hors jeu passent d'abord : un addon cassé n'est jamais publié.
+name: Publier une version
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "tests/**"
+      - "outils/LISEZMOI.txt"
+      - "outils/paquet.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publier
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Lua 5.1
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1 > /dev/null
+
+      - name: Tests hors jeu
+        run: |
+          for t in tests/*_simu.lua; do
+            a=$(basename "$t" _simu.lua)
+            echo "== $a"
+            lua5.1 "$t" "$a/$a.lua"
+          done
+
+      - name: Fabriquer les paquets
+        run: |
+          VERSION="$(date -u +%Y.%m.%d).${{ github.run_number }}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          python3 outils/publier.py "$VERSION" dist
+
+      - name: Créer la version sur GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Dernier changement : $(git log -1 --pretty=%s)"
+            echo
+            cat dist/notes.md
+          } > dist/description.md
+          gh release create "v$VERSION" \
+            dist/addons-wow-*.zip dist/release.json \
+            --title "Addons $VERSION" \
+            --notes-file dist/description.md

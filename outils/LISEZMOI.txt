@@ -1,6 +1,16 @@
 ADDONS DE VALENTIN : INSTALLATION
 =================================
 
+LE PLUS SIMPLE : WOWUP (mises à jour automatiques)
+  1. Installe WowUp (https://wowup.io, gratuit) et laisse-le trouver WoW.
+     En haut, choisis WoW Forever ou Retail.
+  2. « Get Addons » > « Install from URL », colle
+     https://github.com/vguyon-dev/addons-wow puis « Install ».
+  3. C'est tout : WowUp te proposera chaque correction. Ensuite, va
+     directement à « DANS LE JEU » plus bas.
+
+SINON, À LA MAIN :
+
 1. Ferme World of Warcraft.
 
 2. Ouvre le dossier du jeu. Le plus simple : dans l'application Battle.net,
