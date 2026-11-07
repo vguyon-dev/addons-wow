@@ -13,7 +13,7 @@ ADDONS DE VALENTIN : INSTALLATION
    (si « Interface » ou « AddOns » n'existe pas, crée-le avec ce nom exact)
 
 4. Copie dedans les dossiers du zip : CarnetDeSession, QuetesAuto,
-   MarchandAuto, MetiersAuto, ButinRapide, EntreFreres, SacsRanges, AlerteRare. Copie les DOSSIERS eux-mêmes,
+   MarchandAuto, MetiersAuto, ButinRapide, EntreFreres, SacsRanges, AlerteRare, LivresBiblio (Forever seulement). Copie les DOSSIERS eux-mêmes,
    pas seulement ce qu'il y a dedans.
    Pour une mise à jour : remplace les anciens dossiers (tes réglages sont
    gardés, ils sont ailleurs).
@@ -32,6 +32,8 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /carnet  Carnet de session (temps, or, XP, monstres)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
   /ma      Marchand auto (vend les gris, répare, rachète ton stock)
+  /livres  Livres de bibliothèque (Forever) : panneau, /livres proche pour une balise
+           Désactive l'addon « Library Books » de Taraezor pour ne pas avoir deux fois les épingles
   /ar      Alerte rare et coffres (coupée au départ : /ar on pour l'activer)
   /sr      Sacs rangés (ranger les sacs, équipement en double ou moins bon)
   /mt      Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
