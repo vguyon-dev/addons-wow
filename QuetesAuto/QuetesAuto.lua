@@ -750,7 +750,10 @@ local boutonObjet = CreateFrame("Button", "QuetesAutoObjetQuete", UIParent, "Sec
 boutonObjet:SetSize(40, 40)
 boutonObjet:SetPoint("CENTER", UIParent, "CENTER", 0, 180)
 boutonObjet:RegisterForClicks("AnyUp", "AnyDown")
-boutonObjet:SetAttribute("type1", "item") -- clic gauche seulement
+-- Clic gauche seulement. Une macro « /use sac case » plutôt que le type « item » :
+-- sur Forever, le type « item » avec « sac case » plante dans le code de Blizzard
+-- (C_Item.IsEquippableItem reçoit nil).
+boutonObjet:SetAttribute("type1", "macro")
 boutonObjet:Hide()
 local imageObjet = boutonObjet:CreateTexture(nil, "ARTWORK")
 imageObjet:SetAllPoints()
@@ -815,7 +818,7 @@ local function majObjetQuete()
   local o = ns.objetDeQuete(objets, ecartees)
   if not o then boutonObjet:Hide() return end
   boutonObjet.sac, boutonObjet.case, boutonObjet.quete = o.sac, o.case, o.questID
-  boutonObjet:SetAttribute("item", o.sac .. " " .. o.case)
+  boutonObjet:SetAttribute("macrotext1", "/use " .. o.sac .. " " .. o.case)
   imageObjet:SetTexture(iconeCase(o.sac, o.case) or "Interface\\Icons\\INV_Misc_Note_01")
   if not boutonObjet:IsShown() then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_OPEN or 875) end
   boutonObjet:Show()
