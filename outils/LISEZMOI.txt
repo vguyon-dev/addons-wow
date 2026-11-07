@@ -23,7 +23,7 @@ SINON, À LA MAIN :
    (si « Interface » ou « AddOns » n'existe pas, crée-le avec ce nom exact)
 
 4. Copie dedans les dossiers du zip : CarnetDeSession, QuetesAuto,
-   MarchandAuto, MetiersAuto, ButinRapide, EntreFreres, SacsRanges, AlerteRare, LivresBiblio (Forever seulement). Copie les DOSSIERS eux-mêmes,
+   MarchandAuto, MetiersAuto, ButinRapide, QuetesDuGroupe, RapportErreurs, SacsRanges, AlerteRare, LivresBiblio (Forever seulement). Copie les DOSSIERS eux-mêmes,
    pas seulement ce qu'il y a dedans.
    Pour une mise à jour : remplace les anciens dossiers (tes réglages sont
    gardés, ils sont ailleurs).
@@ -49,7 +49,10 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /mt      Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
            Astuce : récolte sur la molette (bouton « Choisir la touche », puis roule la molette)
   /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
-  /ef      Entre frères (en groupe : les quêtes de chacun)
+  /qg      Quêtes du groupe (en groupe : les quêtes de chacun ; ancien nom EntreFreres,
+           supprime son vieux dossier si tu l'avais copié à la main)
+  /re      Rapport d'erreurs : tes erreurs partent toutes seules à Valentin quand il est
+           en ligne (groupe, guilde ou amis). /re test pour essayer.
 
 En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie à
 Valentin le message d'erreur.

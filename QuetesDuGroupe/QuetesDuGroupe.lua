@@ -1,21 +1,21 @@
 -- ============================================================================
--- Entre frères : quand vous êtes groupés, un panneau montre les quêtes de
+-- Quêtes du groupe : quand vous êtes groupés, un panneau montre les quêtes de
 -- chacun et où il en est. Trois parties par joueur du groupe :
 --  - en commun : la quête, ta progression et la sienne ;
 --  - lui seulement : des quêtes que tu pourrais aller prendre ;
 --  - toi seulement : des quêtes que tu pourrais lui partager.
 -- Il faut que l'autre ait aussi l'addon : les journaux de quêtes s'échangent
 -- par messages d'addon, invisibles dans le chat.
--- Commande : /ef (le panneau), /ef options (les réglages).
+-- Commande : /qg (le panneau), /qg options (les réglages).
 -- ============================================================================
 
 local NOM_ADDON, ns = ...
-local PREFIXE = "EntreFreres" -- 16 caractères au plus, imposé par le jeu
+local PREFIXE = "QuetesDuGroupe" -- 16 caractères au plus, imposé par le jeu
 local SEP = "~"               -- séparateur des champs d'un message
 
 local DEFAUTS = {
   actif = true,          -- échanger les quêtes avec le groupe
-  afficherAuto = true,   -- ouvrir le panneau quand un frère avec l'addon arrive
+  afficherAuto = true,   -- ouvrir le panneau quand un joueur du groupe avec l'addon arrive
   minimap = false,       -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 160,
 }
@@ -24,7 +24,7 @@ local db
 local estSecret = issecretvalue or function() return false end
 
 -- ---------------------------------------------------------------------------
--- Partie « logique pure », testée hors jeu (tests/EntreFreres_simu.lua).
+-- Partie « logique pure », testée hors jeu (tests/QuetesDuGroupe_simu.lua).
 -- ---------------------------------------------------------------------------
 
 -- Coupe un texte à n octets sans laisser une lettre accentuée à moitié.
@@ -193,7 +193,7 @@ end
 -- Le panneau
 -- ---------------------------------------------------------------------------
 
-local panneau = CreateFrame("Frame", "EntreFreresPanneau", UIParent, "BasicFrameTemplateWithInset")
+local panneau = CreateFrame("Frame", "QuetesDuGroupePanneau", UIParent, "BasicFrameTemplateWithInset")
 ns.panneau = panneau
 panneau:SetSize(380, 420)
 panneau:SetPoint("LEFT", UIParent, "LEFT", 40, 0)
@@ -207,7 +207,7 @@ panneau:Hide()
 tinsert(UISpecialFrames, panneau:GetName())
 local titre = panneau.TitleText or panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 if not panneau.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Entre frères")
+titre:SetText("Quêtes du groupe")
 
 local defile = CreateFrame("ScrollFrame", nil, panneau, "UIPanelScrollFrameTemplate")
 defile:SetPoint("TOPLEFT", 12, -30)
@@ -251,7 +251,7 @@ rafraichir = function()
       t[1] = "Tu n'es pas en groupe."
     else
       t[1] = "Personne dans le groupe n'a encore envoyé ses quêtes."
-      t[2] = "Il faut que l'autre ait aussi installé Entre frères."
+      t[2] = "Il faut que l'autre ait aussi installé Quêtes du groupe."
     end
   end
   texte:SetText(table.concat(t, "\n"))
@@ -269,9 +269,9 @@ end
 -- ---------------------------------------------------------------------------
 
 ns.reglages = ns.creerReglages({
-  titre = "Entre frères",
+  titre = "Quêtes du groupe",
   icone = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
-  nomDB = "EntreFreresDB",
+  nomDB = "QuetesDuGroupeDB",
   defauts = DEFAUTS,
   ouvrirHub = basculerPanneau,
   options = {
@@ -284,16 +284,32 @@ ns.reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
-  astuce = "Le panneau : /ef ou un clic sur la ligne Entre frères de l'icône commune. Réglages : /ef options.",
+  astuce = "Le panneau : /qg ou un clic sur la ligne Quêtes du groupe de l'icône commune. Réglages : /qg options.",
   auChargement = function(d) db = d end,
 })
 
 -- ---------------------------------------------------------------------------
--- Événements et commande /ef
+-- Événements et commande /qg
 -- ---------------------------------------------------------------------------
 
 if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
   C_ChatInfo.RegisterAddonMessagePrefix(PREFIXE)
+end
+
+-- Ancien nom : cet addon s'appelait « EntreFreres ». Si l'ancien dossier est
+-- encore là (copie à la main, ou WowUp qui ne l'a pas retiré), on le coupe pour
+-- ne pas avoir deux panneaux : il sera vraiment parti au prochain /reload.
+local GetInfoAddon = (C_AddOns and C_AddOns.GetAddOnInfo) or GetAddOnInfo
+local CouperAddon = (C_AddOns and C_AddOns.DisableAddOn) or DisableAddOn
+if GetInfoAddon and CouperAddon and GetInfoAddon("EntreFreres") then
+  local charge = (C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded)("EntreFreres")
+  CouperAddon("EntreFreres")
+  if charge then
+    C_Timer.After(5, function()
+      print("|cff33ff99Quêtes du groupe|r : l'ancien addon « EntreFreres » est remplacé par celui-ci. "
+        .. "Il est coupé ; fais /reload, puis tu peux supprimer son dossier.")
+    end)
+  end
 end
 
 local ecouteur = CreateFrame("Frame")
@@ -317,9 +333,9 @@ ecouteur:SetScript("OnEvent", function(_, evenement, ...)
   end
 end)
 
-SLASH_ENTREFRERES1 = "/ef"
-SLASH_ENTREFRERES2 = "/entrefreres"
-SlashCmdList.ENTREFRERES = function(message)
+SLASH_QUETESDUGROUPE1 = "/qg"
+SLASH_QUETESDUGROUPE2 = "/quetesdugroupe"
+SlashCmdList.QUETESDUGROUPE = function(message)
   local cmd = strtrim(message or ""):lower()
   local r = ns.reglages
   if cmd == "" then
@@ -329,6 +345,6 @@ SlashCmdList.ENTREFRERES = function(message)
   elseif cmd == "on" or cmd == "off" then
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
   elseif not r.basculerOption(cmd) then
-    r.dire("/ef : le panneau     /ef options : les réglages     /ef on, /ef off")
+    r.dire("/qg : le panneau     /qg options : les réglages     /qg on, /qg off")
   end
 end

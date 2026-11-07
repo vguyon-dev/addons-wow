@@ -399,6 +399,11 @@ local function prendreRecompense()
   table.insert(db.journal, 1, { quete = GetTitleText and GetTitleText() or "?", choix = index,
     raison = raison, candidats = detail, competencesLues = competences() ~= nil })
   while #db.journal > 20 do table.remove(db.journal) end
+  -- Copie dans le journal de RapportErreurs s'il est installé (envoyé sur demande).
+  if RapportErreurs_Noter then
+    pcall(RapportErreurs_Noter, "QuetesAuto", string.format("%s : choix %s (%s) parmi %s",
+      db.journal[1].quete, tostring(index), tostring(raison), table.concat(detail, " | ")))
+  end
   if raison == "métier" then
     dire("récompense " .. c.lien .. " (pour ton métier).")
   elseif raison == "amélioration" then

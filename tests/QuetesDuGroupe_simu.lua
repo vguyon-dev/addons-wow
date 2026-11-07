@@ -1,6 +1,6 @@
--- Simulation hors jeu d'Entre frères : messages échangés et comparaison des quêtes.
+-- Simulation hors jeu de Quêtes du groupe : messages échangés et comparaison des quêtes.
 -- Lancer depuis Windows :
---   wsl lua5.1 tests/EntreFreres_simu.lua EntreFreres/EntreFreres.lua
+--   wsl lua5.1 tests/QuetesDuGroupe_simu.lua QuetesDuGroupe/QuetesDuGroupe.lua
 local bidon
 bidon = function()
   return setmetatable({}, { __index = function() return bidon() end, __call = function() return bidon() end })
@@ -12,8 +12,8 @@ tinsert = table.insert
 
 local ns = {}
 local reglagesLua = arg[1]:gsub("[^/]+$", "Reglages.lua")
-assert(loadfile(reglagesLua))("EntreFreres", ns)
-assert(loadfile(arg[1]))("EntreFreres", ns)
+assert(loadfile(reglagesLua))("QuetesDuGroupe", ns)
+assert(loadfile(arg[1]))("QuetesDuGroupe", ns)
 
 local ok = true
 local function verifie(libelle, attendu, obtenu)
@@ -24,7 +24,7 @@ end
 
 local function lire(p) local f = assert(io.open(p, "rb")) local s = f:read("*a") f:close() return s end
 verifie("Reglages.lua identique dans QuetesAuto", true,
-  lire(reglagesLua) == lire((reglagesLua:gsub("EntreFreres/Reglages", "QuetesAuto/Reglages"))))
+  lire(reglagesLua) == lire((reglagesLua:gsub("QuetesDuGroupe/Reglages", "QuetesAuto/Reglages"))))
 
 -- Progression.
 verifie("progression : deux objectifs", "3/8,1/1",
