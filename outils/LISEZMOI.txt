@@ -39,6 +39,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   clic = la liste des addons ; dans la liste, clic gauche = réglages,
   clic droit = activer ou couper. Glisser l'icône = la déplacer.
 
+  /bv      Barres de vie (couleur selon la menace, rares et élites, pourcentage)
   /carnet  Carnet de session (temps, or, XP, monstres)
   /hv      Enchères (relevé des prix, liste de courses ; /hv releve à l'hôtel des ventes)
   /courrier Courrier (récupérer tout le courrier, l'or seulement ou les cochés)

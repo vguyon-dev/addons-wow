@@ -1,0 +1,12 @@
+## Interface: 120105, 16001
+## Title: Barres de vie
+## Notes: Barres de vie des monstres plus lisibles : couleur selon la menace, rares et élites marqués, pourcentage, cible plus grande.
+## Category: Addons de Valentin
+## Author: Valentin
+## Version: 0.1.0
+## IconTexture: Interface\Icons\Ability_Warrior_DefensiveStance
+## SavedVariables: BarresDeVieDB
+## AddonCompartmentFunc: BarresDeVie_OuvrirReglages
+
+Reglages.lua
+BarresDeVie.lua

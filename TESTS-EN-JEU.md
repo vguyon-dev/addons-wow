@@ -84,7 +84,15 @@ Avant de commencer :
 
 ## Barres de vie (nouveau)
 
-À compléter une fois l'addon écrit.
+Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates ou Plater est installé, le désactiver pour ce test.
+
+- [ ] En combat contre un monstre seul : la barre devient rouge quand il te tape.
+- [ ] En groupe avec ton frère : verte quand il tape ton frère, orange quand il commence à te viser.
+- [ ] Le pourcentage de vie s'affiche au milieu de la barre et descend.
+- [ ] Un élite a une marque dorée à gauche de sa barre, un rare une marque argentée.
+- [ ] La barre de ta cible est un peu plus grande ; décocher l'option la remet comme avant.
+- [ ] En donjon : pas d'erreur. Si la couleur reste celle du jeu, c'est normal (le jeu cache la menace).
+- [ ] Après un combat : aucun message « fonction protégée » ni « taint » dans BugSack.
 
 ## Plus anciens, jamais confirmés
 
