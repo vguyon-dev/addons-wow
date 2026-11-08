@@ -8,6 +8,8 @@
 --   /way effacer                retire toutes les balises
 --   /gps                        les réglages, avec la liste des balises
 --
+-- Sans balise, la flèche suit l'épingle posée sur la carte du jeu, sinon la
+-- quête suivie (son objectif, ou le PNJ à qui la rendre).
 -- Une flèche déplaçable montre la direction, la distance et le temps restant,
 -- même au-delà de 1 000 m et depuis une autre zone du même continent. Arrivé à
 -- moins de 10 m : un son, la balise disparaît et la suivante prend le relais.
@@ -23,6 +25,8 @@ local DEFAUTS = {
   epingle = true,       -- la balise suivie devient aussi l'épingle du jeu
   plusProche = true,    -- suivre la balise la plus proche (sinon la dernière posée)
   arrivee = true,       -- son et retrait de la balise à l'arrivée
+  suivreQuete = true,   -- sans balise : la flèche suit la quête suivie
+  suivreEpingle = true, -- sans balise : la flèche suit l'épingle posée sur la carte du jeu
   minimap = false,
   angleMinimap = 30,
 }
@@ -235,7 +239,7 @@ fleche:SetScript("OnDragStop", function(self)
   db.positionFleche = { p, rp, x, y }
 end)
 fleche:SetScript("OnMouseUp", function(_, bouton)
-  if bouton == "RightButton" and suivie then
+  if bouton == "RightButton" and suivie and not suivie.auto then
     ns.reglages.dire("balise retirée : " .. (suivie.titre or "Balise"))
     retirer(suivie)
   end
@@ -264,6 +268,65 @@ local function placerFleche()
   if p then fleche:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else fleche:SetPoint("TOP", UIParent, "TOP", 0, -160) end
 end
 
+-- ---------------------------------------------------------------------------
+-- Sans balise : la quête suivie, ou l'épingle posée sur la carte du jeu
+-- ---------------------------------------------------------------------------
+
+-- La quête à suivre : celle choisie dans le suivi des objectifs (super-suivi),
+-- sinon la première de la liste de suivi.
+local function queteSuivie()
+  local id = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+  if (not id or id == 0) and C_QuestLog.GetQuestIDForQuestWatchIndex then
+    id = C_QuestLog.GetQuestIDForQuestWatchIndex(1)
+  end
+  if id and id ~= 0 then return id end
+end
+
+-- Où aller pour cette quête : le prochain point du jeu (portail, bateau…), sinon
+-- la marque de la quête sur la carte où tu es ou sur ses cartes parentes.
+local function lieuQuete(id, carteIci)
+  if C_QuestLog.GetNextWaypoint then
+    local ok, carte, x, y = pcall(C_QuestLog.GetNextWaypoint, id)
+    if ok and carte and x and y then return carte, x, y end
+  end
+  local carte = carteIci
+  for _ = 1, 4 do
+    if not carte or not C_QuestLog.GetQuestsOnMap then break end
+    for _, q in ipairs(C_QuestLog.GetQuestsOnMap(carte) or {}) do
+      if q.questID == id and q.x and q.y then return carte, q.x, q.y end
+    end
+    local info = C_Map.GetMapInfo(carte)
+    carte = info and info.parentMapID
+  end
+end
+
+local auto, autoCalcule = nil, 0
+local function cibleAuto(carteIci)
+  if GetTime() - autoCalcule < 0.5 then return auto end
+  autoCalcule = GetTime()
+  auto = nil
+  -- Une épingle que tu as posée toi-même sur la carte du jeu.
+  if db.suivreEpingle and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
+    local p = C_Map.GetUserWaypoint()
+    if p and p.position then
+      local x, y = p.position:GetXY()
+      auto = { titre = "Épingle de la carte", carte = p.uiMapID, x = x, y = y, auto = true }
+    end
+  end
+  -- La quête suivie.
+  if not auto and db.suivreQuete then
+    local id = queteSuivie()
+    local carte, x, y = id and lieuQuete(id, carteIci)
+    if carte then
+      local titre = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id) or "Quête"
+      local fini = C_QuestLog.IsComplete and C_QuestLog.IsComplete(id)
+      auto = { titre = (fini and "Rendre : " or "") .. titre, carte = carte, x = x, y = y, auto = true }
+    end
+  end
+  if auto then auto.monde = versMonde(auto.carte, auto.x, auto.y) end
+  return auto
+end
+
 local derniere = { d = nil, t = nil, vitesse = nil }
 local moteur = CreateFrame("Frame")
 local attente = 0
@@ -271,22 +334,31 @@ moteur:SetScript("OnUpdate", function(_, ecoule)
   attente = attente + ecoule
   if attente < 0.1 then return end
   attente = 0
-  if not db or not db.actif or #perso.balises == 0 then fleche:Hide() return end
-  local moi = ici()
-  -- Une balise posée avant que le monde soit chargé : sa position se calcule maintenant.
-  for _, x in ipairs(perso.balises) do
-    if not x.monde then x.monde = versMonde(x.carte, x.x, x.y) end
+  if not db or not db.actif then fleche:Hide() return end
+  local moi, carteIci = ici()
+  local b, d
+  if #perso.balises > 0 then
+    -- Une balise posée avant que le monde soit chargé : sa position se calcule maintenant.
+    for _, x in ipairs(perso.balises) do
+      if not x.monde then x.monde = versMonde(x.carte, x.x, x.y) end
+    end
+    b, d = ns.choisir(perso.balises, moi, db.plusProche)
+  else
+    b = cibleAuto(carteIci)
+    if b and b.monde and moi and b.monde.continent == moi.continent then
+      d = ns.distance(moi.x, moi.y, b.monde.x, b.monde.y)
+    end
   end
-  local b, d = ns.choisir(perso.balises, moi, db.plusProche)
-  if b ~= suivie then
+  if b ~= suivie and not (b and suivie and b.auto and suivie.auto and b.titre == suivie.titre) then
     suivie = b
     derniere.d, derniere.vitesse = nil, nil
-    poserEpingle(b)
+    -- L'épingle du jeu ne suit que nos balises : la quête a déjà sa marque.
+    if not (b and b.auto) then poserEpingle(b) end
   end
   if not b or not d then fleche:Hide() return end
 
-  -- Arrivé.
-  if d < 10 then
+  -- Arrivé (seulement pour nos balises : une quête se termine dans le jeu).
+  if d < 10 and not b.auto then
     ns.reglages.dire("arrivé : " .. (b.titre or "balise") .. ".")
     if db.arrivee then
       if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.MAP_PING or 3175) end
@@ -356,6 +428,10 @@ ns.reglages = ns.creerReglages({
       aide = "Direction (verte quand tu vas dans le bon sens), distance et temps restant, même au-delà de 1 000 m. Glisser pour la déplacer, clic droit pour retirer la balise." },
     { cle = "epingle", libelle = "Épingle du jeu sur la balise suivie",
       aide = "La balise suivie apparaît aussi sur la carte et la minimap comme une épingle du jeu." },
+    { cle = "suivreQuete", libelle = "Sans balise, suivre la quête suivie",
+      aide = "La quête choisie dans le suivi des objectifs (sinon la première suivie) : son objectif, ou le PNJ à qui la rendre quand elle est finie. Passe aussi par les portails et bateaux que le jeu indique." },
+    { cle = "suivreEpingle", libelle = "Sans balise, suivre l'épingle de la carte du jeu",
+      aide = "L'épingle que tu poses toi-même sur la carte (clic sur la carte du jeu). Elle passe avant la quête." },
     { cle = "plusProche", libelle = "Suivre la balise la plus proche",
       aide = "Décoché : la dernière balise posée." },
     { cle = "arrivee", libelle = "Son et retrait de la balise à l'arrivée",

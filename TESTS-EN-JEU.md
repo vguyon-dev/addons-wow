@@ -68,6 +68,11 @@ Avant de commencer :
 - [ ] Réglages : la liste des balises (la suivie marquée d'un « > »), la croix, « Balise ici », « Tout effacer ».
 - [ ] `/reload` : les balises sont toujours là.
 - [ ] Livres de bibliothèque : « Balise vers le livre le plus proche » passe par le GPS.
+- [ ] Sans aucune balise : la flèche montre l'objectif de la quête suivie (celle cliquée dans le suivi des objectifs), avec son titre.
+- [ ] Quête finie : la flèche montre le PNJ à qui la rendre (« Rendre : … »).
+- [ ] Quête dans une autre zone : la flèche passe par le chemin du jeu (portail, bateau) quand il y en a un.
+- [ ] Une épingle posée à la main sur la carte du jeu : la flèche la suit, avant la quête.
+- [ ] Poser une balise `/way` : la flèche la suit, puis revient à la quête quand la balise est atteinte.
 - [ ] Si TomTom est encore installé : vérifier qui répond à `/way` (le désactiver pour ne garder que le nôtre).
 
 ## Enchères (nouveau)
