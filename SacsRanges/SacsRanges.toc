@@ -3,7 +3,7 @@
 ## Notes: Range les sacs (et la banque), signale l'équipement en double et celui moins bon que ce que tu portes.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.6.0
+## Version: 0.6.1
 ## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## SavedVariables: SacsRangesDB
 ## AddonCompartmentFunc: SacsRanges_OuvrirReglages

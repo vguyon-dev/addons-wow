@@ -247,7 +247,10 @@ local function caseDe(sac, case)
   end
   b = nouveau
   b:SetID(case)
-  b.bagID = sac
+  -- Le numéro de sac passe par SetBagID (un attribut), JAMAIS par b.bagID = sac :
+  -- une valeur posée par un addon « contamine » le clic, et le jeu refuse alors
+  -- d'utiliser ou d'équiper l'objet (ADDON_ACTION_FORBIDDEN sur UseContainerItem,
+  -- vu en jeu le 08/11). Sans SetBagID, le jeu lit le numéro du parent (SetID).
   if b.SetBagID then pcall(b.SetBagID, b, sac) end
   b:SetSize(TAILLE, TAILLE)
   -- Le compteur de cases libres, sur la case vide qui les représente.
