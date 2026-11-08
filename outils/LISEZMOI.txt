@@ -52,7 +52,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /qg      Quêtes du groupe (en groupe : les quêtes de chacun ; ancien nom EntreFreres,
            supprime son vieux dossier si tu l'avais copié à la main)
   /re      Rapport d'erreurs : tes erreurs partent toutes seules à Valentin quand il est
-           en ligne (groupe, guilde ou amis). /re test pour essayer.
+           en ligne (groupe, guilde ou amis). /re test pour essayer, /re etat si rien n'arrive.
 
 En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie à
 Valentin le message d'erreur.

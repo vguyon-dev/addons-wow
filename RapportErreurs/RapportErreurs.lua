@@ -35,6 +35,7 @@ local DEFAUTS = {
 }
 
 local db
+local dernierRecevoir -- pour voir quand « recevoir » change en jeu
 local estSecret = issecretvalue or function() return false end
 local GetMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
 
@@ -149,7 +150,7 @@ local function versionDe(addon)
   return ok and v or "?"
 end
 
-local envoyerEnAttente -- défini plus bas
+local envoyerEnAttente, annoncer -- définis plus bas
 local dansNoter = false
 
 local function noter(message, pile, genre)
@@ -268,8 +269,15 @@ local function envoyerErreur(e, cible)
 end
 
 -- Les erreurs pas encore envoyées partent vers chaque destinataire joignable.
+local derniereRelance = 0
 envoyerEnAttente = function()
   if not db or not db.actif or not db.envoyer then return end
+  -- Personne de connu pour recevoir : on se réannonce (au plus toutes les 30 s).
+  -- Cas typique : celui qui reçoit a coché l'option après notre annonce de connexion.
+  if next(destinataires) == nil and time() - derniereRelance >= 30 then
+    derniereRelance = time()
+    annoncer()
+  end
   for nom in pairs(destinataires) do
     if enLigne(nom) then
       for _, e in ipairs(db.erreurs) do
@@ -297,7 +305,7 @@ local function envoyerTout(cible)
 end
 
 -- Annonce : « R » = je reçois, « S » = j'envoie. Dans le groupe et la guilde.
-local function annoncer()
+annoncer = function()
   if not db or not db.actif then return end
   local message = db.recevoir and "R" or (db.envoyer and "S")
   if not message then return end
@@ -460,8 +468,17 @@ ns.reglages = ns.creerReglages({
   astuce = "/re : le panneau. /re demander <joueur> : tout son rapport. /re test : une erreur d'essai.",
   auChargement = function(d)
     db = d
+    dernierRecevoir = d.recevoir
     -- Réglage « recevoir » coché ou décoché : on prévient les autres tout de suite.
     C_Timer.After(5, annoncer)
+  end,
+  surChangement = function(d)
+    -- « Recevoir » coché ou décoché en jeu : on prévient les autres tout de suite,
+    -- sans attendre la prochaine connexion.
+    if d.recevoir ~= dernierRecevoir then
+      dernierRecevoir = d.recevoir
+      annoncer()
+    end
   end,
 })
 
@@ -515,6 +532,16 @@ SlashCmdList.RAPPORTERREURS = function(message)
   elseif cmd == "test" then
     r.dire("erreur d'essai : elle doit apparaître dans /re (et chez celui qui reçoit).")
     C_Timer.After(0.1, function() error("erreur d'essai (/re test)") end)
+  elseif cmd == "etat" or cmd == "état" then
+    local noms = {}
+    for nom in pairs(destinataires) do noms[#noms + 1] = nom end
+    local attente = 0
+    for _, e in ipairs(db.erreurs) do if not e.envoyee then attente = attente + 1 end end
+    r.dire(string.format("envoyer : %s, recevoir : %s, groupe : %s.", db.envoyer and "oui" or "non",
+      db.recevoir and "oui" or "non", IsInGroup() and "oui" or "non"))
+    r.dire("destinataires connus : " .. (#noms > 0 and table.concat(noms, ", ") or "aucun")
+      .. " ; erreurs pas encore envoyées : " .. attente .. ".")
+    annoncer()
   elseif cmd == "effacer" then
     wipe(db.erreurs); wipe(db.journal); wipe(db.recues)
     r.dire("tout est effacé.")
@@ -522,6 +549,6 @@ SlashCmdList.RAPPORTERREURS = function(message)
   elseif cmd == "on" or cmd == "off" then
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
   else
-    r.dire("/re : le panneau   /re options   /re demander <joueur>   /re test   /re effacer")
+    r.dire("/re : le panneau   /re options   /re demander <joueur>   /re test   /re etat   /re effacer")
   end
 end
