@@ -40,6 +40,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   clic droit = activer ou couper. Glisser l'icône = la déplacer.
 
   /carnet  Carnet de session (temps, or, XP, monstres)
+  /hv      Enchères (relevé des prix, liste de courses ; /hv releve à l'hôtel des ventes)
   /courrier Courrier (récupérer tout le courrier, l'or seulement ou les cochés)
   /way     GPS (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte ; /gps pour les réglages)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)

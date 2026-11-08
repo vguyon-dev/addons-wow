@@ -251,7 +251,7 @@ end
 -- ============================================================ liste éditable
 -- spec = {
 --   titre = "…", vide = "texte quand la liste est vide", hauteur = lignes visibles (5),
---   lignes = function() return { { texte = "…", lien = lien ou nil, retirer = fonction }, … } end,
+--   lignes = function() return { { texte = "…", lien = lien ou nil, retirer = fonction, clic = fonction ou nil }, … } end,
 --   deposer = function(idObjet, lien, quantite) end,   -- facultatif : zone de dépôt
 --   texteDepot = "…", quantite = 20,                   -- quantite : un champ nombre en plus
 --   vider = function() end,                            -- facultatif : bouton « Tout retirer »
@@ -381,6 +381,8 @@ function ns.creerListe(parent, y, spec)
         l.texte:SetText(d.texte)
         l.lien = d.lien
         l.croix:SetScript("OnClick", function() d.retirer(); maj() end)
+        -- Une ligne peut aussi se cliquer (d.clic), par exemple pour lancer une recherche.
+        l:SetScript("OnClick", d.clic and function() d.clic() end or nil)
         l:Show(); l.croix:Show()
       else
         l:Hide(); l.croix:Hide()

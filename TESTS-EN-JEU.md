@@ -72,7 +72,15 @@ Avant de commencer :
 
 ## Enchères (nouveau)
 
-À compléter une fois l'addon écrit.
+- [ ] À l'hôtel des ventes, le panneau « Enchères » apparaît à droite de la fenêtre du jeu.
+- [ ] « Relever les prix » : « Le jeu prépare la liste… », puis le pourcentage de dépouillement, puis « relevé fini : N objets ». L'écran ne doit pas geler.
+- [ ] Un second clic avant 15 minutes : message « encore N min ».
+- [ ] Bulle d'un objet (sac, butin) : la ligne « Enchères » avec le prix et son âge.
+- [ ] Liste de courses : taper un nom puis « Ajouter » (ou Entrée), glisser un objet du sac dans la zone.
+- [ ] Clic sur une ligne de la liste : l'onglet Acheter s'ouvre avec la recherche lancée.
+- [ ] `/reload` : les prix et la liste sont gardés.
+- [ ] Butin rapide : la ligne « Hôtel des ventes » du bilan de farm utilise nos prix.
+- [ ] Forever : vérifier que l'hôtel des ventes y a bien le relevé complet (sinon, le dire).
 
 ## Barres de vie (nouveau)
 

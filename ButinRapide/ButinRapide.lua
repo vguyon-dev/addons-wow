@@ -8,7 +8,7 @@
 --  3. Ramasser seulement ce que tu veux : ignorer les gris, et une liste
 --     d'objets à ne jamais ramasser.
 --  4. Bilan de farm : ce que tu as ramassé, sa valeur à la revente et à
---     l'hôtel des ventes (si Auctionator est là), et le gain par heure.
+--     l'hôtel des ventes (si Enchères ou Auctionator est là), et le gain par heure.
 --  5. Touche d'interaction sur les cadavres (option) : le jeu vise tout seul
 --     le cadavre le plus proche, une touche l'ouvre. Un appui par cadavre :
 --     aucun addon n'a le droit d'ouvrir un cadavre à ta place.
@@ -182,6 +182,11 @@ end
 -- ---------------------------------------------------------------------------
 
 local function prixHV(lien)
+  -- Notre addon Enchères d'abord, sinon Auctionator.
+  if Encheres_Prix then
+    local p = Encheres_Prix(lien)
+    if p then return p end
+  end
   local api = Auctionator and Auctionator.API and Auctionator.API.v1
   if not api or not api.GetAuctionPriceByItemLink then return nil end
   local ok, prix = pcall(api.GetAuctionPriceByItemLink, NOM_ADDON, lien)
@@ -384,7 +389,7 @@ function majBilan()
     "Or ramassé : " .. texteOr(perso.argent),
     "Revente marchand : " .. texteOr(revente),
   }
-  if Auctionator then lignes[#lignes + 1] = "Hôtel des ventes : " .. texteOr(hv) end
+  if Encheres_Prix or Auctionator then lignes[#lignes + 1] = "Hôtel des ventes : " .. texteOr(hv) end
   lignes[#lignes + 1] = "|cff40ff40Par heure : " .. texteOr(ns.parHeure(perso.argent + hv, duree)) .. "|r"
   for i = 1, math.min(5, #liste) do
     lignes[#lignes + 1] = liste[i].nombre .. " × " .. liste[i].lien
