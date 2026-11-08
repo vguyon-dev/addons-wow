@@ -129,4 +129,10 @@ local st = ns.lireStats({ ITEM_MOD_AGILITY_SHORT = 2, ITEM_MOD_CRIT_RATING_SHORT
 verifie("lecture des caractéristiques", "2/4", st.agilite .. "/" .. st.secondaires)
 verifie("sans caractéristiques : le niveau d'objet tranche", true, ns.comparer({ stats = {}, niveau = 12, type = "INVTYPE_CLOAK" },
   { [15] = { stats = {}, niveau = 8, nom = "Cape" } }, "agilite") ~= nil)
+-- Outils de métier : leur propre section, jamais comparés comme des armes
+verifie("canne à pêche (arme, sous-classe 20) : Métiers", "metier", ns.categorie(2, 1, false, true, 20, 6256))
+verifie("couteau à dépecer (arme divers, 14) : Métiers", "metier", ns.categorie(2, 1, false, true, 14, 7005))
+verifie("outil de métier Retail (classe 19) : Métiers", "metier", ns.categorie(19, 1, false, true, 0, 1))
+verifie("une vraie dague reste de l'équipement", "equip", ns.categorie(2, 2, false, true, 15, 2092))
+verifie("un outil d'objet de quête reste en Quête", "quete", ns.categorie(2, 1, true, true, 14, 7005))
 os.exit(ok and 0 or 1)

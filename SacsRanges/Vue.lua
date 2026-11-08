@@ -23,6 +23,7 @@ ns.SECTIONS = {
   { id = "equip", nom = "Équipement", couleur = { 0.42, 0.62, 1.00 } },
   { id = "conso", nom = "Consommables", couleur = { 0.40, 0.85, 0.50 } },
   { id = "compo", nom = "Composants", couleur = { 0.90, 0.70, 0.35 } },
+  { id = "metier", nom = "Métiers", couleur = { 0.55, 0.80, 0.85 } },
   { id = "quete", nom = "Quête", couleur = { 1.00, 0.82, 0.20 } },
   { id = "divers", nom = "Divers", couleur = { 0.75, 0.70, 0.62 } },
   { id = "vendre", nom = "À vendre", couleur = { 0.62, 0.62, 0.62 } },
@@ -35,8 +36,10 @@ local CLASSES = { [0] = "conso", [2] = "equip", [4] = "equip", [5] = "compo", [7
 
 -- La section d'un objet. Gris ou équipement que tu ne peux pas porter : à vendre.
 -- Un objet de quête reste en « Quête » même s'il est gris (on ne le vend pas).
-function ns.categorie(classe, qualite, quete, utilisable)
+-- Un outil de métier (canne à pêche, couteau à dépecer…) va dans « Métiers ».
+function ns.categorie(classe, qualite, quete, utilisable, sousClasse, id)
   if quete or classe == 12 then return "quete" end
+  if ns.estOutilMetier and ns.estOutilMetier(classe, sousClasse, id) then return "metier" end
   if qualite == 0 then return "vendre" end
   local c = CLASSES[classe]
   if c == "equip" and utilisable == false then return "vendre" end
@@ -324,13 +327,13 @@ local function lire()
     local n = ns.nbCases and ns.nbCases(sac) or 0
     for case = 1, n do
       total = total + 1
-      local icone, nombre, verrou, qualite, lien = infoCase(sac, case)
+      local icone, nombre, verrou, qualite, lien, idObjet = infoCase(sac, case)
       if icone and lien then
-        local nom, _, q, _, _, _, _, _, _, _, _, classe = infoObjet(lien)
+        local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse = infoObjet(lien)
         qualite = qualite or q or 1
         local utilisable = true
         if classe == 2 or classe == 4 then utilisable = ns.utilisableCase and ns.utilisableCase(sac, case, lien) end
-        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable)
+        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet)
         local conseil
         if categorie == "equip" and ns.db and ns.db.conseils ~= false and ns.conseil then
           local ok, c = pcall(ns.conseil, lien)

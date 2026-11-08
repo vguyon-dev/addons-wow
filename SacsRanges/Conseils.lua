@@ -194,6 +194,10 @@ local function avisPawn(lien)
   if not ok2 then return nil end
   local u = type(infosPawn) == "table" and infosPawn[1]
   if not u then return false end
+  -- Pawn compare parfois à un emplacement vide qu'on ne peut pas remplir (main
+  -- gauche sans ambidextrie) : « +10000 % » pour un couteau à dépecer, vu en jeu
+  -- le 08/11. Sans objet porté en face, c'est notre propre comparaison qui tranche.
+  if not u.ExistingItemLink then return nil end
   local pourcent = tonumber(u.PercentUpgrade)
   local echelle = u.LocalizedScaleName or u.ScaleName or "Pawn"
   return { raison = (pourcent and ("+" .. math.floor(pourcent * 100 + 0.5) .. " % ") or "") .. "(" .. echelle .. ")" }
@@ -203,9 +207,11 @@ end
 -- vérifié que c'est de l'équipement que tu peux porter.
 function ns.conseil(lien)
   if not lien then return nil end
-  if cache[lien] ~= nil then return cache[lien] or nil end
+  local cle = lien .. (ns.db and ns.db.avisPawn and "|P" or "")
+  if cache[cle] ~= nil then return cache[cle] or nil end
   if not principale then lireSpecialisation() end
-  local resultat = avisPawn(lien)
+  local resultat = nil
+  if ns.db and ns.db.avisPawn then resultat = avisPawn(lien) end
   if resultat == nil then
     local _, niveau, typeObjet = infos(lien)
     if not typeObjet then return nil end -- pas encore en cache : on reviendra
@@ -236,7 +242,7 @@ function ns.conseil(lien)
     resultat = ns.comparer({ stats = statsDe(lien), niveau = niveau, type = typeObjet }, portes, principale, aDistance,
       ambidextre) or false
   end
-  cache[lien] = resultat
+  cache[cle] = resultat
   return resultat or nil
 end
 

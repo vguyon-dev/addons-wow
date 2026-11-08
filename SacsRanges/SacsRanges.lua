@@ -19,6 +19,7 @@ local DEFAUTS = {
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
+  avisPawn = false,        -- prendre l'avis de Pawn s'il est installé (sinon notre propre calcul)
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
 }
@@ -79,6 +80,18 @@ function ns.utilisable(classeObjet, sousClasse, connait, rouge)
   local sort = connait and COMPETENCES[classeObjet] and COMPETENCES[classeObjet][sousClasse]
   if sort and not connait(sort) then return false end
   return true
+end
+
+-- Les outils de métier (canne à pêche, couteau à dépecer, pioche, marteau…) :
+-- ce ne sont pas des armes à comparer ni à vendre. Classe 19 = outil de métier
+-- (Retail) ; arme de sous-classe 20 = canne à pêche, 14 = « divers » (couteau à
+-- dépecer, pioche, marteau de forgeron) ; plus les outils connus par leur numéro.
+local OUTILS = { [7005] = true, [2901] = true, [5956] = true, [6256] = true, [6365] = true, [6366] = true,
+  [6367] = true, [12225] = true, [6219] = true, [10498] = true, [19970] = true, [45120] = true }
+function ns.estOutilMetier(classe, sousClasse, id)
+  if id and OUTILS[id] then return true end
+  if classe == 19 then return true end
+  return classe == 2 and (sousClasse == 20 or sousClasse == 14)
 end
 
 -- objets : { { id, lien, niveau, type, utilisable } } (type = « INVTYPE_… » du
@@ -209,7 +222,9 @@ local function lireSacs()
       local lien, id = lienCase(sac, case)
       if lien and id then
         local typ, _, _, classeObjet, sousClasse = select(9, infoObjet(lien))
-        if typ and EMPLACEMENTS[typ] then
+        if ns.estOutilMetier(classeObjet, sousClasse, id) then
+          -- un outil de métier n'est ni « moins bon » ni « à vendre »
+        elseif typ and EMPLACEMENTS[typ] then
           local lu, rouge = pcall(ligneRouge, sac, case)
           objets[#objets + 1] = { id = id, lien = lien, niveau = niveau(lien), type = typ,
             utilisable = ns.utilisable(classeObjet, sousClasse, connait, lu and rouge or nil) }
@@ -424,11 +439,13 @@ ns.reglages = ns.creerReglages({
       aide = "Une petite barre au-dessus du sac à dos ; « Banque » apparaît quand la banque est ouverte. Sans objet avec le sac par catégories." },
     { titre = "Sac par catégories" },
     { cle = "vueCategories", libelle = "Sac rangé par catégories (remplace les sacs du jeu)",
-      aide = "Un seul sac en sections : Équipement, Consommables, Composants, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
+      aide = "Un seul sac en sections : Équipement, Consommables, Composants, Métiers, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
     { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)", dependDe = "vueCategories",
       aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
     { cle = "conseils", libelle = "Section « À équiper » et flèche verte", dependDe = "vueCategories",
-      aide = "Les objets meilleurs que ce que tu portes, pour ta spécialisation, en haut du sac avec la raison. Avec Pawn installé, c'est son avis qui compte. Clic droit pour équiper." },
+      aide = "Les objets meilleurs que ce que tu portes, pour ta spécialisation, en haut du sac avec la raison. Clic droit pour équiper." },
+    { cle = "avisPawn", libelle = "Prendre l'avis de Pawn s'il est installé", dependDe = "conseils",
+      aide = "Décoché : l'addon juge seul (caractéristique principale de ta spécialisation, dégâts de l'arme, Endurance), sans Pawn." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
