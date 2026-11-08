@@ -273,7 +273,7 @@ ns.reglages = ns.creerReglages({
   icone = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
   nomDB = "QuetesDuGroupeDB",
   defauts = DEFAUTS,
-  ouvrirHub = basculerPanneau,
+  ouvrirHub = basculerPanneau, texteHub = "Quêtes du groupe",
   options = {
     { titre = "En groupe" },
     { cle = "actif", libelle = "Échanger les quêtes avec le groupe",
@@ -284,7 +284,7 @@ ns.reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
-  astuce = "Le panneau : /qg ou un clic sur la ligne Quêtes du groupe de l'icône commune. Réglages : /qg options.",
+  astuce = "Le panneau : /qg, le bouton en haut de cette fenêtre ou Maj+clic sur la ligne de l'icône commune.",
   auChargement = function(d) db = d end,
 })
 

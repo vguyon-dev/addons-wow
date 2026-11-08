@@ -253,6 +253,23 @@ local function caseDe(sac, case)
   -- Le compteur de cases libres, sur la case vide qui les représente.
   b.libres = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
   b.libres:SetPoint("BOTTOMRIGHT", -3, 3)
+  -- La flèche verte des objets à équiper (une flèche du jeu, teintée en vert).
+  b.fleche = b:CreateTexture(nil, "OVERLAY", nil, 7)
+  b.fleche:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up")
+  b.fleche:SetVertexColor(0.2, 1, 0.2)
+  b.fleche:SetSize(22, 22)
+  b.fleche:SetPoint("TOPLEFT", -5, 5)
+  b.fleche:Hide()
+  -- La raison du conseil, ajoutée à la bulle d'aide de l'objet.
+  b:HookScript("OnEnter", function(self)
+    local c = self.conseil
+    if not c or not GameTooltip:IsShown() then return end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
+      .. " : " .. (c.raison or ""), 0.12, 1, 0)
+    if c.remplace then GameTooltip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
+    GameTooltip:Show()
+  end)
   cases[cle] = b
   return b
 end
@@ -272,6 +289,24 @@ local function remplir(b, icone, nombre, verrou, qualite, lien)
   if SetItemButtonDesaturated then SetItemButtonDesaturated(b, verrou) end
   if SetItemButtonQuality then pcall(SetItemButtonQuality, b, qualite, lien) end
   b.libres:SetText("")
+  b.conseil = nil
+  b.fleche:Hide()
+end
+
+-- Les lignes de la section « À équiper » : le nom de l'objet et la raison, à droite de la case.
+local lignesConseil = {}
+local function ligneConseil(i)
+  if not lignesConseil[i] then
+    local nom = contenu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    nom:SetJustifyH("LEFT")
+    local raison = contenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    raison:SetJustifyH("LEFT")
+    raison:SetTextColor(0.12, 1, 0)
+    local remplace = contenu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    remplace:SetJustifyH("LEFT")
+    lignesConseil[i] = { nom = nom, raison = raison, remplace = remplace }
+  end
+  return lignesConseil[i]
 end
 
 -- ---------------------------------------------------------------------------
@@ -292,9 +327,15 @@ local function lire()
         qualite = qualite or q or 1
         local utilisable = true
         if classe == 2 or classe == 4 then utilisable = ns.utilisableCase and ns.utilisableCase(sac, case, lien) end
+        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable)
+        local conseil
+        if categorie == "equip" and ns.db and ns.db.conseils ~= false and ns.conseil then
+          local ok, c = pcall(ns.conseil, lien)
+          if ok then conseil = c end
+        end
         objets[#objets + 1] = {
           sac = sac, case = case, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite, lien = lien,
-          nom = nom or lien, categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable),
+          nom = nom or lien, categorie = categorie, conseil = conseil,
         }
       else
         libres = libres + 1
@@ -316,8 +357,63 @@ local function majVue()
 
   for _, b in pairs(cases) do b.utilisee = false end
   local filtre = ns.simplifier(recherche:GetText() or "")
-  local parSection = ns.repartir(objets)
+  local function visible(o) return filtre == "" or ns.simplifier(o.nom):find(filtre, 1, true) end
+
+  -- Les objets à équiper sortent de leur section et passent en tête, une ligne chacun.
+  local aEquiper, autres = {}, {}
+  for _, o in ipairs(objets) do
+    if o.conseil then aEquiper[#aEquiper + 1] = o else autres[#autres + 1] = o end
+  end
+  table.sort(aEquiper, function(a, b) return (a.nom or "") < (b.nom or "") end)
+  local parSection = ns.repartir(autres)
   local y, it = 0, 0
+
+  if #aEquiper > 0 then
+    it = it + 1
+    local t = titreDe(it)
+    t:ClearAllPoints()
+    t:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
+    t:SetText("À équiper  |cff888888" .. #aEquiper .. "|r")
+    t:SetTextColor(0.12, 1, 0)
+    t:Show()
+    y = y + 16
+  end
+  for i, o in ipairs(aEquiper) do
+    local b = caseDe(o.sac, o.case)
+    local l = ligneConseil(i)
+    if b then
+      b.utilisee = true
+      if not InCombatLockdown() then
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
+      end
+      remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
+      b.conseil = o.conseil
+      b.fleche:Show()
+      b:SetAlpha(visible(o) and 1 or 0.2)
+      b:Show()
+    end
+    l.nom:ClearAllPoints()
+    l.nom:SetPoint("TOPLEFT", contenu, "TOPLEFT", TAILLE + 8, -(y + 1))
+    l.nom:SetText(o.lien or o.nom)
+    l.raison:ClearAllPoints()
+    l.raison:SetPoint("TOPLEFT", l.nom, "BOTTOMLEFT", 0, -1)
+    l.raison:SetText(o.conseil.raison or "")
+    l.remplace:ClearAllPoints()
+    l.remplace:SetPoint("TOPLEFT", l.raison, "BOTTOMLEFT", 0, -1)
+    l.remplace:SetText(o.conseil.remplace and ("remplace : " .. o.conseil.remplace) or "")
+    for _, fs in pairs(l) do
+      fs:SetWidth(largeur - TAILLE - 8)
+      if fs.SetWordWrap then fs:SetWordWrap(false) end
+      fs:Show()
+    end
+    y = y + TAILLE + ECART + 4
+  end
+  for i = #aEquiper + 1, #lignesConseil do
+    local l = lignesConseil[i]
+    l.nom:Hide(); l.raison:Hide(); l.remplace:Hide()
+  end
+  if #aEquiper > 0 then y = y + 6 end
 
   for _, s in ipairs(ns.SECTIONS) do
     local liste = parSection[s.id]
@@ -340,7 +436,7 @@ local function majVue()
             b:SetPoint("TOPLEFT", contenu, "TOPLEFT", col * (TAILLE + ECART), -(y + ligne * (TAILLE + ECART)))
           end
           remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
-          b:SetAlpha((filtre == "" or ns.simplifier(o.nom):find(filtre, 1, true)) and 1 or 0.2)
+          b:SetAlpha(visible(o) and 1 or 0.2)
           b:Show()
         end
       end
@@ -457,6 +553,18 @@ for nom, quoi in pairs({
   CloseAllBags = "fermer", CloseBackpack = "fermer",
 }) do
   if _G[nom] then hooksecurefunc(nom, function() noter(quoi) end) end
+end
+
+-- Bouton des réglages : montre le sac par catégories, ou prévient qu'il est coupé.
+function ns.ouvrirVue()
+  if not vueActive() then
+    if ns.reglages then
+      ns.reglages.dire(ns.db and not ns.db.actif and "Sacs rangés est coupé : active-le d'abord."
+        or "le sac par catégories n'est pas activé : coche-le dans les réglages.")
+    end
+    return
+  end
+  if fenetre:IsShown() then fenetre:Raise() else fenetre:Show() end
 end
 
 -- Option cochée ou décochée, apparence changée.

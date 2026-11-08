@@ -1,10 +1,11 @@
 -- Simulation hors jeu du Carnet : fausse API WoW, puis scénarios de passage de niveau.
 -- Lancer depuis Windows :
 --   wsl lua5.1 tests/CarnetDeSession_simu.lua CarnetDeSession/CarnetDeSession.lua
-local function bidon()
-  return setmetatable({}, { __index = function() return function() return bidon() end end })
+local bidon
+bidon = function()
+  return setmetatable({}, { __index = function() return bidon() end, __call = function() return bidon() end })
 end
-local ecouteur
+local cadres = {}
 function CreateFrame()
   local f = bidon()
   local scripts = {}
@@ -12,10 +13,13 @@ function CreateFrame()
   rawset(f, "IsShown", function() return false end)
   rawset(f, "RegisterEvent", function() end)
   rawset(f, "_scripts", scripts)
-  ecouteur = f
+  cadres[#cadres + 1] = f
   return f
 end
-UIParent = {}
+UIParent, UISpecialFrames = {}, {}
+tinsert = table.insert
+Minimap = bidon()
+rawset(Minimap, "GetWidth", function() return 140 end)
 time, date = os.time, os.date
 C_Timer = { NewTicker = function() end }
 SlashCmdList = {}
@@ -27,9 +31,16 @@ function UnitXPMax() return etat.xpMax end
 function GetMoney() return etat.argent end
 function print() end
 
-local chunk = assert(loadfile(arg[1]))
-chunk("CarnetDeSession", {})
-local function evt(nom, ...) ecouteur._scripts.OnEvent(ecouteur, nom, ...) end
+local ns = {}
+local reglagesLua = arg[1]:gsub("[^/]+$", "Reglages.lua")
+assert(loadfile(reglagesLua))("CarnetDeSession", ns)
+assert(loadfile(arg[1]))("CarnetDeSession", ns)
+-- Chaque événement va à tous les cadres qui écoutent (celui de l'addon, celui des réglages).
+local function evt(nom, ...)
+  for _, f in ipairs(cadres) do
+    if f._scripts.OnEvent then f._scripts.OnEvent(f, nom, ...) end
+  end
+end
 
 evt("ADDON_LOADED", "CarnetDeSession")
 evt("PLAYER_ENTERING_WORLD", true, false)
@@ -62,4 +73,16 @@ etat.uniteNiveau = 3
 etat.uniteNiveau = 1
 evt("PLAYER_LOGOUT")
 verifie("niveau de fin malgré UnitLevel périmé", 3, s.niveauFin)
+-- 6. carnet coupé : rien ne compte, et la réactivation repart de la barre actuelle
+etat.uniteNiveau = 3
+CarnetDeSessionDB.actif = false
+local avant = s.xpGagnee
+etat.xp = 300; evt("PLAYER_XP_UPDATE", "player")
+evt("PARTY_KILL", nil, "Creature-0-1")
+verifie("coupé : pas d'expérience comptée", avant, s.xpGagnee)
+verifie("coupé : pas de monstre compté", 0, s.monstres)
+CarnetDeSessionDB.actif = true
+etat.xp = 350; evt("PLAYER_XP_UPDATE", "player")
+verifie("réactivé : seulement le gain d'après", avant + 50, s.xpGagnee)
+verifie("réglages : actif par défaut", true, CarnetDeSessionDB.affiche)
 os.exit(ok and 0 or 1)

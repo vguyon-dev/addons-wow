@@ -67,6 +67,49 @@ function ns.lotsAAcheter(cible, possede, lot, prix, argent)
   return math.max(lots, 0)
 end
 
+-- Le nom affiché d'un objet : celui du lien enregistré, sinon celui du jeu
+-- (infoFn = GetItemInfo), sinon « objet 123 ».
+function ns.nomObjet(id, lien, infoFn)
+  local nom = type(lien) == "string" and lien:match("%[(.-)%]")
+  if not nom and infoFn then
+    local ok, n = pcall(infoFn, id)
+    if ok and type(n) == "string" then nom = n end
+  end
+  return nom or ("objet " .. tostring(id))
+end
+
+-- Les lignes de la liste « Gris à garder » : { texte, lien, retirer }, triées par nom.
+-- retirer(id) est appelé par la croix d'une ligne.
+function ns.lignesGardes(gardes, infoFn, retirer)
+  local l = {}
+  for id, lien in pairs(gardes or {}) do
+    l[#l + 1] = { id = id, texte = ns.nomObjet(id, lien, infoFn), lien = "item:" .. id,
+                  retirer = function() retirer(id) end }
+  end
+  table.sort(l, function(a, b)
+    local x, y = a.texte:lower(), b.texte:lower()
+    if x ~= y then return x < y end
+    return a.id < b.id
+  end)
+  return l
+end
+
+-- Les lignes de la liste « Stock à racheter » : « 20 x Nom ».
+function ns.lignesStock(stock, infoFn, retirer)
+  local l = {}
+  for id, v in pairs(stock or {}) do
+    local nom = ns.nomObjet(id, type(v) == "table" and v.lien or nil, infoFn)
+    l[#l + 1] = { id = id, nom = nom, texte = (type(v) == "table" and v.qte or "?") .. " x " .. nom,
+                  lien = "item:" .. id, retirer = function() retirer(id) end }
+  end
+  table.sort(l, function(a, b)
+    local x, y = a.nom:lower(), b.nom:lower()
+    if x ~= y then return x < y end
+    return a.id < b.id
+  end)
+  return l
+end
+
 -- ---------------------------------------------------------------------------
 -- Achat automatique : remettre le stock (nourriture, eau, réactifs…)
 -- ---------------------------------------------------------------------------
@@ -194,7 +237,20 @@ end
 -- Réglages
 -- ---------------------------------------------------------------------------
 
-local function compter(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+local QTE_DEFAUT = 20
+
+local function infoObjet(id)
+  local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+  return f and f(id)
+end
+
+-- Le lien d'un objet lâché dans la liste (celui du curseur, sinon celui du jeu).
+local function lienDe(id, lien)
+  if type(lien) == "string" then return lien end
+  local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+  local ok, _, l = pcall(f, id)
+  return ok and l or ("objet " .. id)
+end
 
 ns.reglages = ns.creerReglages({
   titre = "Marchand auto",
@@ -206,13 +262,13 @@ ns.reglages = ns.creerReglages({
     { cle = "actif", libelle = "Activer Marchand auto",
       aide = "Interrupteur général. Le clic droit sur l'icône fait la même chose." },
     { cle = "vendreGris", libelle = "Vendre les objets gris",
-      aide = "Tous les gris de tes sacs, sauf ceux de ta liste « à garder »." },
+      aide = "Tous les gris de tes sacs, sauf ceux de la liste « Gris à garder »." },
     { cle = "reparer", libelle = "Réparer l'équipement",
       aide = "Seulement chez les marchands qui savent réparer (enclume dans leur fenêtre)." },
-    { cle = "banqueGuilde", libelle = "Payer avec la banque de guilde",
+    { cle = "banqueGuilde", libelle = "Payer avec la banque de guilde", dependDe = "reparer",
       aide = "Si ta guilde te le permet et qu'il y a assez ; sinon avec ton or." },
     { cle = "acheter", libelle = "Racheter mon stock",
-      aide = "Nourriture, eau, réactifs… jusqu'à la quantité voulue. Liste : /ma stock." },
+      aide = "Nourriture, eau, réactifs… jusqu'à la quantité voulue de la liste « Stock à racheter »." },
     { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
       aide = "Garde une de ces touches enfoncée en ouvrant le marchand pour tout faire à la main." },
     { titre = "Affichage" },
@@ -224,27 +280,35 @@ ns.reglages = ns.creerReglages({
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)
-    t:SetText("Gris à garder")
-    y = y - 32
-    local compteur = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    compteur:SetPoint("TOPLEFT", 20, y)
-    y = y - 22
-    local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b:SetSize(160, 24)
-    b:SetPoint("TOPLEFT", 16, y)
-    b:SetText("Vider les gris gardés")
-    b:SetScript("OnClick", function() r.changer("gardes", {}); r.dire("plus aucun gris gardé.") end)
-    local b2 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b2:SetSize(160, 24)
-    b2:SetPoint("TOPLEFT", 184, y)
-    b2:SetText("Vider le stock")
-    b2:SetScript("OnClick", function() r.changer("stock", {}); r.dire("plus rien à racheter.") end)
-    y = y - 28
-    return y, function(d)
-      compteur:SetText("Gris gardés : " .. compter(d.gardes) .. "     Objets en stock : " .. compter(d.stock))
-    end
+    t:SetText("Listes")
+    y = y - 30
+    local maj1, maj2
+    y, maj1 = ns.creerListe(fenetre, y, {
+      titre = "Gris à garder", hauteur = 5,
+      vide = "Aucun : tous les gris sont vendus.",
+      lignes = function()
+        return ns.lignesGardes(db and db.gardes, infoObjet, function(id) db.gardes[id] = nil end)
+      end,
+      deposer = function(id, lien) db.gardes[id] = lienDe(id, lien) end,
+      texteDepot = "Glisse ici un objet gris de ton sac pour ne jamais le vendre",
+      vider = function() db.gardes = {} end,
+    })
+    y, maj2 = ns.creerListe(fenetre, y - 6, {
+      titre = "Stock à racheter", hauteur = 5,
+      vide = "Aucun objet à racheter.",
+      lignes = function()
+        return ns.lignesStock(db and db.stock, infoObjet, function(id) db.stock[id] = nil end)
+      end,
+      deposer = function(id, lien, n)
+        db.stock[id] = { lien = lienDe(id, lien), qte = (n and n > 0) and n or QTE_DEFAUT }
+      end,
+      texteDepot = "Glisse ici un objet de ton sac à garder en stock",
+      quantite = QTE_DEFAUT,
+      vider = function() db.stock = {} end,
+    })
+    return y, function() maj1(); maj2() end
   end,
-  astuce = "Garder un gris : /ma garder puis Maj+clic sur l'objet. Stock : /ma stock 20 puis Maj+clic sur l'objet.",
+  astuce = "Pour ajouter un objet : prends-le dans ton sac et lâche-le dans la zone de la liste (ou clique la zone avec l'objet au curseur). Le stock se rachète jusqu'à la quantité choisie.",
   auChargement = function(d) db = d end,
 })
 

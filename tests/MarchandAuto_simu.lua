@@ -44,4 +44,24 @@ verifie("guilde pas assez : toi", "perso", ns.payeur(500, 1000, 100, true))
 verifie("option guilde coupée : toi", "perso", ns.payeur(500, 1000, -1, false))
 verifie("pas assez d'or nulle part : rien", nil, ns.payeur(500, 100, nil, true))
 verifie("rien à réparer : rien", nil, ns.payeur(0, 1000, -1, true))
+
+-- Lignes des listes de la fenêtre.
+local retires = {}
+local function retirer(id) retires[#retires + 1] = id end
+local info = function(id) if id == 3 then return "Pomme" end end
+verifie("nom : pris du lien", "Eau", ns.nomObjet(1, "|cffffffff|Hitem:1|h[Eau]|h|r", info))
+verifie("nom : pris du jeu sans lien", "Pomme", ns.nomObjet(3, nil, info))
+verifie("nom : repli", "objet 9", ns.nomObjet(9, true, info))
+local g = ns.lignesGardes({ [2] = "[Zèbre]", [1] = "[abeille]", [3] = true }, info, retirer)
+verifie("gardes : 3 lignes", 3, #g)
+verifie("gardes : tri par nom sans casse", "abeille", g[1].texte)
+verifie("gardes : lien de survol", "item:1", g[1].lien)
+g[2].retirer()
+verifie("gardes : la croix retire l'objet", 3, retires[1])
+verifie("gardes : liste vide", 0, #ns.lignesGardes(nil, info, retirer))
+local st = ns.lignesStock({ [5] = { lien = "[Eau]", qte = 20 }, [6] = { lien = "[Biscuit]", qte = 5 } }, info, retirer)
+verifie("stock : « 5 x Biscuit » en premier", "5 x Biscuit", st[1].texte)
+verifie("stock : « 20 x Eau »", "20 x Eau", st[2].texte)
+st[2].retirer()
+verifie("stock : la croix retire l'objet", 5, retires[2])
 os.exit(ok and 0 or 1)

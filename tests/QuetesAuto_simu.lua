@@ -1,4 +1,4 @@
--- Simulation hors jeu de Quêtes auto : priorités chez le PNJ et choix de la récompense.
+-- Simulation hors jeu de Quêtes auto : priorités chez le PNJ, choix de la récompense, fenêtre de réglages.
 -- Lancer depuis Windows :
 --   wsl lua5.1 tests/QuetesAuto_simu.lua QuetesAuto/QuetesAuto.lua
 -- Un objet « bidon » accepte tout : n'importe quel champ, n'importe quel appel.
@@ -6,9 +6,37 @@ local bidon
 bidon = function()
   return setmetatable({}, { __index = function() return bidon() end, __call = function() return bidon() end })
 end
-function CreateFrame() return bidon() end
-UIParent, SlashCmdList, UISpecialFrames, Minimap = {}, {}, {}, bidon()
+-- Un cadre qui retient ses SetScript et son SetText : la simulation peut ainsi « cliquer » un bouton.
+local scripts = {}
+local function cadre()
+  return setmetatable({}, { __index = function(_, k)
+    if k == "SetScript" then
+      return function(self, nom, f) scripts[#scripts + 1] = { self = self, nom = nom, f = f } end
+    elseif k == "SetText" then
+      return function(self, texte) rawset(self, "_texte", texte) end
+    elseif k == "GetText" then
+      return function(self) return rawget(self, "_texte") or "" end
+    end
+    return bidon()
+  end })
+end
+function CreateFrame() return cadre() end
+UIParent, SlashCmdList, UISpecialFrames, WorldFrame = bidon(), {}, {}, bidon()
+Minimap = cadre()
+Minimap.GetWidth = function() return 140 end
 tinsert = table.insert
+-- Quelques fonctions du jeu appelées quand la fenêtre s'ouvre ou qu'on clique un bouton.
+function InCombatLockdown() return false end
+function strtrim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
+function strsplit(sep, s)
+  local t = {}
+  for morceau in (s .. sep):gmatch("(.-)" .. sep:gsub("%-", "%%-")) do t[#t + 1] = morceau end
+  return unpack(t)
+end
+local pnjEnFace -- { guid, nom } du PNJ « en face », ou nil
+function UnitGUID(unite) return unite == "npc" and pnjEnFace and pnjEnFace[1] or nil end
+function UnitName(unite) return unite == "npc" and pnjEnFace and pnjEnFace[2] or nil end
+C_QuestLog = { GetTitleForQuestID = function(id) return id == 555 and "La quête connue" or nil end }
 
 local ns = {}
 -- Le .toc charge Reglages.lua (rangé à côté) avant le fichier principal.
@@ -121,5 +149,84 @@ verifie("chasseur niveau 20 : mailles, non", false, ns.utilisable(4, 3, chasseur
 verifie("bijou ou bague (sans compétence) : oui", true, ns.utilisable(4, 0, chasseur20))
 verifie("ligne rouge dans la bulle : non", false, ns.utilisable(4, 0, chasseur20, true))
 verifie("Retail (pas de liste) : la bulle décide", true, ns.utilisable(2, 7, nil, false))
+
+-- Lignes des listes de la fenêtre (rangées par nom, anciennes entrées à true comprises).
+local retiresPNJ, retiresQuetes = {}, {}
+local lp = ns.lignesPNJ({ [30] = "Zorn", [12] = "alma", [7] = "Alma", [99] = "?" }, function(id) retiresPNJ[#retiresPNJ + 1] = id end)
+verifie("PNJ : quatre lignes", 4, #lp)
+verifie("PNJ : rangés par nom, majuscules ignorées, numéro en cas d'égalité", "alma (n° 12)", lp[2].texte)
+verifie("PNJ : premier", "Alma (n° 7)", lp[1].texte)
+verifie("PNJ : sans nom connu en dernier", "PNJ (n° 99)", lp[4].texte)
+lp[3].retirer()
+verifie("PNJ : la croix retire le bon numéro", 30, retiresPNJ[1])
+local lq = ns.lignesQuetes({ [5] = "Brigands", [3] = true, [9] = "Aide" }, function(id) retiresQuetes[#retiresQuetes + 1] = id end)
+verifie("quêtes : trois lignes", 3, #lq)
+verifie("quêtes : titre et numéro", "Aide (n° 9)", lq[1].texte)
+verifie("quêtes : ancienne entrée à true", "Quête n° 3", lq[3].texte)
+lq[3].retirer()
+verifie("quêtes : la croix retire le bon numéro", 3, retiresQuetes[1])
+verifie("listes vides", 0, #ns.lignesQuetes({}, function() end) + #ns.lignesPNJ({}, function() end))
+
+-- La fenêtre entière : chargement, ouverture, boutons.
+local function essaie(libelle, f, ...)
+  local bon, erreur = pcall(f, ...)
+  if not bon then io.write("   erreur : " .. tostring(erreur) .. "\n") end
+  verifie(libelle, true, bon)
+end
+local function cliquer(texte, rang)
+  local vus = 0
+  for _, s in ipairs(scripts) do
+    if s.nom == "OnClick" and rawget(s.self, "_texte") == texte then
+      vus = vus + 1
+      if vus == (rang or 1) then s.f(s.self) return true end
+    end
+  end
+  return false
+end
+local function premier(nom)
+  for _, s in ipairs(scripts) do if s.nom == nom then return s end end
+end
+local charge = premier("OnEvent")
+verifie("un écouteur de chargement existe", true, charge ~= nil)
+essaie("chargement sans erreur", charge.f, charge.self, "ADDON_LOADED", "QuetesAuto")
+local db = QuetesAutoDB
+verifie("réglages lus dans la base", true, db ~= nil and db.actif == true)
+local aff = premier("OnShow")
+essaie("ouverture de la fenêtre sans erreur", aff.f, aff.self)
+
+-- Les boutons.
+db.pnjIgnores = {}
+verifie("bouton « Ignorer le PNJ en face »", true, cliquer("Ignorer le PNJ en face"))
+verifie("aucun PNJ en face : rien d'ignoré", 0, (function() local n = 0 for _ in pairs(db.pnjIgnores) do n = n + 1 end return n end)())
+pnjEnFace = { "Creature-0-1-2-3-4567-89AB", "Garde" }
+cliquer("Ignorer le PNJ en face")
+verifie("PNJ en face ignoré avec son nom", "Garde", db.pnjIgnores[4567])
+cliquer("Ignorer le PNJ en face")
+verifie("deuxième clic : plus ignoré", nil, db.pnjIgnores[4567])
+db.pnjIgnores = { [1] = "A", [2] = "B" }
+essaie("réouverture avec des PNJ sans erreur", aff.f, aff.self)
+verifie("bouton « Tout retirer » (PNJ)", true, cliquer("Tout retirer", 1))
+verifie("PNJ vidés", nil, next(db.pnjIgnores))
+db.quetesIgnorees = { [1] = true, [2] = "Deux" }
+verifie("bouton « Tout retirer » (quêtes)", true, cliquer("Tout retirer", 2))
+verifie("quêtes vidées", nil, next(db.quetesIgnorees))
+-- /qa ignorer <n> garde le titre quand le jeu le connaît, sinon true.
+SlashCmdList.QUETESAUTO("ignorer 555")
+verifie("quête connue : titre gardé", "La quête connue", db.quetesIgnorees[555])
+SlashCmdList.QUETESAUTO("ignorer 556")
+verifie("quête inconnue : true", true, db.quetesIgnorees[556])
+SlashCmdList.QUETESAUTO("ignorer 555")
+verifie("deuxième /qa ignorer : de nouveau prise", nil, db.quetesIgnorees[555])
+pnjEnFace = nil
+essaie("/qa ignorer sans PNJ ni numéro", SlashCmdList.QUETESAUTO, "ignorer")
+db.vues = { a = true, b = true }
+verifie("bouton « Revoir les cinés »", true, cliquer("Revoir les cinés"))
+verifie("cinématiques oubliées", nil, next(db.vues))
+db.position = { "CENTER", "CENTER", 0, 0 }
+verifie("bouton « Replacer le bouton à l'écran »", true, cliquer("Replacer le bouton à l'écran"))
+verifie("position effacée", nil, db.position)
+db.quetesIgnorees = {}
+verifie("bouton « Ignorer cette quête » sans numéro", true, cliquer("Ignorer cette quête"))
+verifie("sans numéro : rien d'ignoré", nil, next(db.quetesIgnorees))
 
 os.exit(ok and 0 or 1)

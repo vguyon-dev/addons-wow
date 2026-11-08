@@ -38,4 +38,18 @@ verifie("gris le moins cher", 2, ns.grisAJeter({ { valeur = 50 }, { valeur = 3 }
 verifie("aucun gris : rien", nil, ns.grisAJeter({}))
 verifie("par heure : 1000 en 30 min", 2000, ns.parHeure(1000, 1800))
 verifie("par heure : moins d'une minute = 0", 0, ns.parHeure(1000, 30))
+
+-- Lignes de la liste « à ne jamais ramasser ».
+local retires = {}
+local info = function(id) if id == 3 then return "Pomme" end end
+verifie("nom : pris du lien", "Eau", ns.nomObjet(1, "|cffffffff|Hitem:1|h[Eau]|h|r", info))
+verifie("nom : pris du jeu sans lien", "Pomme", ns.nomObjet(3, nil, info))
+verifie("nom : repli", "objet 9", ns.nomObjet(9, true, info))
+local l = ns.lignesIgnores({ [2] = "[Zèbre]", [1] = "[abeille]", [3] = true }, info, function(id) retires[#retires + 1] = id end)
+verifie("ignores : 3 lignes", 3, #l)
+verifie("ignores : tri par nom sans casse", "abeille", l[1].texte)
+verifie("ignores : lien de survol", "item:1", l[1].lien)
+l[3].retirer()
+verifie("ignores : la croix retire l'objet", 2, retires[1])
+verifie("ignores : liste vide", 0, #ns.lignesIgnores(nil, info, function() end))
 os.exit(ok and 0 or 1)

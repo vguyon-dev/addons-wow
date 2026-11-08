@@ -108,6 +108,33 @@ function ns.decision(b, reglages, ignores, seuil)
   return "prendre"
 end
 
+-- Le nom affiché d'un objet : celui du lien enregistré, sinon celui du jeu
+-- (infoFn = GetItemInfo), sinon « objet 123 ».
+function ns.nomObjet(id, lien, infoFn)
+  local nom = type(lien) == "string" and lien:match("%[(.-)%]")
+  if not nom and infoFn then
+    local ok, n = pcall(infoFn, id)
+    if ok and type(n) == "string" then nom = n end
+  end
+  return nom or ("objet " .. tostring(id))
+end
+
+-- Les lignes de la liste « Objets à ne jamais ramasser » : { texte, lien, retirer },
+-- triées par nom. retirer(id) est appelé par la croix d'une ligne.
+function ns.lignesIgnores(ignores, infoFn, retirer)
+  local l = {}
+  for id, lien in pairs(ignores or {}) do
+    l[#l + 1] = { id = id, texte = ns.nomObjet(id, lien, infoFn), lien = "item:" .. id,
+                  retirer = function() retirer(id) end }
+  end
+  table.sort(l, function(a, b)
+    local x, y = a.texte:lower(), b.texte:lower()
+    if x ~= y then return x < y end
+    return a.id < b.id
+  end)
+  return l
+end
+
 -- Parmi les gris des sacs ({ valeur = prix × nombre }), lequel jeter ?
 function ns.grisAJeter(gris)
   local choix
@@ -372,13 +399,28 @@ C_Timer.NewTicker(30, function() majBilan() end) -- l'or par heure bouge avec le
 -- Réglages
 -- ---------------------------------------------------------------------------
 
-local function compter(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+-- Le lien d'un objet lâché dans la liste (celui du curseur, sinon celui du jeu).
+local function lienDe(id, lien)
+  if type(lien) == "string" then return lien end
+  local ok, _, l = pcall(infoObjet, id)
+  return ok and l or ("objet " .. id)
+end
 
 ns.reglages = ns.creerReglages({
   titre = "Butin rapide",
   icone = "Interface\\Icons\\INV_Misc_Bag_10",
   nomDB = "ButinRapideDB",
   defauts = DEFAUTS,
+  boutons = {
+    { texte = "Nouveau bilan de farm", largeur = 170, aide = "Remet à zéro le bilan de farm de ce personnage (durée, objets, or).",
+      action = function() nouveauBilan(); majBilan(); ns.reglages.dire("bilan remis à zéro.") end },
+    { texte = "Replacer le bilan", aide = "Remet la fenêtre du bilan à sa place d'origine, au bord gauche de l'écran.",
+      action = function()
+        db.positionBilan = nil
+        fenetreBilan:ClearAllPoints()
+        fenetreBilan:SetPoint("LEFT", UIParent, "LEFT", 40, 120)
+      end },
+  },
   options = {
     { titre = "Ramassage" },
     { cle = "actif", libelle = "Activer Butin rapide",
@@ -402,24 +444,21 @@ ns.reglages = ns.creerReglages({
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)
     t:SetText("Listes")
-    y = y - 32
-    local compteur = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    compteur:SetPoint("TOPLEFT", 20, y)
-    y = y - 22
-    local b1 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b1:SetSize(190, 24)
-    b1:SetPoint("TOPLEFT", 16, y)
-    b1:SetText("Vider « à ne pas ramasser »")
-    b1:SetScript("OnClick", function() r.changer("ignores", {}); r.dire("liste vidée.") end)
-    local b2 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b2:SetSize(190, 24)
-    b2:SetPoint("TOPLEFT", 214, y)
-    b2:SetText("Nouveau bilan de farm")
-    b2:SetScript("OnClick", function() nouveauBilan(); majBilan(); r.dire("bilan remis à zéro.") end)
-    y = y - 28
-    return y, function(d) compteur:SetText("Objets à ne jamais ramasser : " .. compter(d.ignores)) end
+    y = y - 30
+    local maj
+    y, maj = ns.creerListe(fenetre, y, {
+      titre = "Objets à ne jamais ramasser", hauteur = 5,
+      vide = "Aucun : tout est ramassé.",
+      lignes = function()
+        return ns.lignesIgnores(db and db.ignores, infoObjet, function(id) db.ignores[id] = nil end)
+      end,
+      deposer = function(id, lien) db.ignores[id] = lienDe(id, lien) end,
+      texteDepot = "Glisse ici un objet de ton sac pour ne plus jamais le ramasser",
+      vider = function() db.ignores = {} end,
+    })
+    return y, function() maj() end
   end,
-  astuce = "Ne plus ramasser un objet : /br ignorer puis Maj+clic sur l'objet. Tout s'applique sans /reload.",
+  astuce = "Pour ne plus ramasser un objet : prends-le dans ton sac et lâche-le dans la zone de la liste (ou clique la zone avec l'objet au curseur). Tout s'applique sans /reload.",
   auChargement = function(d)
     db = d
     ButinRapidePerso = ButinRapidePerso or {}
@@ -435,6 +474,12 @@ ns.reglages = ns.creerReglages({
     end
   end,
   surChangement = function(d)
+    -- Coupé pendant qu'une fenêtre de butin est ouverte : on la rend visible.
+    if not d.actif then
+      if ticker then ticker:Cancel() end
+      enCours, derniersSlots = false, nil
+      if LootFrame then LootFrame:SetAlpha(1) end
+    end
     majBilan()
     if (d.toucheCadavres and true or false) ~= (d.cvarAvant and true or false) then appliquerCadavres(d, true) end
   end,
@@ -450,7 +495,15 @@ for _, e in ipairs({ "LOOT_READY", "LOOT_CLOSED", "PLAYER_MONEY", "UI_ERROR_MESS
   ecouteur:RegisterEvent(e)
 end
 ecouteur:SetScript("OnEvent", function(_, evenement, a, b)
-  if not db or not db.actif then return end
+  if not db or not db.actif then
+    -- Coupé : la fenêtre de butin du jeu doit rester visible (alpha remis à 1).
+    if evenement == "LOOT_CLOSED" then
+      enCours, derniersSlots = false, nil
+      if ticker then ticker:Cancel() end
+      if LootFrame then LootFrame:SetAlpha(1) end
+    end
+    return
+  end
   if evenement == "LOOT_READY" then
     -- Le jeu dit s'il faut ramasser seul : réglage « Butin automatique », Maj inverse.
     local auto = a

@@ -18,6 +18,7 @@ local DEFAUTS = {
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
+  conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
 }
@@ -399,29 +400,42 @@ ns.reglages = ns.creerReglages({
   icone = "Interface\\Icons\\INV_Misc_Bag_08",
   nomDB = "SacsRangesDB",
   defauts = DEFAUTS,
-  ouvrirHub = basculerPanneau,
+  ouvrirHub = basculerPanneau, texteHub = "Analyse des sacs",
+  boutons = {
+    { texte = "Ranger maintenant", aide = "Trie tes sacs par type, et la banque si elle est ouverte (comme /sr ranger).",
+      action = function() ranger(); C_Timer.After(1.5, rafraichir) end },
+    { texte = "Ouvrir le sac par catégories", largeur = 170,
+      aide = "Montre le sac rangé en sections. Utile seulement quand « Sac rangé par catégories » est coché.",
+      action = function() if ns.ouvrirVue then ns.ouvrirVue() end end },
+  },
   options = {
     { titre = "Ranger" },
     { cle = "actif", libelle = "Activer Sacs rangés",
-      aide = "Interrupteur général." },
+      aide = "Interrupteur général : coupé, plus de rangement, plus de barre sur le sac à dos, plus de sac par catégories (les sacs du jeu reviennent)." },
     { cle = "rangerBanque", libelle = "Ranger aussi la banque quand elle est ouverte",
       aide = "Le bouton « Ranger » trie alors tes sacs puis la banque." },
     { cle = "rangerMarchand", libelle = "Ranger tout seul en refermant un marchand",
       aide = "Après la vente des gris par Marchand auto, par exemple." },
-    { titre = "Affichage" },
+    { titre = "Analyse des sacs" },
+    { cle = "ecart", type = "nombre", libelle = "Écart de niveau toléré avant « moins bon »", min = 0, max = 20, pas = 1,
+      aide = "Un objet n'est dit « moins bon » que s'il a plus de ce nombre de niveaux de moins que ce que tu portes. 0 : dès qu'il est plus bas." },
+    { titre = "Sacs du jeu" },
+    { cle = "boutonsSac", libelle = "Boutons Ranger et Analyse sur le sac à dos", dependDe = "!vueCategories",
+      aide = "Une petite barre au-dessus du sac à dos ; « Banque » apparaît quand la banque est ouverte. Sans objet avec le sac par catégories." },
     { titre = "Sac par catégories" },
     { cle = "vueCategories", libelle = "Sac rangé par catégories (remplace les sacs du jeu)",
       aide = "Un seul sac en sections : Équipement, Consommables, Composants, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
-    { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)",
+    { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)", dependDe = "vueCategories",
       aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
-    { cle = "boutonsSac", libelle = "Boutons Ranger et Analyse sur le sac à dos",
-      aide = "Une petite barre au-dessus du sac à dos ; « Banque » apparaît quand la banque est ouverte." },
+    { cle = "conseils", libelle = "Section « À équiper » et flèche verte", dependDe = "vueCategories",
+      aide = "Les objets meilleurs que ce que tu portes, pour ta spécialisation, en haut du sac avec la raison. Avec Pawn installé, c'est son avis qui compte. Clic droit pour équiper." },
+    { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
-  astuce = "Le panneau : /sr ou la ligne Sacs rangés de l'icône commune. Ranger : /sr ranger ou un raccourci clavier.",
+  astuce = "Le panneau d'analyse : /sr, le bouton en haut ou Maj+clic dans l'icône commune. Ranger : /sr ranger ou un raccourci clavier.",
   auChargement = function(d) db = d; ns.db = d end,
-  surChangement = function() placerBarre(); if ns.vueMaj then ns.vueMaj() end end,
+  surChangement = function() placerBarre(); rafraichir(); if ns.vueMaj then ns.vueMaj() end end,
 })
 
 -- ---------------------------------------------------------------------------

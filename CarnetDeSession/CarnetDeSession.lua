@@ -159,9 +159,15 @@ end
 
 fenetre:SetScript("OnShow", rafraichir)
 
+local reglages -- la fenêtre de réglages commune (Reglages.lua), créée plus bas
+
+-- Passe par les réglages pour que la case « Afficher la fenêtre » suive.
 local function afficher(visible)
-  db.affiche = visible
-  fenetre:SetShown(visible)
+  if visible and not db.actif then
+    print(PREFIXE .. "le carnet est coupé : active-le dans ses réglages.")
+    return
+  end
+  reglages.changer("affiche", visible)
 end
 
 fermer:SetScript("OnClick", function()
@@ -232,14 +238,11 @@ end
 -- Chaque événement appelle la fonction du même nom dans cette table.
 local evenements = {}
 
-function evenements.ADDON_LOADED(nom)
-  if nom ~= NOM_ADDON then
-    return
-  end
-  -- Au premier lancement les variables sauvegardées n'existent pas encore.
-  CarnetDeSessionDB = CarnetDeSessionDB or { affiche = true }
+-- Appelé par Reglages.lua quand les variables sauvegardées sont lues.
+local function charger(d)
+  db = d
   CarnetDeSessionPerso = CarnetDeSessionPerso or {}
-  db, session = CarnetDeSessionDB, CarnetDeSessionPerso
+  session = CarnetDeSessionPerso
   -- Champs ajoutés en v0.2 : une session de la v0.1 ne les a pas encore.
   session.historique = session.historique or {}
   session.monstres = session.monstres or 0
@@ -249,15 +252,6 @@ function evenements.ADDON_LOADED(nom)
     local point, pointRelatif, x, y = unpack(db.position)
     fenetre:ClearAllPoints()
     fenetre:SetPoint(point, UIParent, pointRelatif, x, y)
-  end
-
-  -- Une ligne dans l'icône commune des addons de Valentin (Reglages.lua) :
-  -- un clic affiche ou masque la fenêtre du carnet.
-  if ns and ns.inscrireAuHub then
-    ns.inscrireAuHub({
-      titre = "Carnet de session", icone = "Interface/Icons/INV_Misc_Book_09", db = db,
-      ouvrir = function() afficher(not fenetre:IsShown()) end,
-    })
   end
 end
 
@@ -276,7 +270,7 @@ function evenements.PLAYER_ENTERING_WORLD(connexion, rechargement)
   niveauXP, xpPrecedente, xpMaxPrecedente = niveau, UnitXP("player"), UnitXPMax("player")
   pret = true
 
-  fenetre:SetShown(db.affiche)
+  fenetre:SetShown(db.actif and db.affiche)
   C_Timer.NewTicker(1, rafraichir) -- le temps de jeu avance chaque seconde
 end
 
@@ -286,6 +280,13 @@ end
 
 function evenements.PLAYER_XP_UPDATE(unite)
   if unite ~= "player" or not pret then
+    return
+  end
+  -- Coupé : on ne compte pas, mais on suit la barre pour repartir juste à la réactivation.
+  if not db.actif then
+    xpPrecedente, xpMaxPrecedente = UnitXP("player"), UnitXPMax("player")
+    niveauXP = math.max(UnitLevel("player"), niveau)
+    niveau = math.max(niveau, niveauXP)
     return
   end
   -- UnitLevel peut encore donner l'ancien niveau juste après un passage de niveau :
@@ -311,6 +312,9 @@ function evenements.PLAYER_LEVEL_UP(nouveauNiveau)
     return
   end
   niveau = math.max(niveau, nouveauNiveau)
+  if not db.actif then
+    return
+  end
   print(PREFIXE .. string.format("niveau %d atteint !", nouveauNiveau))
   rafraichir()
 end
@@ -324,7 +328,7 @@ end
 -- un joueur tué en JcJ a un identifiant qui commence par "Player".
 -- Si l'identifiant est secret, on ne peut pas le lire : on compte quand même.
 function evenements.PARTY_KILL(_, cibleGUID)
-  if not pret then
+  if not pret or not db.actif then
     return
   end
   -- estSecret passe en premier : même un simple test « cibleGUID and » lit la valeur.
@@ -340,8 +344,82 @@ for nom in pairs(evenements) do
   ecouteur:RegisterEvent(nom)
 end
 ecouteur:SetScript("OnEvent", function(_, evenement, ...)
-  evenements[evenement](...)
+  local f = evenements[evenement]
+  if f then f(...) end
 end)
+
+---------------------------------------------------------------------------
+-- Les réglages (fenêtre commune de Reglages.lua, menu « Addons de Valentin »)
+---------------------------------------------------------------------------
+
+local function remettreAZero()
+  -- La session en cours part dans l'historique avant la remise à zéro.
+  noterFin()
+  archiver()
+  nouvelleSession()
+  niveau = UnitLevel("player")
+  niveauXP, xpPrecedente, xpMaxPrecedente = niveau, UnitXP("player"), UnitXPMax("player")
+  rafraichir()
+  if reglages.majFenetre then reglages.majFenetre() end
+  print(PREFIXE .. "session remise à zéro.")
+end
+
+local function recentrer()
+  db.position = nil
+  fenetre:ClearAllPoints()
+  fenetre:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
+  afficher(true)
+end
+
+reglages = ns.creerReglages({
+  titre = "Carnet de session",
+  icone = "Interface\\Icons\\INV_Misc_Book_09",
+  nomDB = "CarnetDeSessionDB",
+  defauts = { actif = true, affiche = true, minimap = false },
+  options = {
+    { cle = "actif", libelle = "Activer Carnet de session",
+      aide = "Compte le temps de jeu, l'or, l'expérience et les monstres tués de la session." },
+    { cle = "affiche", libelle = "Afficher la fenêtre du carnet",
+      aide = "Elle se déplace à la souris ; « Recentrer » la remet au milieu de l'écran." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+  },
+  boutons = {
+    { texte = "Remettre à zéro", aide = "Range la session en cours dans l'historique et repart de zéro.",
+      action = remettreAZero },
+    { texte = "Recentrer", aide = "Replace la fenêtre du carnet au milieu de l'écran.", action = recentrer },
+  },
+  -- Les dernières sessions de ce personnage, directement dans la fenêtre.
+  contenu = function(f, y)
+    local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("TOPLEFT", 16, y - 6)
+    t:SetText("Dernières sessions")
+    local liste = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    liste:SetPoint("TOPLEFT", 16, y - 34)
+    liste:SetWidth(410)
+    liste:SetJustifyH("LEFT")
+    -- Une session par ligne, jamais coupée en deux (sinon elle déborderait).
+    if liste.SetWordWrap then liste:SetWordWrap(false) end
+    local function maj()
+      if not session or #session.historique == 0 then
+        liste:SetText("|cff888888Aucune session terminée pour ce personnage.|r")
+        return
+      end
+      local l = {}
+      for i = 1, math.min(5, #session.historique) do
+        local s = session.historique[i]
+        l[#l + 1] = string.format("%s  %s  %s  %s XP  %d tués", date("%d/%m %H:%M", s.debut),
+          formatDuree(s.duree), formatOr(s.orGagne), formatNombre(s.xp), s.monstres)
+      end
+      liste:SetText(table.concat(l, "\n"))
+    end
+    return y - 34 - 5 * 14 - 6, maj
+  end,
+  auChargement = charger,
+  surChangement = function(d)
+    if pret then fenetre:SetShown(d.actif and d.affiche) end
+  end,
+})
 
 ---------------------------------------------------------------------------
 -- La commande /carnet
@@ -352,21 +430,14 @@ SlashCmdList.CARNETDESESSION = function(message)
   local commande = strtrim(message or ""):lower()
   if commande == "" then
     afficher(not fenetre:IsShown())
+  elseif commande == "options" or commande == "reglages" then
+    reglages.ouvrir()
   elseif commande == "raz" then
-    -- La session en cours part dans l'historique avant la remise à zéro.
-    noterFin()
-    archiver()
-    nouvelleSession()
-    niveauXP, xpPrecedente, xpMaxPrecedente = UnitLevel("player"), UnitXP("player"), UnitXPMax("player")
-    rafraichir()
-    print(PREFIXE .. "session remise à zéro.")
+    remettreAZero()
   elseif commande == "historique" then
     afficherHistorique()
   elseif commande == "centre" then
-    db.position = nil
-    fenetre:ClearAllPoints()
-    fenetre:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
-    afficher(true)
+    recentrer()
   elseif commande == "debug" then
     -- Montre les deux chiffres que l'addon soustrait, pour comparer avec ton sac.
     print(PREFIXE .. "or actuel : " .. iconesPieces(GetMoney()))
@@ -375,6 +446,7 @@ SlashCmdList.CARNETDESESSION = function(message)
   else
     print(PREFIXE .. "commandes :")
     print("  /carnet : afficher ou masquer la fenêtre")
+    print("  /carnet options : les réglages (activer ou couper le carnet)")
     print("  /carnet raz : ranger la session dans l'historique et repartir de zéro")
     print("  /carnet historique : les 10 dernières sessions de ce personnage")
     print("  /carnet centre : replacer la fenêtre au centre")

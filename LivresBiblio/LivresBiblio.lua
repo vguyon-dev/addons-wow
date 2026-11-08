@@ -30,6 +30,7 @@ local DEFAUTS = {
 }
 
 local db
+local baliserLePlusProche
 local perso -- LivresBiblioPerso : { ramasses = { [quete] = true } }, propre à chaque personnage
 
 -- ---------------------------------------------------------------------------
@@ -447,6 +448,47 @@ rafraichirTout = function()
   majPanneau()
 end
 
+-- Balise vers le livre à trouver le plus proche, sur ta carte (bouton et /livres proche).
+baliserLePlusProche = function()
+  local r = ns.reglages
+  local carte = C_Map.GetBestMapForUnit("player")
+  local pos = carte and C_Map.GetPlayerMapPosition(carte, "player")
+  if not pos then return r.dire("position inconnue ici.") end
+  local px, py = pos:GetXY()
+  -- Tous les endroits possibles : celui du livre et ses « autres » (Rumi).
+  local meilleur, dMin
+  for _, l in ipairs(ns.LIVRES) do
+    if etat(l) == "aTrouver" and (db.niv60 or not l.niv60) then
+      for _, lieu in ipairs({ l, unpack(l.autres or {}) }) do
+        if lieu.carte == carte then
+          local d = (lieu.x - px) ^ 2 + (lieu.y - py) ^ 2
+          if not dMin or d < dMin then meilleur, dMin = { l = l, lieu = lieu }, d end
+        end
+      end
+    end
+  end
+  if not meilleur then return r.dire("plus aucun livre à trouver dans cette zone.") end
+  baliser(meilleur.lieu.carte, meilleur.lieu.x, meilleur.lieu.y, meilleur.l.nom)
+end
+
+-- Vide les livres ramassés et ceux remis à trouver à la main (après confirmation).
+local function toutRemettreATrouver()
+  if not perso then return end
+  for k in pairs(perso.ramasses) do perso.ramasses[k] = nil end
+  for k in pairs(perso.ignores) do perso.ignores[k] = nil end
+  ns.reglages.dire("tous les livres sont de nouveau à trouver (sauf ceux déjà rendus).")
+  rafraichirTout()
+end
+ns.toutRemettreATrouver = toutRemettreATrouver
+if StaticPopupDialogs then
+  StaticPopupDialogs["LIVRESBIBLIO_REMETTRE"] = {
+    text = "Livres de bibliothèque : remettre tous les livres de ce personnage à trouver ?\nLes livres déjà rendus restent rendus.",
+    button1 = YES or "Oui", button2 = NO or "Non",
+    OnAccept = toutRemettreATrouver,
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+  }
+end
+
 -- ---------------------------------------------------------------------------
 -- Réglages (Reglages.lua) : le clic dans l'icône commune ouvre le panneau.
 -- ---------------------------------------------------------------------------
@@ -456,15 +498,23 @@ ns.reglages = ns.creerReglages({
   icone = "Interface\\Icons\\INV_Misc_Book_09",
   nomDB = "LivresBiblioDB",
   defauts = DEFAUTS,
-  ouvrirHub = basculerPanneau,
+  ouvrirHub = basculerPanneau, texteHub = "Liste des livres",
+  boutons = {
+    { texte = "Balise vers le livre le plus proche", largeur = 210,
+      aide = "Pose une balise sur le livre à trouver le plus proche, sur ta carte (comme /livres proche).",
+      action = function() baliserLePlusProche() end },
+    { texte = "Tout remettre à trouver", largeur = 160,
+      aide = "Oublie les livres marqués ramassés et ceux remis à trouver à la main, pour ce personnage. Les livres déjà rendus restent rendus.",
+      action = function() StaticPopup_Show("LIVRESBIBLIO_REMETTRE") end },
+  },
   options = {
     { titre = "Carte" },
-    { cle = "actif", libelle = "Épingler les livres sur la carte",
-      aide = "Un livre ramassé quitte la carte tout de suite, même s'il n'est pas encore rendu." },
+    { cle = "actif", libelle = "Activer Livres de bibliothèque",
+      aide = "Coupé : plus aucun livre ni PNJ épinglé sur la carte. La liste, /livres proche et le suivi des livres ramassés continuent." },
     { cle = "continent", libelle = "Aussi sur les cartes des continents",
       aide = "Kalimdor et les Royaumes de l'Est, pour voir d'un coup d'œil où il en reste." },
-    { cle = "niv60", libelle = "Livres « niveau 60 »",
-      aide = "Huit livres de haut niveau, rendus à un autre PNJ." },
+    { cle = "niv60", libelle = "Livres « niveau 60 »", toujours = true,
+      aide = "Huit livres de haut niveau, rendus à un autre PNJ. Agit sur la carte, la liste et /livres proche." },
     { cle = "pnj", libelle = "Épingler le PNJ à qui rendre tes livres",
       aide = "Seulement quand tu as des livres ramassés pas encore rendus." },
     { cle = "aRendre", libelle = "Garder en grisé les livres ramassés pas encore rendus",
@@ -473,7 +523,7 @@ ns.reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
-  astuce = "Le panneau : /livres ou la ligne de l'icône commune. Sur la carte : clic gauche = balise, clic droit = ramassé ou pas.",
+  astuce = "La liste des livres : /livres, le bouton en haut ou Maj+clic dans l'icône commune. Sur la carte : clic gauche = balise, clic droit = ramassé ou pas.",
   auChargement = function(d)
     db = d
     LivresBiblioPerso = LivresBiblioPerso or {}
@@ -534,25 +584,7 @@ SlashCmdList.LIVRESBIBLIO = function(message)
   elseif cmd == "options" or cmd == "reglages" then
     r.ouvrir()
   elseif cmd == "proche" then
-    -- Balise vers le livre à trouver le plus proche, sur ta carte.
-    local carte = C_Map.GetBestMapForUnit("player")
-    local pos = carte and C_Map.GetPlayerMapPosition(carte, "player")
-    if not pos then return r.dire("position inconnue ici.") end
-    local px, py = pos:GetXY()
-    -- Tous les endroits possibles : celui du livre et ses « autres » (Rumi).
-    local meilleur, dMin
-    for _, l in ipairs(ns.LIVRES) do
-      if etat(l) == "aTrouver" and (db.niv60 or not l.niv60) then
-        for _, lieu in ipairs({ l, unpack(l.autres or {}) }) do
-          if lieu.carte == carte then
-            local d = (lieu.x - px) ^ 2 + (lieu.y - py) ^ 2
-            if not dMin or d < dMin then meilleur, dMin = { l = l, lieu = lieu }, d end
-          end
-        end
-      end
-    end
-    if not meilleur then return r.dire("plus aucun livre à trouver dans cette zone.") end
-    baliser(meilleur.lieu.carte, meilleur.lieu.x, meilleur.lieu.y, meilleur.l.nom)
+    baliserLePlusProche()
   elseif not r.basculerOption(cmd) then
     r.dire("/livres : le panneau     /livres proche : balise vers le livre le plus proche     /livres options")
   end

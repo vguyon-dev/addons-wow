@@ -10,8 +10,9 @@
 --  3. Des filtres : quêtes grises, journalières, payantes, PNJ et quêtes ignorés.
 --  4. En groupe, il partage tes quêtes et accepte celles de tes frères.
 --  5. Il passe les cinématiques déjà vues une fois.
---  6. Tout se règle dans une fenêtre (Reglages.lua) : icône de minimap, /qa,
---     ou Échap > Options > AddOns. Bouton à l'écran et raccourci clavier.
+--  6. Tout se règle dans une fenêtre (Reglages.lua), listes des PNJ et des quêtes
+--     ignorés comprises : icône de minimap, /qa, ou Échap > Options > AddOns.
+--     Bouton à l'écran et raccourci clavier.
 --
 -- Maintenir Maj, Ctrl ou Alt en parlant au PNJ met l'addon en pause.
 -- ============================================================================
@@ -107,6 +108,43 @@ function ns.optionUnique(options, derniere)
   local id = options[1].gossipOptionID
   if not id or id == derniere then return nil end
   return id
+end
+
+-- Lignes des listes de la fenêtre de réglages : { texte, retirer }, rangées par nom.
+-- ignores : db.pnjIgnores ([idPNJ] = nom) ; retirer(id) est appelé par la croix.
+function ns.lignesPNJ(ignores, retirer)
+  local lignes = {}
+  for id, nom in pairs(ignores) do
+    local ok = type(nom) == "string" and nom ~= "" and nom ~= "?"
+    lignes[#lignes + 1] = {
+      id = tonumber(id) or 0, cle = ok and nom:lower() or "~",
+      texte = (ok and nom or "PNJ") .. " (n° " .. tostring(id) .. ")",
+      retirer = function() retirer(id) end,
+    }
+  end
+  table.sort(lignes, function(a, b)
+    if a.cle ~= b.cle then return a.cle < b.cle end
+    return a.id < b.id
+  end)
+  return lignes
+end
+
+-- Pareil pour db.quetesIgnorees ([idQuête] = titre, ou true pour les anciennes entrées).
+function ns.lignesQuetes(ignorees, retirer)
+  local lignes = {}
+  for id, titre in pairs(ignorees) do
+    local ok = type(titre) == "string" and titre ~= ""
+    lignes[#lignes + 1] = {
+      id = tonumber(id) or 0, cle = ok and titre:lower() or "~",
+      texte = ok and (titre .. " (n° " .. tostring(id) .. ")") or ("Quête n° " .. tostring(id)),
+      retirer = function() retirer(id) end,
+    }
+  end
+  table.sort(lignes, function(a, b)
+    if a.cle ~= b.cle then return a.cle < b.cle end
+    return a.id < b.id
+  end)
+  return lignes
 end
 
 -- Métiers (numéros « skillLine » du jeu) qui se servent d'un objet, d'après sa
@@ -419,8 +457,8 @@ end
 -- ---------------------------------------------------------------------------
 
 -- Numéro du PNJ à qui tu parles, lu dans son GUID : « Creature-0-…-<id>-… ».
-local function idPNJ()
-  local guid = UnitGUID("npc")
+local function idPNJ(unite)
+  local guid = UnitGUID(unite or "npc")
   if estSecret(guid) or not guid then return nil end
   local typ, _, _, _, _, id = strsplit("-", guid)
   if typ == "Creature" or typ == "Vehicle" then return tonumber(id) end
@@ -618,6 +656,61 @@ local bouton, icone -- bouton à l'écran, créé plus bas
 
 local function compter(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 
+-- Ignore (ou ne plus ignorer) le PNJ en face : celui à qui tu parles, sinon ta cible.
+-- Renvoie ce qu'il faut dire, ou nil quand il n'y a pas de PNJ.
+local function basculerPNJ()
+  for _, unite in ipairs({ "npc", "target" }) do
+    local pnj = idPNJ(unite)
+    if pnj then
+      local nom = UnitName(unite)
+      if estSecret(nom) or type(nom) ~= "string" or nom == "" then nom = nil end
+      db.pnjIgnores[pnj] = db.pnjIgnores[pnj] == nil and (nom or "?") or nil
+      return (nom or "ce PNJ") .. (db.pnjIgnores[pnj] and " est ignoré." or " n'est plus ignoré.")
+    end
+  end
+end
+
+-- Le titre d'une quête, quand le jeu le connaît (nil sinon). Le titre est gardé dans la
+-- liste des quêtes ignorées pour qu'on la reconnaisse dans la fenêtre.
+local function titreQuete(id)
+  local t
+  if GetQuestID and GetTitleText and GetQuestID() == id then t = GetTitleText() end -- quête affichée
+  if (not t or t == "") and C_QuestLog and C_QuestLog.GetTitleForQuestID then
+    t = C_QuestLog.GetTitleForQuestID(id)
+  end
+  if not t or t == "" then
+    -- Forever : on cherche la quête dans le journal.
+    local rang = C_QuestLog and C_QuestLog.GetLogIndexForQuestID or GetQuestLogIndexByID
+    if rang and GetQuestLogTitle then
+      local i = rang(id)
+      if i and i > 0 then t = GetQuestLogTitle(i) end
+    end
+  end
+  if estSecret(t) or type(t) ~= "string" or t == "" then return nil end
+  return t
+end
+
+-- Ignore une quête : on garde son titre quand on le connaît (sinon true).
+local function ignorerQuete(id)
+  db.quetesIgnorees[id] = titreQuete(id) or true
+end
+
+-- Le bouton à l'écran à sa place : celle que tu as choisie en le glissant, sinon celle d'origine.
+local function placerBouton()
+  bouton:ClearAllPoints()
+  local p = db.position
+  if p then bouton:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+  else bouton:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -200, -200) end
+end
+
+-- Remet le bouton à sa place d'origine. Faux en combat.
+local function replacerBouton()
+  if InCombatLockdown() then return false end
+  db.position = nil
+  placerBouton()
+  return true
+end
+
 local reglages = ns.creerReglages({
   titre = "Quêtes auto",
   icone = "Interface\\GossipFrame\\AvailableQuestIcon",
@@ -628,11 +721,11 @@ local reglages = ns.creerReglages({
     { cle = "actif", libelle = "Activer Quêtes auto",
       aide = "Interrupteur général. L'icône, le bouton et le raccourci font la même chose." },
     { cle = "accepter", libelle = "Accepter les quêtes tout seul",
-      aide = "Prend les nouvelles quêtes que les PNJ te proposent." },
+      aide = "Prend les nouvelles quêtes que les PNJ te proposent. Coupé, les quêtes partagées par le groupe et les objets de quête restent gérés par leurs propres cases." },
     { cle = "rendre", libelle = "Rendre les quêtes finies tout seul",
-      aide = "Toujours avant d'accepter les nouvelles. Une quête pas finie ne bloque rien." },
-    { cle = "recompenseAuto", libelle = "Choisir la récompense tout seul",
-      aide = "Une amélioration pour toi, sinon l'objet le plus cher à la revente." },
+      aide = "Toujours avant d'accepter les nouvelles. Une quête pas finie ne bloque rien. Coupé, tu rends chaque quête toi-même et tu choisis toi-même la récompense." },
+    { cle = "recompenseAuto", libelle = "Choisir la récompense tout seul", dependDe = "rendre",
+      aide = "Une amélioration pour toi, sinon l'objet le plus cher à la revente. Décoché, l'addon te prévient et te laisse choisir puis rendre la quête." },
     { cle = "pauseTouches", libelle = "Maj, Ctrl ou Alt met en pause",
       aide = "Garde une de ces touches enfoncée en parlant au PNJ pour tout faire à la main." },
     { cle = "dialogueUnique", libelle = "Cliquer la phrase quand le PNJ n'en a qu'une",
@@ -646,11 +739,11 @@ local reglages = ns.creerReglages({
     { cle = "objetsQuete", libelle = "Bouton pour les objets qui commencent une quête",
       aide = "Un objet ramassé lance une quête : un clic sur le bouton qui apparaît, et la quête est acceptée. La croix l'écarte." },
     { titre = "Filtres" },
-    { cle = "grises", libelle = "Ignorer les quêtes grises",
+    { cle = "grises", libelle = "Ignorer les quêtes grises", dependDe = "accepter",
       aide = "Les quêtes trop faciles pour ton niveau." },
-    { cle = "journalieres", libelle = "Ignorer les journalières et hebdomadaires",
+    { cle = "journalieres", libelle = "Ignorer les journalières et hebdomadaires", dependDe = "accepter",
       aide = "Elles restent proposées, tu les prends toi-même si tu veux." },
-    { cle = "payantes", libelle = "Ne pas rendre les quêtes qui coûtent de l'or",
+    { cle = "payantes", libelle = "Ne pas rendre les quêtes qui coûtent de l'or", dependDe = "rendre",
       aide = "L'addon te prévient et te laisse payer toi-même." },
     { titre = "Confort" },
     { cle = "cinematiques", libelle = "Passer les cinématiques déjà vues",
@@ -660,43 +753,104 @@ local reglages = ns.creerReglages({
     { cle = "bouton", libelle = "Bouton à l'écran",
       aide = "Un second « ! » jaune à poser où tu veux, en plus de l'icône de la minimap. Clic : activer ou couper." },
   },
-  -- Zone « Listes » : compteurs et boutons pour vider.
+  -- Zone « Listes et outils » : PNJ et quêtes ignorés (avec leur croix), cinématiques,
+  -- place du bouton à l'écran.
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)
-    t:SetText("Listes")
+    t:SetText("Listes et outils")
     y = y - 32
-    local compteurs = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    compteurs:SetPoint("TOPLEFT", 20, y)
-    y = y - 22
-    local function vider(texte, x, cle, message)
-      local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-      b:SetSize(130, 24)
-      b:SetPoint("TOPLEFT", x, y)
-      b:SetText(texte)
-      b:SetScript("OnClick", function() r.changer(cle, {}); dire(message) end)
+    local function texte(police, x, haut, largeur)
+      local fs = fenetre:CreateFontString(nil, "OVERLAY", police)
+      fs:SetPoint("TOPLEFT", x, haut)
+      fs:SetWidth(largeur)
+      fs:SetJustifyH("LEFT")
+      return fs
     end
-    vider("Vider les PNJ", 16, "pnjIgnores", "plus aucun PNJ ignoré.")
-    vider("Vider les quêtes", 152, "quetesIgnorees", "plus aucune quête ignorée.")
-    vider("Revoir les cinés", 288, "vues", "les cinématiques seront de nouveau montrées une fois.")
-    y = y - 28
+
+    -- PNJ ignorés : la liste, puis le bouton pour ignorer celui qu'on a en face.
+    local majPNJ, majQuetes
+    y, majPNJ = ns.creerListe(fenetre, y, {
+      titre = "PNJ ignorés",
+      vide = "Aucun PNJ ignoré.",
+      hauteur = 4,
+      lignes = function()
+        return ns.lignesPNJ(db.pnjIgnores, function(id) db.pnjIgnores[id] = nil; r.appliquer() end)
+      end,
+      vider = function() r.changer("pnjIgnores", {}); dire("plus aucun PNJ ignoré.") end,
+    })
+    local bPNJ = ns.creerBouton(fenetre, "Ignorer le PNJ en face",
+      "Le PNJ à qui tu parles, sinon ton PNJ ciblé. S'il est déjà ignoré, il ne l'est plus. Un PNJ ignoré n'est plus géré par l'addon.",
+      function()
+        local message = basculerPNJ()
+        dire(message or "aucun PNJ en face : parle à un PNJ ou cible-le d'abord.")
+        if message then r.appliquer() end
+      end, 170)
+    bPNJ:SetPoint("TOPLEFT", 16, y)
+    texte("GameFontDisableSmall", 196, y - 6, 210):SetText("Parle au PNJ ou cible-le d'abord.")
+    y = y - 34
+
+    -- Quêtes ignorées : la liste, puis une zone pour en ajouter une par son numéro.
+    y, majQuetes = ns.creerListe(fenetre, y, {
+      titre = "Quêtes ignorées",
+      vide = "Aucune quête ignorée.",
+      hauteur = 4,
+      lignes = function()
+        return ns.lignesQuetes(db.quetesIgnorees, function(id) db.quetesIgnorees[id] = nil; r.appliquer() end)
+      end,
+      vider = function() r.changer("quetesIgnorees", {}); dire("plus aucune quête ignorée.") end,
+    })
+    texte("GameFontHighlightSmall", 20, y - 6, 90):SetText("N° de quête :")
+    local champ = CreateFrame("EditBox", nil, fenetre, "InputBoxTemplate")
+    champ:SetSize(70, 20)
+    champ:SetPoint("TOPLEFT", 112, y - 2)
+    champ:SetAutoFocus(false)
+    champ:SetNumeric(true)
+    champ:SetMaxLetters(7)
+    champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    champ:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    local bQuete = ns.creerBouton(fenetre, "Ignorer cette quête",
+      "Pour une quête que tu connais par son numéro (par exemple celui de Wowhead) : elle ne sera plus acceptée toute seule. Pour la reprendre, retire-la de la liste.",
+      function()
+        local id = tonumber(champ:GetText())
+        if not id or id <= 0 then return dire("tape d'abord le numéro de la quête.") end
+        if db.quetesIgnorees[id] then return dire("la quête " .. id .. " est déjà ignorée.") end
+        ignorerQuete(id)
+        champ:SetText("")
+        dire("quête " .. id .. " ignorée.")
+        r.appliquer()
+      end, 150)
+    bQuete:SetPoint("TOPLEFT", 190, y)
+    y = y - 34
+
+    -- Cinématiques vues et place du bouton à l'écran.
+    local cines = texte("GameFontHighlight", 20, y - 5, 230)
+    local bCines = ns.creerBouton(fenetre, "Revoir les cinés",
+      "Oublie les cinématiques déjà vues : chacune sera de nouveau montrée une fois, puis passée.",
+      function() r.changer("vues", {}); dire("les cinématiques seront de nouveau montrées une fois.") end, 150)
+    bCines:SetPoint("TOPLEFT", 254, y)
+    y = y - 34
+    local bPlace = ns.creerBouton(fenetre, "Replacer le bouton à l'écran",
+      "Remet le bouton « ! » à sa place d'origine (en haut à droite), par exemple s'il est sorti de l'écran. Il ne se montre que si la case « Bouton à l'écran » est cochée.",
+      function()
+        if replacerBouton() then dire("bouton remis à sa place.")
+        else dire("|cffff4040pas en combat.|r") end
+      end, 200)
+    bPlace:SetPoint("TOPLEFT", 16, y)
+    y = y - 34
+
     return y, function(d)
-      compteurs:SetText(string.format("PNJ ignorés : %d     Quêtes ignorées : %d     Cinématiques vues : %d",
-        compter(d.pnjIgnores), compter(d.quetesIgnorees), compter(d.vues)))
+      majPNJ()
+      majQuetes()
+      cines:SetText("Cinématiques déjà vues : " .. compter(d.vues))
     end
   end,
-  astuce = "Ignorer un PNJ : parle-lui puis tape /qa ignorer. Tout s'applique tout de suite, sans /reload.",
+  astuce = "Tout s'applique tout de suite, sans /reload. Commande : /qa.",
   auChargement = function(d)
     db = d
     -- Une seule fois : le bouton à l'écran faisait doublon avec l'icône de la minimap.
     if not db.boutonRange then db.bouton = false; db.boutonRange = true end
-    bouton:ClearAllPoints()
-    if db.position then
-      local p = db.position
-      bouton:SetPoint(p[1], UIParent, p[2], p[3], p[4])
-    else
-      bouton:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -200, -200)
-    end
+    placerBouton()
   end,
   surChangement = function(d)
     icone:SetDesaturated(not d.actif)
@@ -889,14 +1043,10 @@ SlashCmdList.QUETESAUTO = function(texte)
   elseif cmd == "ignorer" then
     local id = tonumber(reste)
     if id then
-      if db.quetesIgnorees[id] then db.quetesIgnorees[id] = nil else db.quetesIgnorees[id] = true end
+      if db.quetesIgnorees[id] then db.quetesIgnorees[id] = nil else ignorerQuete(id) end
       dire("quête " .. id .. (db.quetesIgnorees[id] and " ignorée." or " de nouveau prise."))
-    elseif idPNJ() then
-      local pnj = idPNJ()
-      db.pnjIgnores[pnj] = db.pnjIgnores[pnj] == nil and (UnitName("npc") or "?") or nil
-      dire((UnitName("npc") or "ce PNJ") .. (db.pnjIgnores[pnj] and " est ignoré." or " n'est plus ignoré."))
     else
-      dire("parle à un PNJ puis tape /qa ignorer, ou /qa ignorer <numéro de quête>.")
+      dire(basculerPNJ() or "parle à un PNJ (ou cible-le) puis tape /qa ignorer, ou /qa ignorer <numéro de quête>.")
     end
     reglages.appliquer()
   elseif not reglages.basculerOption(cmd) then

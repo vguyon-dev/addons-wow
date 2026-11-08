@@ -135,7 +135,7 @@ ns.reglages = ns.creerReglages({
     { cle = "coffres", libelle = "Coffres et trésors",
       aide = "Le coffre qui apparaît sur la minimap quand un trésor est proche." },
     { cle = "elites", libelle = "Prévenir aussi pour les élites",
-      aide = "Hors donjon seulement. Peut être bavard dans certaines zones." },
+      aide = "Peut être bavard dans certaines zones." },
     { cle = "son", libelle = "Jouer un son",
       aide = "Le même son qu'une alerte de raid." },
     { cle = "balise", libelle = "Poser une balise sur la carte",

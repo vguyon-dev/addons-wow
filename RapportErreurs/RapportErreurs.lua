@@ -2,7 +2,7 @@
 -- Rapport d'erreurs : garde les erreurs Lua (et les petits journaux des addons)
 -- et les envoie à celui qui les analyse, par messages d'addon invisibles.
 --
--- Deux rôles, réglés dans /re options :
+-- Deux rôles, réglés dans la fenêtre de réglages (/re options) :
 --  - « Envoyer mes erreurs » (coché au départ) : chez tes amis. Leurs erreurs
 --    partent vers un joueur qui a coché « Recevoir », dès qu'il est en ligne et
 --    joignable : dans ton groupe, dans ta guilde ou dans ta liste d'amis.
@@ -11,7 +11,7 @@
 --    l'on relit hors du jeu après un /reload.
 -- Par défaut, seules les erreurs des « Addons de Valentin » partent.
 -- Commandes : /re (le panneau), /re options, /re demander <joueur>, /re test,
--- /re effacer.
+-- /re etat, /re effacer, /re <réglage> (coche ou décoche : envoyer, recevoir…).
 -- Un addon peut écrire dans le journal : RapportErreurs_Noter("MonAddon", "texte").
 -- ============================================================================
 
@@ -122,6 +122,23 @@ function ns.ranger(liste, e, maxi)
   table.insert(liste, 1, e)
   while #liste > maxi do table.remove(liste) end
   return e, true
+end
+
+-- Nombre d'erreurs pas encore envoyées.
+function ns.compterEnAttente(erreurs)
+  local n = 0
+  for _, e in ipairs(erreurs or {}) do if not e.envoyee then n = n + 1 end end
+  return n
+end
+
+-- La ligne d'état en direct : qui reçoit, combien d'erreurs attendent.
+-- destinataires : { [joueur] = true }
+function ns.texteEtat(destinataires, enAttente)
+  local noms = {}
+  for nom in pairs(destinataires or {}) do noms[#noms + 1] = nom end
+  table.sort(noms)
+  return "Destinataires connus : " .. (#noms > 0 and table.concat(noms, ", ") or "aucun")
+    .. "\nErreurs pas encore envoyées : " .. enAttente
 end
 
 -- ---------------------------------------------------------------------------
@@ -442,6 +459,53 @@ panneau:SetScript("OnShow", rafraichir)
 local function basculerPanneau() panneau:SetShown(not panneau:IsShown()) end
 
 -- ---------------------------------------------------------------------------
+-- Les actions : partagées par les boutons de la fenêtre et les commandes /re.
+-- ---------------------------------------------------------------------------
+
+local function erreurDEssai()
+  ns.reglages.dire("erreur d'essai : elle doit apparaître dans /re (et chez celui qui reçoit).")
+  C_Timer.After(0.1, function() error("erreur d'essai (/re test)") end)
+end
+
+-- Où en est l'envoi, puis on se réannonce.
+local function etat()
+  local r = ns.reglages
+  r.dire(string.format("envoyer : %s, recevoir : %s, groupe : %s.", db.envoyer and "oui" or "non",
+    db.recevoir and "oui" or "non", IsInGroup() and "oui" or "non"))
+  r.dire((ns.texteEtat(destinataires, ns.compterEnAttente(db.erreurs)):gsub("\n", " ; ")) .. ".")
+  annoncer()
+end
+
+local function demanderRapport(arg)
+  local r = ns.reglages
+  arg = strtrim(arg or "")
+  if arg == "" then return r.dire("écris d'abord le nom du joueur.") end
+  if not db.recevoir then
+    return r.dire("coche d'abord « Recevoir les erreurs des autres » dans les réglages.")
+  end
+  local nom = arg:sub(1, 1):upper() .. arg:sub(2)
+  poster("R", "WHISPER", nom)
+  C_Timer.After(1, function() poster("D", "WHISPER", nom) end)
+  r.dire("demande envoyée à " .. nom .. " ; son rapport arrive dans /re.")
+end
+
+local function toutEffacer()
+  wipe(db.erreurs); wipe(db.journal); wipe(db.recues)
+  ns.reglages.dire("tout est effacé.")
+  rafraichir()
+  if ns.reglages.majFenetre then ns.reglages.majFenetre() end
+end
+
+if StaticPopupDialogs then
+  StaticPopupDialogs["RAPPORTERREURS_EFFACER"] = {
+    text = "Rapport d'erreurs : effacer toutes tes erreurs, ton journal et les rapports reçus ?\nCe ne peut pas être annulé.",
+    button1 = YES or "Oui", button2 = NO or "Non",
+    OnAccept = toutEffacer,
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+  }
+end
+
+-- ---------------------------------------------------------------------------
 -- Réglages (Reglages.lua)
 -- ---------------------------------------------------------------------------
 
@@ -450,22 +514,80 @@ ns.reglages = ns.creerReglages({
   icone = "Interface\\Icons\\INV_Misc_Note_02",
   nomDB = "RapportErreursDB",
   defauts = DEFAUTS,
-  ouvrirHub = basculerPanneau,
+  ouvrirHub = basculerPanneau, texteHub = "Voir le rapport",
+  boutons = {
+    { texte = "Envoyer une erreur d'essai", largeur = 170,
+      aide = "Fabrique une fausse erreur : elle doit apparaître dans le rapport et chez celui qui reçoit (comme /re test).",
+      action = erreurDEssai },
+    { texte = "Se réannoncer", largeur = 110,
+      aide = "Dit à ton groupe et à ta guilde si tu envoies ou si tu reçois, et affiche où en est l'envoi (comme /re etat).",
+      action = etat },
+    { texte = "Tout effacer", largeur = 100,
+      aide = "Efface tes erreurs, ton journal et les rapports reçus, après confirmation.",
+      action = function() StaticPopup_Show("RAPPORTERREURS_EFFACER") end },
+  },
   options = {
+    { titre = "Rapport" },
+    { cle = "actif", libelle = "Activer Rapport d'erreurs",
+      aide = "Coupé : plus aucune erreur gardée, envoyée ni reçue, et le journal des addons n'écrit plus." },
     { titre = "Envoyer" },
     { cle = "envoyer", libelle = "Envoyer mes erreurs",
       aide = "À un joueur qui a coché « Recevoir », dès qu'il est dans ton groupe, ta guilde ou ta liste d'amis et en ligne." },
-    { cle = "toutes", libelle = "Aussi les erreurs des autres addons",
+    { cle = "toutes", libelle = "Aussi les erreurs des autres addons", dependDe = "envoyer",
       aide = "Coupé : seules les erreurs des Addons de Valentin partent." },
     { titre = "Recevoir" },
     { cle = "recevoir", libelle = "Recevoir les erreurs des autres",
       aide = "Pour celui qui analyse les erreurs. Elles sont gardées par joueur, lisibles avec /re." },
-    { cle = "annoncer", libelle = "Prévenir dans le chat à chaque erreur reçue" },
-    { titre = "Affichage" },
+    { cle = "annoncer", libelle = "Prévenir dans le chat à chaque erreur reçue", dependDe = "recevoir",
+      aide = "Un message avec le nom du joueur et de l'addon en cause, à la première fois qu'une erreur arrive." },
+    { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin." },
   },
-  astuce = "/re : le panneau. /re demander <joueur> : tout son rapport. /re test : une erreur d'essai.",
+  contenu = function(f, y, r)
+    local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("TOPLEFT", 16, y - 6)
+    t:SetText("En direct")
+    y = y - 30
+    local ligne = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ligne:SetPoint("TOPLEFT", 20, y)
+    ligne:SetWidth(380)
+    ligne:SetJustifyH("LEFT")
+    -- Trois lignes au plus : une longue liste de noms ne recouvre pas la suite.
+    if ligne.SetMaxLines then ligne:SetMaxLines(3) end
+    y = y - 50
+
+    local etiquette = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    etiquette:SetPoint("TOPLEFT", 20, y)
+    etiquette:SetText("Demander le rapport d'un joueur")
+    y = y - 20
+    local champ = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    champ:SetSize(150, 20)
+    champ:SetPoint("TOPLEFT", 26, y)
+    champ:SetAutoFocus(false)
+    champ:SetMaxLetters(24)
+    local demander = ns.creerBouton(f, "Demander son rapport",
+      "Lui demande tout ce qu'il a gardé (comme /re demander). Il faut avoir coché « Recevoir ».",
+      function() demanderRapport(champ:GetText()) end, 170)
+    demander:SetPoint("LEFT", champ, "RIGHT", 10, 0)
+    champ:SetScript("OnEnterPressed", function(self) self:ClearFocus(); demanderRapport(self:GetText()) end)
+    champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    y = y - 30
+
+    local function maj()
+      if not db then return end
+      ligne:SetText(ns.texteEtat(destinataires, ns.compterEnAttente(db.erreurs)))
+      if db.recevoir and db.actif then demander:Enable() else demander:Disable() end
+    end
+    -- L'état bouge sans cesse (un destinataire arrive, une erreur part) : mise à jour chaque seconde.
+    local depuis = 0
+    f:SetScript("OnUpdate", function(_, dt)
+      depuis = depuis + dt
+      if depuis >= 1 then depuis = 0; maj() end
+    end)
+    return y, maj
+  end,
+  astuce = "Le rapport : /re, le bouton en haut ou Maj+clic dans l'icône commune.",
   auChargement = function(d)
     db = d
     dernierRecevoir = d.recevoir
@@ -521,34 +643,16 @@ SlashCmdList.RAPPORTERREURS = function(message)
   elseif cmd == "options" or cmd == "reglages" then
     r.ouvrir()
   elseif cmd == "demander" and arg ~= "" then
-    local nom = arg:sub(1, 1):upper() .. arg:sub(2)
-    if not db.recevoir then
-      r.dire("coche d'abord « Recevoir les erreurs des autres » (/re options).")
-    else
-      poster("R", "WHISPER", nom)
-      C_Timer.After(1, function() poster("D", "WHISPER", nom) end)
-      r.dire("demande envoyée à " .. nom .. " ; son rapport arrive dans /re.")
-    end
+    demanderRapport(arg)
   elseif cmd == "test" then
-    r.dire("erreur d'essai : elle doit apparaître dans /re (et chez celui qui reçoit).")
-    C_Timer.After(0.1, function() error("erreur d'essai (/re test)") end)
+    erreurDEssai()
   elseif cmd == "etat" or cmd == "état" then
-    local noms = {}
-    for nom in pairs(destinataires) do noms[#noms + 1] = nom end
-    local attente = 0
-    for _, e in ipairs(db.erreurs) do if not e.envoyee then attente = attente + 1 end end
-    r.dire(string.format("envoyer : %s, recevoir : %s, groupe : %s.", db.envoyer and "oui" or "non",
-      db.recevoir and "oui" or "non", IsInGroup() and "oui" or "non"))
-    r.dire("destinataires connus : " .. (#noms > 0 and table.concat(noms, ", ") or "aucun")
-      .. " ; erreurs pas encore envoyées : " .. attente .. ".")
-    annoncer()
+    etat()
   elseif cmd == "effacer" then
-    wipe(db.erreurs); wipe(db.journal); wipe(db.recues)
-    r.dire("tout est effacé.")
-    rafraichir()
+    toutEffacer()
   elseif cmd == "on" or cmd == "off" then
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
-  else
+  elseif not r.basculerOption(cmd) then
     r.dire("/re : le panneau   /re options   /re demander <joueur>   /re test   /re etat   /re effacer")
   end
 end

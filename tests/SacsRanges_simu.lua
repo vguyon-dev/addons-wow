@@ -13,6 +13,7 @@ local ns = {}
 local reglagesLua = arg[1]:gsub("[^/]+$", "Reglages.lua")
 assert(loadfile(reglagesLua))("SacsRanges", ns)
 assert(loadfile(arg[1]))("SacsRanges", ns)
+assert(loadfile((arg[1]:gsub("[^/]+$", "Conseils.lua"))))("SacsRanges", ns)
 assert(loadfile((arg[1]:gsub("[^/]+$", "Vue.lua"))))("SacsRanges", ns)
 
 local ok = true
@@ -98,4 +99,34 @@ verifie("répartition : 3 composants", 3, #parts.compo)
 verifie("recherche sans accents", true, ns.simplifier("Étoffe de LIN"):find("etoffe", 1, true) ~= nil)
 verifie("recherche : œ", "oeil de murloc", ns.simplifier("Œil de murloc"))
 
+-- Objets conseillés à équiper (Conseils.lua)
+local milice = { stats = { dps = 2.0 }, type = "INVTYPE_WEAPON", nom = "Dague de la milice" }
+local usee = { stats = { dps = 0.9 }, type = "INVTYPE_WEAPON" }
+verifie("dague usée moins bonne que la milice : pas de conseil", nil, ns.comparer(usee, { [16] = milice }, "agilite", false, false))
+local gants = ns.comparer({ stats = { agilite = 2, endurance = 1 }, type = "INVTYPE_HAND" }, {}, "agilite")
+verifie("gants sur un emplacement vide", "emplacement vide", gants and gants.raison)
+local arc = ns.comparer({ stats = { dps = 3.0 }, type = "INVTYPE_RANGEDRIGHT" },
+  { [16] = { stats = { dps = 1.8 }, type = "INVTYPE_RANGEDRIGHT", nom = "Arc usé" } }, "agilite", false)
+verifie("arc meilleur : la raison", "+1,2 dégâts par seconde", arc and arc.raison)
+verifie("arc meilleur : ce qu'il remplace", "Arc usé", arc and arc.remplace)
+local bague = ns.comparer({ stats = { agilite = 3 }, type = "INVTYPE_FINGER" },
+  { [11] = { stats = { agilite = 5 }, nom = "Forte" }, [12] = { stats = { agilite = 1 }, nom = "Faible" } }, "agilite")
+verifie("bague : remplace la plus faible", "Faible", bague and bague.remplace)
+verifie("bague : la raison", "+2 Agilité", bague and bague.raison)
+local deuxMains = { stats = { dps = 4, force = 2 }, type = "INVTYPE_2HWEAPON", nom = "Grande hache" }
+verifie("main gauche vide sous une arme à deux mains : pas un trou", nil,
+  ns.comparer({ stats = { force = 1 }, type = "INVTYPE_SHIELD" }, { [16] = deuxMains }, "force"))
+local hache = ns.comparer({ stats = { dps = 5, force = 3 }, type = "INVTYPE_2HWEAPON" },
+  { [16] = { stats = { dps = 2 }, type = "INVTYPE_WEAPON" }, [17] = { stats = { force = 1 }, type = "INVTYPE_SHIELD" } }, "force")
+verifie("deux mains mieux que arme + bouclier", true, hache ~= nil)
+verifie("lanceur : les dégâts de l'arme comptent peu", nil,
+  ns.comparer({ stats = { dps = 3 }, type = "INVTYPE_WEAPON" }, { [16] = { stats = { dps = 1, intelligence = 2 } } }, "intelligence"))
+verifie("sans ambidextrie : pas de conseil pour la main gauche vide", nil,
+  ns.comparer({ stats = { dps = 1 }, type = "INVTYPE_WEAPON" }, { [16] = milice }, "agilite", false, false))
+verifie("ambidextre : main gauche vide conseillée", "emplacement vide",
+  (ns.comparer({ stats = { dps = 1 }, type = "INVTYPE_WEAPON" }, { [16] = milice }, "agilite", false, true) or {}).raison)
+local st = ns.lireStats({ ITEM_MOD_AGILITY_SHORT = 2, ITEM_MOD_CRIT_RATING_SHORT = 3, ITEM_MOD_HASTE_RATING_SHORT = 1, BIDON = 9 })
+verifie("lecture des caractéristiques", "2/4", st.agilite .. "/" .. st.secondaires)
+verifie("sans caractéristiques : le niveau d'objet tranche", true, ns.comparer({ stats = {}, niveau = 12, type = "INVTYPE_CLOAK" },
+  { [15] = { stats = {}, niveau = 8, nom = "Cape" } }, "agilite") ~= nil)
 os.exit(ok and 0 or 1)

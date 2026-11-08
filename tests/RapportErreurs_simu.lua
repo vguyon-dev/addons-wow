@@ -84,4 +84,12 @@ verifie("la plus récente en tête", "D", liste[1].message)
 gestionnaire("une erreur")
 verifie("gestionnaire précédent rappelé", 1, appelsAncien)
 
+-- La ligne d'état en direct et le compte des erreurs en attente.
+verifie("attente : compte", 2, ns.compterEnAttente({ { envoyee = true }, {}, { envoyee = false } }))
+verifie("attente : liste vide", 0, ns.compterEnAttente({}))
+verifie("état : aucun destinataire", "Destinataires connus : aucun\nErreurs pas encore envoyées : 0",
+  ns.texteEtat({}, 0))
+verifie("état : destinataires triés", "Destinataires connus : Anna, Zoe\nErreurs pas encore envoyées : 3",
+  ns.texteEtat({ Zoe = true, Anna = true }, 3))
+
 os.exit(ok and 0 or 1)

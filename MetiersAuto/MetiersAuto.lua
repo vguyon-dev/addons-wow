@@ -118,6 +118,28 @@ function ns.manque(besoin, compter)
   return a, math.max(0, besoin.besoin - a)
 end
 
+-- Les lignes de la liste de courses dans la fenêtre de réglages : { texte, retirer }.
+-- courses : db.courses ; retirer(i) est appelé par la croix de la ligne n° i.
+function ns.lignesCourses(courses, retirer)
+  local lignes = {}
+  for i, l in ipairs(courses) do
+    lignes[i] = {
+      texte = (l.nombre or 1) .. " × " .. tostring(l.nom or l.recette),
+      retirer = function() retirer(i) end,
+    }
+  end
+  return lignes
+end
+
+-- « N endroits connus ici, M en tout ». ici vaut nil quand la position est inconnue
+-- (donjon, ou position cachée par le jeu).
+function ns.texteFilons(ici, total)
+  if not ici then
+    return string.format("Position inconnue ici, %d %s en tout", total, total > 1 and "endroits" or "endroit")
+  end
+  return string.format("%d %s ici, %d en tout", ici, ici > 1 and "endroits connus" or "endroit connu", total)
+end
+
 -- ---------------------------------------------------------------------------
 -- Petits outils
 -- ---------------------------------------------------------------------------
@@ -197,6 +219,8 @@ local function changerModePeche(actif)
     if not InCombatLockdown() then ClearOverrideBindings(lancer) end
     ns.reglages.dire("mode pêche |cffff4040terminé|r, son remis comme avant.")
   end
+  -- La fenêtre de réglages, si elle est ouverte, montre le bon état du bouton.
+  if ns.reglages.majFenetre then ns.reglages.majFenetre() end
 end
 
 function MetiersAuto_ModePeche() changerModePeche(not modePeche) end
@@ -256,8 +280,9 @@ local function remettreReperage()
   end
 end
 
-local function toucheInteraction()
-  local k = GetBindingKey and GetBindingKey("INTERACTTARGET")
+-- La touche reliée à une action du jeu ou de l'addon, écrite lisiblement (nil si aucune).
+local function texteTouche(action)
+  local k = GetBindingKey and GetBindingKey(action)
   if not k or k == "" then return nil end
   -- GetBindingText traduit le code de la touche (« SHIFT-E » devient « Maj-E »,
   -- « BUTTON4 » un bouton de souris). Certaines touches (², <) sortent en « ? »
@@ -266,6 +291,7 @@ local function toucheInteraction()
   if not texte or texte == "" or texte:find("?", 1, true) then texte = k end
   return texte
 end
+local function toucheInteraction() return texteTouche("INTERACTTARGET") end
 
 -- Choisir la touche depuis les réglages : on écoute la prochaine touche
 -- appuyée, puis on la relie à « Interagir avec la cible » comme le ferait
@@ -278,7 +304,11 @@ capture:EnableKeyboard(true)
 capture:SetScript("OnKeyDown", function(self, key)
   if MODIFICATEURS[key] then return end
   self:Hide()
-  if key == "ESCAPE" then ns.reglages.dire("choix de la touche annulé.") return end
+  if key == "ESCAPE" then
+    ns.reglages.dire("choix de la touche annulé.")
+    if self.apres then self.apres() end
+    return
+  end
   local combo = (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "")
     .. (IsShiftKeyDown() and "SHIFT-" or "") .. key
   if SetBinding(combo, "INTERACTTARGET") then
@@ -290,11 +320,13 @@ capture:SetScript("OnKeyDown", function(self, key)
   if self.apres then self.apres() end
 end)
 
+-- Renvoie vrai quand l'écoute de la touche a démarré.
 local function choisirTouche(apres)
-  if InCombatLockdown() then ns.reglages.dire("|cffff4040pas en combat.|r") return end
+  if InCombatLockdown() then ns.reglages.dire("|cffff4040pas en combat.|r") return false end
   capture.apres = apres
   capture:Show()
   ns.reglages.dire("appuie sur la touche voulue pour récolter (Échap pour annuler).")
+  return true
 end
 
 -- « Filon pas fini » : un addon n'a pas le droit de continuer la récolte à ta
@@ -357,6 +389,22 @@ local function memoriserIci()
   end
 end
 
+-- Nombre d'endroits connus sur une carte, et sur toutes les cartes.
+local function nbFilons(carte) return carte and db.filons[carte] and #db.filons[carte] or 0 end
+local function totalFilons()
+  local total = 0
+  for _, liste in pairs(db.filons) do total = total + #liste end
+  return total
+end
+
+-- Oublie les endroits de la carte où tu es. Faux quand la position est inconnue.
+local function oublierCarte()
+  local carte = ici()
+  if not carte then return false end
+  db.filons[carte] = nil
+  return true
+end
+
 local fleche = CreateFrame("Frame", "MetiersAutoFleche", UIParent)
 fleche:SetSize(56, 70)
 fleche:SetPoint("TOP", UIParent, "TOP", 0, -120)
@@ -378,6 +426,14 @@ image:SetTexture("Interface\\Minimap\\MiniMap-QuestArrow")
 local legende = fleche:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 legende:SetPoint("TOP", image, "BOTTOM", 0, -2)
 legende:SetWidth(180)
+
+-- La flèche à sa place : celle que tu as choisie en la glissant, sinon celle d'origine.
+local function placerFleche()
+  fleche:ClearAllPoints()
+  local p = db.positionFleche
+  if p then fleche:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+  else fleche:SetPoint("TOP", UIParent, "TOP", 0, -120) end
+end
 
 -- Un petit moteur invisible recalcule la flèche 10 fois par seconde. La flèche
 -- elle-même n'apparaît que s'il y a un endroit connu sur la carte où tu es.
@@ -490,6 +546,23 @@ fermer:SetPoint("TOPRIGHT", -2, -2)
 fermer:SetScript("OnClick", function() ns.reglages.changer("afficherCourses", false) end)
 local lignes = {}
 
+-- La fenêtre de la liste à sa place : celle que tu as choisie, sinon celle d'origine.
+local function placerCourses()
+  fenetreCourses:ClearAllPoints()
+  local p = db.positionCourses
+  if p then fenetreCourses:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+  else fenetreCourses:SetPoint("RIGHT", UIParent, "RIGHT", -60, 80) end
+end
+
+-- Remet la flèche et la liste de courses à leur place d'origine. Faux en combat.
+local function replacerFenetres()
+  if InCombatLockdown() then return false end
+  db.positionFleche, db.positionCourses = nil, nil
+  placerFleche()
+  placerCourses()
+  return true
+end
+
 local function majCourses()
   local liste = db.courses
   if not db.afficherCourses or #liste == 0 then fenetreCourses:Hide() return end
@@ -533,85 +606,128 @@ ns.reglages = ns.creerReglages({
     { titre = "Général" },
     { cle = "actif", libelle = "Activer Métiers auto",
       aide = "Interrupteur général. Le clic droit sur l'icône fait la même chose." },
+    { cle = "minimap", libelle = "Icône à part autour de la minimap",
+      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
     { titre = "Pêche" },
     { cle = "pecheDoubleClic", libelle = "Double clic droit pour lancer la ligne",
       aide = "Seulement en mode pêche. Pour ferrer : clic droit sur le bouchon." },
     { cle = "pecheAuto", libelle = "Mode pêche dès que tu pêches toi-même",
       aide = "Il s'arrête seul après 60 secondes sans pêcher, ou en combat." },
     { cle = "pecheSon", libelle = "Bien entendre le bouchon",
-      aide = "En mode pêche : effets sonores à fond, musique et ambiance coupées." },
+      aide = "En mode pêche : effets sonores à fond, musique et ambiance coupées. Tout revient comme avant à la fin." },
     { titre = "Récolte" },
     { cle = "interaction", libelle = "Une touche pour récolter",
-      aide = "« Interagir avec la cible » vise seule filon, herbe ou bouchon. Appuie autant de fois que le filon le demande." },
+      aide = "« Interagir avec la cible » vise seule filon, herbe ou bouchon. Appuie autant de fois que le filon le demande. La touche se choisit plus bas." },
     { cle = "ramassage", libelle = "Ramassage automatique du butin",
       aide = "Le butin va directement dans tes sacs." },
     { cle = "reperage", libelle = "Remettre le repérage des minerais et herbes",
       aide = "Après une mort ou une reconnexion, sur la minimap." },
     { cle = "filonPasFini", libelle = "Prévenir quand un filon n'est pas fini",
       aide = "Message et son s'il reste des coups à donner, pour qu'un autre joueur ne le finisse pas." },
-    { cle = "filonSon", libelle = "Son et rappel de cette alerte",
+    { cle = "filonSon", libelle = "Son et rappel de cette alerte", dependDe = "filonPasFini",
       aide = "Jamais si ta touche de récolte est la molette : l'alerte reste discrète." },
     { cle = "fleche", libelle = "Flèche vers le filon ou l'herbe connu le plus proche",
-      aide = "L'addon retient chaque endroit où tu récoltes. Déplace la flèche en la glissant. /mt filons : combien." },
+      aide = "L'addon retient chaque endroit où tu récoltes (le nombre est plus bas). Déplace la flèche en la glissant." },
     { titre = "Artisanat" },
     { cle = "afficherCourses", libelle = "Afficher la liste de courses",
-      aide = "Ajouter une recette : /mt courses 5 puis Maj+clic sur la recette." },
-    { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "La fenêtre à l'écran avec les composants des recettes de la liste et ce qu'il te manque. Déplace-la en la glissant." },
   },
+  -- Zone « Touches et outils » : les touches, le mode pêche, les endroits connus,
+  -- la place des fenêtres et la liste de courses.
   contenu = function(fenetre, y, r)
+    local function texteFixe(x, haut, largeur)
+      local fs = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+      fs:SetPoint("TOPLEFT", x, haut)
+      fs:SetWidth(largeur)
+      fs:SetJustifyH("LEFT")
+      return fs
+    end
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)
-    t:SetText("Touches et liste")
+    t:SetText("Touches et outils")
     y = y - 32
-    local touche = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    touche:SetPoint("TOPLEFT", 20, y - 5)
-    touche:SetWidth(240)
-    touche:SetJustifyH("LEFT")
-    local maj -- fonction de mise à jour, définie plus bas
-    local b0 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b0:SetSize(150, 24)
+    local maj, majListe -- fonctions de mise à jour, définies plus bas
+
+    -- La touche de récolte et le bouton pour la choisir.
+    local touche = texteFixe(20, y - 5, 230)
+    local b0
+    b0 = ns.creerBouton(fenetre, "Choisir la touche",
+      "Appuie ensuite sur la touche voulue : elle devient « Interagir avec la cible ». Échap annule. Impossible en combat.",
+      function()
+        if choisirTouche(function() maj() end) then b0:SetText("Appuie sur une touche…") end
+      end, 150)
     b0:SetPoint("TOPLEFT", 254, y)
-    b0:SetText("Choisir la touche")
-    b0:SetScript("OnClick", function()
-      b0:SetText("Appuie sur une touche…")
-      choisirTouche(function() maj() end)
-    end)
     y = y - 34
-    local b1 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b1:SetSize(190, 24)
+
+    -- Le mode pêche et son raccourci.
+    local b1 = ns.creerBouton(fenetre, "Démarrer le mode pêche",
+      "Double clic droit pour lancer la ligne, clic droit sur le bouchon pour ferrer. S'arrête seul après 60 secondes sans pêcher.",
+      function() MetiersAuto_ModePeche(); r.appliquer() end, 190)
     b1:SetPoint("TOPLEFT", 16, y)
-    b1:SetScript("OnClick", function() MetiersAuto_ModePeche(); r.appliquer() end)
-    local b2 = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
-    b2:SetSize(190, 24)
-    b2:SetPoint("TOPLEFT", 214, y)
-    b2:SetText("Vider la liste de courses")
-    b2:SetScript("OnClick", function() r.changer("courses", {}); r.dire("liste de courses vidée.") end)
-    y = y - 28
+    local touchePeche = texteFixe(214, y - 5, 200)
+    y = y - 34
+
+    -- Les endroits retenus pour la flèche.
+    local filons = texteFixe(20, y - 5, 230)
+    local b2 = ns.creerBouton(fenetre, "Oublier cette carte",
+      "Efface les endroits retenus sur la carte où tu es. Les autres cartes ne changent pas.",
+      function()
+        if oublierCarte() then r.dire("endroits oubliés pour cette carte.")
+        else r.dire("position inconnue ici (donjon, ou position cachée par le jeu).") end
+        r.majFenetre()
+      end, 150)
+    b2:SetPoint("TOPLEFT", 254, y)
+    y = y - 34
+
+    -- La place de la flèche et de la liste.
+    local b3 = ns.creerBouton(fenetre, "Replacer la flèche et la liste",
+      "Remet la flèche et la liste de courses à leur place d'origine, par exemple si l'une est sortie de l'écran.",
+      function()
+        if replacerFenetres() then r.dire("flèche et liste de courses remises à leur place.")
+        else r.dire("|cffff4040pas en combat.|r") end
+      end, 220)
+    b3:SetPoint("TOPLEFT", 16, y)
+    y = y - 34
+
+    -- La liste de courses : on y retire une ligne ou tout ; l'ajout se fait en jeu.
+    local aide = fenetre:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    aide:SetPoint("TOPLEFT", 20, y - 2)
+    aide:SetWidth(380)
+    aide:SetJustifyH("LEFT")
+    aide:SetText("Pour ajouter une recette : ouvre ton métier, tape /mt courses 5 (5 = le nombre à fabriquer), puis Maj+clic sur la recette.")
+    local hAide = aide.GetStringHeight and aide:GetStringHeight()
+    y = y - 6 - math.max(type(hAide) == "number" and hAide or 0, 24)
+    y, majListe = ns.creerListe(fenetre, y, {
+      titre = "Liste de courses",
+      vide = "Aucune recette dans la liste.",
+      hauteur = 5,
+      lignes = function()
+        return ns.lignesCourses(db.courses, function(i) table.remove(db.courses, i); r.appliquer() end)
+      end,
+      vider = function() r.changer("courses", {}); r.dire("liste de courses vidée.") end,
+    })
+
     maj = function()
       local k = toucheInteraction()
       touche:SetText("Touche pour récolter : " .. (k and ("|cff00ff00" .. k .. "|r") or "|cffff4040aucune|r"))
       b0:SetText(k and "Changer la touche" or "Choisir la touche")
       b1:SetText(modePeche and "Arrêter le mode pêche" or "Démarrer le mode pêche")
+      local kp = texteTouche("METIERSAUTO_PECHE")
+      touchePeche:SetText("Raccourci : " .. (kp and ("|cff00ff00" .. kp .. "|r") or "|cffff4040aucun|r"))
+      local carte = ici()
+      filons:SetText(ns.texteFilons(carte and nbFilons(carte) or nil, totalFilons()))
+      if carte and nbFilons(carte) > 0 then b2:Enable() else b2:Disable() end
+      majListe()
     end
     return y, maj
   end,
-  astuce = "Tout s'applique tout de suite, sans /reload. Commande : /mt.",
+  astuce = "Tout s'applique tout de suite, sans /reload. Le raccourci du mode pêche se choisit dans Échap > Options > Raccourcis. Commande : /mt.",
   auChargement = function(d)
     db = d
     -- Un mode pêche coupé par une déconnexion : on remet le son d'avant.
     sonNormal()
-    if db.positionCourses then
-      local p = db.positionCourses
-      fenetreCourses:SetPoint(p[1], UIParent, p[2], p[3], p[4])
-    else
-      fenetreCourses:SetPoint("RIGHT", UIParent, "RIGHT", -60, 80)
-    end
-    if db.positionFleche then
-      local p = db.positionFleche
-      fleche:ClearAllPoints()
-      fleche:SetPoint(p[1], UIParent, p[2], p[3], p[4])
-    end
+    placerCourses()
+    placerFleche()
   end,
   surChangement = function(d)
     if not d.actif and modePeche then changerModePeche(false) end
@@ -674,15 +790,15 @@ SlashCmdList.METIERSAUTO = function(texte)
   elseif cmd == "on" or cmd == "off" then
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
   elseif cmd == "filons" then
-    local carte = ici()
     if reste:lower() == "oublier" then
-      if carte then db.filons[carte] = nil end
-      return r.dire("endroits oubliés pour cette carte.")
+      return r.dire(oublierCarte() and "endroits oubliés pour cette carte."
+        or "position inconnue ici (donjon, ou position cachée par le jeu).")
     end
-    local total, cartes = 0, 0
-    for _, liste in pairs(db.filons) do total, cartes = total + #liste, cartes + 1 end
-    r.dire(string.format("%d endroits connus ici, %d en tout sur %d cartes. /mt filons oublier : vider cette carte.",
-      carte and db.filons[carte] and #db.filons[carte] or 0, total, cartes))
+    local cartes = 0
+    for _ in pairs(db.filons) do cartes = cartes + 1 end
+    local carte = ici()
+    r.dire(string.format("%s, sur %d cartes. /mt filons oublier : vider cette carte.",
+      ns.texteFilons(carte and nbFilons(carte) or nil, totalFilons()), cartes))
   elseif cmd == "courses" then
     if reste:lower() == "vider" then
       r.changer("courses", {})

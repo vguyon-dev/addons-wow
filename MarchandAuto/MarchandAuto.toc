@@ -3,7 +3,7 @@
 ## Notes: Chez un marchand : vend les objets gris et répare l'équipement, avec la banque de guilde si tu veux.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.3.0
+## Version: 0.4.0
 ## IconTexture: Interface\Icons\INV_Misc_Coin_02
 ## SavedVariables: MarchandAutoDB
 ## AddonCompartmentFunc: MarchandAuto_OuvrirReglages
