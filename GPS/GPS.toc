@@ -1,0 +1,13 @@
+## Interface: 120105, 16001
+## Title: GPS
+## Notes: Balises (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte) et une flèche avec distance et temps restant, même loin.
+## Category: Addons de Valentin
+## Author: Valentin
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+## SavedVariables: GPSDB
+## SavedVariablesPerCharacter: GPSPerso
+## AddonCompartmentFunc: GPS_OuvrirReglages
+
+Reglages.lua
+GPS.lua

@@ -11,7 +11,7 @@
 --   rendu     : sa quête de rendu est validée → plus rien.
 --
 --  - Épingles sur la carte du monde (zone et continent), clic gauche = balise
---    (TomTom s'il est installé, sinon la balise du jeu), clic droit = marquer
+--    (notre GPS, sinon TomTom, sinon la balise du jeu), clic droit = marquer
 --    ramassé ou pas (pour un livre ramassé avant d'installer l'addon et
 --    rangé en banque).
 --  - Panneau /livres : tous les livres, leur état, le compte.
@@ -182,11 +182,13 @@ local function lireSacs()
 end
 
 -- ---------------------------------------------------------------------------
--- Balise : TomTom s'il est là, sinon la balise du jeu.
+-- Balise : notre GPS s'il est là, sinon TomTom, sinon la balise du jeu.
 -- ---------------------------------------------------------------------------
 
 local function baliser(carte, x, y, titre)
-  if TomTom and TomTom.AddWaypoint then
+  if GPS_Ajouter and GPS_Ajouter(carte, x, y, titre) then
+    return
+  elseif TomTom and TomTom.AddWaypoint then
     TomTom:AddWaypoint(carte, x, y, { title = titre, from = "Livres de bibliothèque", persistent = false })
   elseif C_Map.SetUserWaypoint and UiMapPoint
     and (not C_Map.CanSetUserWaypointOnMap or C_Map.CanSetUserWaypointOnMap(carte)) then

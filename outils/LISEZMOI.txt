@@ -41,6 +41,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
 
   /carnet  Carnet de session (temps, or, XP, monstres)
   /courrier Courrier (récupérer tout le courrier, l'or seulement ou les cochés)
+  /way     GPS (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte ; /gps pour les réglages)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
   /ma      Marchand auto (vend les gris, répare, rachète ton stock)
   /livres  Livres de bibliothèque (Forever) : panneau, /livres proche pour une balise
