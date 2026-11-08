@@ -13,6 +13,7 @@ local ns = {}
 local reglagesLua = arg[1]:gsub("[^/]+$", "Reglages.lua")
 assert(loadfile(reglagesLua))("SacsRanges", ns)
 assert(loadfile(arg[1]))("SacsRanges", ns)
+assert(loadfile((arg[1]:gsub("[^/]+$", "Vue.lua"))))("SacsRanges", ns)
 
 local ok = true
 local function verifie(libelle, attendu, obtenu)
@@ -76,4 +77,25 @@ for classe, t in pairs(qa.COMPETENCES) do
   for sc, sort in pairs(t) do if C[classe][sc] ~= sort then pareil = false end end
 end
 verifie("compétences identiques à QuetesAuto", true, pareil)
+-- Vue par catégories : la section de chaque objet.
+verifie("catégorie : arme portable", "equip", ns.categorie(2, 2, false, true))
+verifie("catégorie : arme pas apprise, à vendre", "vendre", ns.categorie(2, 1, false, false))
+verifie("catégorie : gris, à vendre", "vendre", ns.categorie(15, 0, false, true))
+verifie("catégorie : objet de quête gris reste en Quête", "quete", ns.categorie(15, 0, true, true))
+verifie("catégorie : classe quête", "quete", ns.categorie(12, 1, false, true))
+verifie("catégorie : potion", "conso", ns.categorie(0, 1, false, true))
+verifie("catégorie : étoffe", "compo", ns.categorie(7, 1, false, true))
+verifie("catégorie : inconnue (pas encore lue)", "divers", ns.categorie(nil, 1, false, true))
+local parts = ns.repartir({
+  { sac = 0, case = 3, categorie = "compo", nom = "Pierre brute", qualite = 1 },
+  { sac = 0, case = 1, categorie = "compo", nom = "Étoffe de lin", qualite = 1 },
+  { sac = 1, case = 2, categorie = "compo", nom = "Cristal", qualite = 3 },
+  { sac = 0, case = 2, categorie = "rien", nom = "Truc", qualite = 1 },
+})
+verifie("répartition : meilleure qualité d'abord", "Cristal", parts.compo[1].nom)
+verifie("répartition : catégorie inconnue en Divers", 1, #parts.divers)
+verifie("répartition : 3 composants", 3, #parts.compo)
+verifie("recherche sans accents", true, ns.simplifier("Étoffe de LIN"):find("etoffe", 1, true) ~= nil)
+verifie("recherche : œ", "oeil de murloc", ns.simplifier("Œil de murloc"))
+
 os.exit(ok and 0 or 1)

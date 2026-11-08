@@ -16,6 +16,8 @@ local DEFAUTS = {
   rangerBanque = true,     -- ranger aussi la banque quand elle est ouverte
   ecart = 0,               -- « moins bon » = au moins ce nombre de niveaux en dessous
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
+  vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
+  apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
 }
@@ -187,6 +189,16 @@ local function ligneRouge(sac, case)
   return rouge
 end
 
+-- Peut-on porter l'objet de cette case ? (vrai pour tout ce qui n'est pas de
+-- l'équipement). Sert à la vue par catégories pour la section « À vendre ».
+function ns.utilisableCase(sac, case, lien)
+  local typ, _, _, classeObjet, sousClasse = select(9, infoObjet(lien))
+  if not (typ and EMPLACEMENTS[typ]) then return true end
+  local lu, rouge = pcall(ligneRouge, sac, case)
+  return ns.utilisable(classeObjet, sousClasse, competences(), lu and rouge or nil)
+end
+ns.nbCases = nbCases
+
 local function lireSacs()
   local objets = {}
   local connait = competences()
@@ -233,6 +245,7 @@ local function ranger()
   ns.reglages.dire("sacs rangés" .. ((banqueOuverte and db.rangerBanque) and ", banque aussi." or "."))
 end
 SacsRanges_Ranger = ranger
+ns.ranger = ranger
 BINDING_HEADER_SACSRANGES = "Sacs rangés"
 BINDING_NAME_SACSRANGES_RANGER = "Ranger les sacs"
 
@@ -301,6 +314,7 @@ boutonRanger:SetScript("OnClick", function() ranger() C_Timer.After(1.5, rafraic
 local function basculerPanneau()
   panneau:SetShown(not panneau:IsShown())
 end
+ns.basculerPanneau = basculerPanneau
 
 -- ---------------------------------------------------------------------------
 -- La barre de boutons collée au-dessus du sac à dos.
@@ -356,7 +370,7 @@ local function sacADos()
 end
 
 local function placerBarre()
-  local f = db and db.actif and db.boutonsSac and sacADos()
+  local f = db and db.actif and db.boutonsSac and not db.vueCategories and sacADos()
   if not f then barre:Hide() return end
   barre:ClearAllPoints()
   barre:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 4, 2)
@@ -395,14 +409,19 @@ ns.reglages = ns.creerReglages({
     { cle = "rangerMarchand", libelle = "Ranger tout seul en refermant un marchand",
       aide = "Après la vente des gris par Marchand auto, par exemple." },
     { titre = "Affichage" },
+    { titre = "Sac par catégories" },
+    { cle = "vueCategories", libelle = "Sac rangé par catégories (remplace les sacs du jeu)",
+      aide = "Un seul sac en sections : Équipement, Consommables, Composants, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
+    { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)",
+      aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
     { cle = "boutonsSac", libelle = "Boutons Ranger et Analyse sur le sac à dos",
       aide = "Une petite barre au-dessus du sac à dos ; « Banque » apparaît quand la banque est ouverte." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
   astuce = "Le panneau : /sr ou la ligne Sacs rangés de l'icône commune. Ranger : /sr ranger ou un raccourci clavier.",
-  auChargement = function(d) db = d end,
-  surChangement = function() placerBarre() end,
+  auChargement = function(d) db = d; ns.db = d end,
+  surChangement = function() placerBarre(); if ns.vueMaj then ns.vueMaj() end end,
 })
 
 -- ---------------------------------------------------------------------------
@@ -436,6 +455,12 @@ SlashCmdList.SACSRANGES = function(message)
   local r = ns.reglages
   if cmd == "" then
     basculerPanneau()
+  elseif cmd == "vue" then
+    r.changer("vueCategories", not db.vueCategories)
+    r.dire("sac par catégories " .. (db.vueCategories and "|cff00ff00activé|r" or "|cffff4040coupé|r") .. ".")
+  elseif cmd == "apparence" then
+    r.changer("apparenceWow", not db.apparenceWow)
+    r.dire("apparence : " .. (db.apparenceWow and "cadre du jeu." or "nouveau visuel."))
   elseif cmd == "ranger" then
     ranger()
   elseif cmd == "options" or cmd == "reglages" then
@@ -444,5 +469,6 @@ SlashCmdList.SACSRANGES = function(message)
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
   elseif not r.basculerOption(cmd) then
     r.dire("/sr : le panneau     /sr ranger : ranger les sacs     /sr options : les réglages")
+    r.dire("/sr vue : sac par catégories oui ou non     /sr apparence : nouveau visuel ou cadre du jeu")
   end
 end
