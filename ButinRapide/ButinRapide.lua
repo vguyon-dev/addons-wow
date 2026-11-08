@@ -9,6 +9,9 @@
 --     d'objets à ne jamais ramasser.
 --  4. Bilan de farm : ce que tu as ramassé, sa valeur à la revente et à
 --     l'hôtel des ventes (si Auctionator est là), et le gain par heure.
+--  5. Touche d'interaction sur les cadavres (option) : le jeu vise tout seul
+--     le cadavre le plus proche, une touche l'ouvre. Un appui par cadavre :
+--     aucun addon n'a le droit d'ouvrir un cadavre à ta place.
 -- Le ramassage suit le réglage du jeu (« Butin automatique ») : Maj inverse,
 -- comme d'habitude.
 -- ============================================================================
@@ -24,7 +27,55 @@ local DEFAUTS = {
   ignorerGris = false,    -- laisser les gris au sol
   ignores = {},           -- [idObjet] = lien : à ne jamais ramasser
   bilan = true,           -- afficher la fenêtre du bilan de farm
+  toucheCadavres = false, -- vise tout seul le cadavre le plus proche (touche d'interaction)
+  cvarAvant = nil,        -- réglages du jeu d'avant, remis quand on décoche
 }
+
+-- ---------------------------------------------------------------------------
+-- Touche d'interaction : réglages cachés du jeu (CVars), posés hors combat.
+--   SoftTargetInteract      3 = toujours (clavier et manette)
+--   SoftTargetInteractArc   2 = tout autour de toi, pas seulement devant
+-- ---------------------------------------------------------------------------
+
+local CVARS_CADAVRES = { SoftTargetInteract = "3", SoftTargetInteractArc = "2" }
+local lireCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
+local poserCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
+
+local function appliquerCadavres(d, prevenir)
+  if not lireCVar or not poserCVar then return end
+  if InCombatLockdown() then return end
+  local function dire(t) if prevenir and ns.reglages then ns.reglages.dire(t) end end
+  if d.toucheCadavres then
+    if not d.cvarAvant then
+      d.cvarAvant = {}
+      for nom in pairs(CVARS_CADAVRES) do
+        local ok, v = pcall(lireCVar, nom)
+        d.cvarAvant[nom] = ok and v or false
+      end
+    end
+    local manque = false
+    for nom, v in pairs(CVARS_CADAVRES) do
+      local ok, ancien = pcall(lireCVar, nom)
+      if not ok or ancien == nil then manque = true else pcall(poserCVar, nom, v) end
+    end
+    if manque then
+      dire("|cffff4040ce jeu n'a pas la touche d'interaction|r : il faudra cliquer chaque cadavre.")
+    elseif prevenir then
+      local touche = GetBindingKey and GetBindingKey("INTERACTTARGET")
+      if touche then
+        dire("cadavres : passe dessus et appuie sur |cffffffff" .. touche .. "|r, un appui par cadavre.")
+      else
+        dire("cadavres : donne une touche à « Interagir avec la cible » (Options, Raccourcis), puis un appui par cadavre.")
+      end
+    end
+  elseif d.cvarAvant then
+    for nom, v in pairs(d.cvarAvant) do
+      if v then pcall(poserCVar, nom, v) end
+    end
+    d.cvarAvant = nil
+    dire("touche d'interaction : réglages du jeu remis comme avant.")
+  end
+end
 
 local db, perso
 
@@ -327,6 +378,8 @@ ns.reglages = ns.creerReglages({
       aide = "Interrupteur général. Désactive SpeedyAutoLoot pour ne pas avoir les deux." },
     { cle = "ignorerGris", libelle = "Laisser les objets gris au sol",
       aide = "Pratique en farm pour garder de la place. L'or et les objets de quête sont toujours pris." },
+    { cle = "toucheCadavres", libelle = "Touche d'interaction sur les cadavres",
+      aide = "Le jeu vise tout seul le cadavre le plus proche : une touche l'ouvre, sans viser. Un appui par cadavre. Donne une touche à « Interagir avec la cible » (Options, Raccourcis)." },
     { titre = "Sacs pleins" },
     { cle = "sacsPleins", libelle = "Alerte avec bouton « jeter le gris le moins cher »",
       aide = "Dit ce qui reste au sol ; un clic fait de la place et ramasse." },
@@ -365,6 +418,8 @@ ns.reglages = ns.creerReglages({
     ButinRapidePerso = ButinRapidePerso or {}
     perso = ButinRapidePerso
     if not perso.debut then nouveauBilan() end
+    -- Le jeu remet parfois ses réglages au démarrage : on repose les nôtres.
+    C_Timer.After(2, function() appliquerCadavres(d, false) end)
     if db.positionBilan then
       local p = db.positionBilan
       fenetreBilan:SetPoint(p[1], UIParent, p[2], p[3], p[4])
@@ -372,7 +427,10 @@ ns.reglages = ns.creerReglages({
       fenetreBilan:SetPoint("LEFT", UIParent, "LEFT", 40, 120)
     end
   end,
-  surChangement = function() majBilan() end,
+  surChangement = function(d)
+    majBilan()
+    if (d.toucheCadavres and true or false) ~= (d.cvarAvant and true or false) then appliquerCadavres(d, true) end
+  end,
 })
 
 -- ---------------------------------------------------------------------------

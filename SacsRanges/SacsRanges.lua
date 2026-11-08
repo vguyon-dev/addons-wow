@@ -4,6 +4,7 @@
 --     sur les sacs, et sur la banque quand elle est ouverte.
 --  2. Un panneau qui signale l'équipement en double et l'équipement moins bon
 --     que ce que tu portes (à vendre ou à mettre en banque ?).
+--  3. Une barre de boutons collée au sac à dos : Ranger, Analyse, Banque.
 -- Commande : /sr (le panneau), /sr ranger, /sr options (les réglages).
 -- ============================================================================
 
@@ -14,6 +15,7 @@ local DEFAUTS = {
   rangerMarchand = false,  -- ranger tout seul en refermant un marchand
   rangerBanque = true,     -- ranger aussi la banque quand elle est ouverte
   ecart = 0,               -- « moins bon » = au moins ce nombre de niveaux en dessous
+  boutonsSac = true,       -- la barre de boutons sur le sac à dos
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
 }
@@ -301,6 +303,80 @@ local function basculerPanneau()
 end
 
 -- ---------------------------------------------------------------------------
+-- La barre de boutons collée au-dessus du sac à dos.
+-- Retail : sacs combinés (ContainerFrameCombinedBags) ou sac à dos séparé ;
+-- Forever : une fenêtre par sac, celle du sac 0 est le sac à dos.
+-- ---------------------------------------------------------------------------
+
+local barre = CreateFrame("Frame", "SacsRangesBarre", UIParent)
+barre:SetSize(1, 22)
+barre:SetFrameStrata("HIGH")
+barre:Hide()
+
+local function petitBouton(texteBouton, largeur, aide, action)
+  local b = CreateFrame("Button", nil, barre, "UIPanelButtonTemplate")
+  b:SetSize(largeur, 22)
+  b:SetText(texteBouton)
+  b:SetScript("OnClick", action)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:AddLine(texteBouton)
+    GameTooltip:AddLine(aide, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return b
+end
+
+local bRanger = petitBouton("Ranger", 70, "Trie tes sacs par type (équipement, composants, consommables…), et la banque si elle est ouverte.",
+  function() ranger() C_Timer.After(1.5, rafraichir) end)
+local bAnalyse = petitBouton("Analyse", 70, "Équipement en double, moins bon que ce que tu portes, ou que tu ne peux pas porter.",
+  function() basculerPanneau() end)
+local bBanque = petitBouton("Banque", 70, "Range seulement la banque (quand elle est ouverte).", function()
+  local triBanque = C_Container and C_Container.SortBankBags or SortBankBags
+  if InCombatLockdown() then return ns.reglages.dire("|cffff4040pas en combat.|r") end
+  if triBanque then triBanque() ns.reglages.dire("banque rangée.") end
+end)
+bRanger:SetPoint("LEFT", barre, "LEFT", 0, 0)
+bAnalyse:SetPoint("LEFT", bRanger, "RIGHT", 2, 0)
+bBanque:SetPoint("LEFT", bAnalyse, "RIGHT", 2, 0)
+
+local function bagDe(f)
+  if f.GetBagID then local ok, id = pcall(f.GetBagID, f) if ok then return id end end
+  return f.GetID and f:GetID()
+end
+
+-- La fenêtre du sac à dos actuellement affichée, ou nil.
+local function sacADos()
+  if ContainerFrameCombinedBags and ContainerFrameCombinedBags:IsShown() then return ContainerFrameCombinedBags end
+  for i = 1, (NUM_CONTAINER_FRAMES or 13) do
+    local f = _G["ContainerFrame" .. i]
+    if f and f:IsShown() and bagDe(f) == 0 then return f end
+  end
+end
+
+local function placerBarre()
+  local f = db and db.actif and db.boutonsSac and sacADos()
+  if not f then barre:Hide() return end
+  barre:ClearAllPoints()
+  barre:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 4, 2)
+  barre:SetWidth(214)
+  bBanque:SetShown(banqueOuverte)
+  barre:Show()
+end
+
+-- Chaque fenêtre de sac prévient quand elle s'ouvre ou se ferme.
+local function brancher(f)
+  if f and not f.sacsRangesBranche then
+    f.sacsRangesBranche = true
+    f:HookScript("OnShow", function() C_Timer.After(0, placerBarre) end)
+    f:HookScript("OnHide", function() C_Timer.After(0, placerBarre) end)
+  end
+end
+brancher(ContainerFrameCombinedBags)
+for i = 1, (NUM_CONTAINER_FRAMES or 13) do brancher(_G["ContainerFrame" .. i]) end
+
+-- ---------------------------------------------------------------------------
 -- Réglages (Reglages.lua) : le clic dans l'icône commune ouvre le panneau.
 -- ---------------------------------------------------------------------------
 
@@ -319,11 +395,14 @@ ns.reglages = ns.creerReglages({
     { cle = "rangerMarchand", libelle = "Ranger tout seul en refermant un marchand",
       aide = "Après la vente des gris par Marchand auto, par exemple." },
     { titre = "Affichage" },
+    { cle = "boutonsSac", libelle = "Boutons Ranger et Analyse sur le sac à dos",
+      aide = "Une petite barre au-dessus du sac à dos ; « Banque » apparaît quand la banque est ouverte." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
   },
   astuce = "Le panneau : /sr ou la ligne Sacs rangés de l'icône commune. Ranger : /sr ranger ou un raccourci clavier.",
   auChargement = function(d) db = d end,
+  surChangement = function() placerBarre() end,
 })
 
 -- ---------------------------------------------------------------------------
@@ -337,8 +416,8 @@ end
 local dernierRangement = 0
 ecouteur:SetScript("OnEvent", function(_, evenement)
   if not db then return end
-  if evenement == "BANKFRAME_OPENED" then banqueOuverte = true
-  elseif evenement == "BANKFRAME_CLOSED" then banqueOuverte = false
+  if evenement == "BANKFRAME_OPENED" then banqueOuverte = true; placerBarre()
+  elseif evenement == "BANKFRAME_CLOSED" then banqueOuverte = false; placerBarre()
   elseif evenement == "MERCHANT_CLOSED" then
     -- MERCHANT_CLOSED arrive parfois deux fois : un seul rangement.
     if db.actif and db.rangerMarchand and GetTime() - dernierRangement > 3 then
