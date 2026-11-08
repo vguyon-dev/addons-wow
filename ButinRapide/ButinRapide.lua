@@ -41,6 +41,13 @@ local CVARS_CADAVRES = { SoftTargetInteract = "3", SoftTargetInteractArc = "2" }
 local lireCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
 local poserCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 
+-- C'est la même touche que la récolte de Métiers auto (« Interagir avec la
+-- cible », réglage SoftTargetInteract) : une seule touche pour les filons,
+-- les herbes et les cadavres. On ne la coupe jamais si Métiers auto s'en sert.
+local function metiersSenSert()
+  return type(MetiersAutoDB) == "table" and MetiersAutoDB.actif ~= false and MetiersAutoDB.interaction ~= false
+end
+
 local function appliquerCadavres(d, prevenir)
   if not lireCVar or not poserCVar then return end
   if InCombatLockdown() then return end
@@ -63,14 +70,14 @@ local function appliquerCadavres(d, prevenir)
     elseif prevenir then
       local touche = GetBindingKey and GetBindingKey("INTERACTTARGET")
       if touche then
-        dire("cadavres : passe dessus et appuie sur |cffffffff" .. touche .. "|r, un appui par cadavre.")
+        dire("cadavres : même touche que la récolte, |cffffffff" .. touche .. "|r, un appui par cadavre.")
       else
         dire("cadavres : donne une touche à « Interagir avec la cible » (Options, Raccourcis), puis un appui par cadavre.")
       end
     end
   elseif d.cvarAvant then
     for nom, v in pairs(d.cvarAvant) do
-      if v then pcall(poserCVar, nom, v) end
+      if v and not (nom == "SoftTargetInteract" and metiersSenSert()) then pcall(poserCVar, nom, v) end
     end
     d.cvarAvant = nil
     dire("touche d'interaction : réglages du jeu remis comme avant.")
@@ -379,7 +386,7 @@ ns.reglages = ns.creerReglages({
     { cle = "ignorerGris", libelle = "Laisser les objets gris au sol",
       aide = "Pratique en farm pour garder de la place. L'or et les objets de quête sont toujours pris." },
     { cle = "toucheCadavres", libelle = "Touche d'interaction sur les cadavres",
-      aide = "Le jeu vise tout seul le cadavre le plus proche : une touche l'ouvre, sans viser. Un appui par cadavre. Donne une touche à « Interagir avec la cible » (Options, Raccourcis)." },
+      aide = "Même touche que la récolte de Métiers auto (« Interagir avec la cible ») : elle vise aussi le cadavre le plus proche, tout autour de toi. Un appui par cadavre." },
     { titre = "Sacs pleins" },
     { cle = "sacsPleins", libelle = "Alerte avec bouton « jeter le gris le moins cher »",
       aide = "Dit ce qui reste au sol ; un clic fait de la place et ramasse." },
