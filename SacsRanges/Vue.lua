@@ -424,16 +424,39 @@ for _, f in ipairs(fenetresDuJeu()) do
   end)
 end
 
-local function ouvrir() if vueActive() then fenetre:Show() end end
-local function fermerVue() fenetre:Hide() end
-local function basculer() if vueActive() then fenetre:SetShown(not fenetre:IsShown()) end end
+-- Le jeu enchaîne ses fonctions : B appelle « basculer », qui appelle à son tour
+-- « ouvrir » (il croit ses sacs fermés, puisqu'on les cache). Réagir à chacune
+-- ouvrait puis refermait aussitôt la fenêtre. On note donc tout ce qui arrive
+-- pendant une image et on décide une seule fois, à l'image suivante : une
+-- bascule l'emporte (on inverse l'état d'avant), sinon la dernière demande.
+local etatAvant, bascule, demande, decisionPrevue = nil, false, nil, false
 
-for nom, action in pairs({
-  ToggleAllBags = basculer, ToggleBackpack = basculer,
-  OpenAllBags = ouvrir, OpenBackpack = ouvrir,
-  CloseAllBags = fermerVue, CloseBackpack = fermerVue,
+local function decider()
+  decisionPrevue = false
+  local montrer
+  if bascule then montrer = not etatAvant else montrer = demande end
+  etatAvant, bascule, demande = nil, false, nil
+  if montrer == nil then return end
+  if montrer and not vueActive() then return end
+  fenetre:SetShown(montrer)
+end
+
+local function noter(quoi)
+  if not vueActive() and quoi ~= "fermer" then return end
+  if etatAvant == nil then etatAvant = fenetre:IsShown() end
+  if quoi == "basculer" then bascule = true else demande = (quoi == "ouvrir") end
+  if not decisionPrevue then
+    decisionPrevue = true
+    C_Timer.After(0, decider)
+  end
+end
+
+for nom, quoi in pairs({
+  ToggleAllBags = "basculer", ToggleBackpack = "basculer", ToggleBag = "basculer",
+  OpenAllBags = "ouvrir", OpenBackpack = "ouvrir",
+  CloseAllBags = "fermer", CloseBackpack = "fermer",
 }) do
-  if _G[nom] then hooksecurefunc(nom, action) end
+  if _G[nom] then hooksecurefunc(nom, function() noter(quoi) end) end
 end
 
 -- Option cochée ou décochée, apparence changée.
