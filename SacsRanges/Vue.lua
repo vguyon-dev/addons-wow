@@ -272,10 +272,11 @@ local function caseDe(sac, case)
   b.fleche:SetSize(22, 22)
   b.fleche:SetPoint("TOPLEFT", -5, 5)
   b.fleche:Hide()
-  -- La raison du conseil, ajoutée à la bulle d'aide de l'objet.
+  -- La raison du conseil, ajoutée à la bulle d'aide de l'objet (sauf si l'avis
+  -- est déjà ajouté à toutes les bulles par Conseils.lua).
   b:HookScript("OnEnter", function(self)
     local c = self.conseil
-    if not c or not GameTooltip:IsShown() then return end
+    if not c or not GameTooltip:IsShown() or (ns.bullesActives and ns.bullesActives()) then return end
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
       .. " : " .. (c.raison or ""), 0.12, 1, 0)

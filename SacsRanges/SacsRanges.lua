@@ -19,6 +19,7 @@ local DEFAUTS = {
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
+  conseilsBulles = true,   -- « Mieux pour <spé> » dans toutes les bulles d'objets
   avisPawn = false,        -- prendre l'avis de Pawn s'il est installé (sinon notre propre calcul)
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
@@ -175,6 +176,7 @@ local function competences()
   if RETAIL or not connaitSort(COMPETENCES[4][1]) then return nil end
   return connaitSort
 end
+ns.competences = competences -- pour les bulles d'objets (Conseils.lua)
 
 -- Lit la bulle de l'objet du sac dans une bulle cachée : vrai si une ligne est
 -- en rouge, nil si la bulle n'a pas pu être lue.
@@ -444,7 +446,10 @@ ns.reglages = ns.creerReglages({
       aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
     { cle = "conseils", libelle = "Section « À équiper » et flèche verte", dependDe = "vueCategories",
       aide = "Les objets meilleurs que ce que tu portes, pour ta spécialisation, en haut du sac avec la raison. Clic droit pour équiper." },
-    { cle = "avisPawn", libelle = "Prendre l'avis de Pawn s'il est installé", dependDe = "conseils",
+    { titre = "Conseils d'équipement" },
+    { cle = "conseilsBulles", libelle = "Dire dans les bulles d'objets ce qui est mieux pour toi",
+      aide = "Butin, récompenses de quête, marchand, sacs : une ligne verte « Mieux pour <ta spécialisation> » avec la raison et ce que l'objet remplace. Rien quand l'objet n'est pas mieux ou que tu ne peux pas le porter." },
+    { cle = "avisPawn", libelle = "Prendre l'avis de Pawn s'il est installé",
       aide = "Décoché : l'addon juge seul (caractéristique principale de ta spécialisation, dégâts de l'arme, Endurance), sans Pawn." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",

@@ -246,6 +246,63 @@ function ns.conseil(lien)
   return resultat or nil
 end
 
+-- ---------------------------------------------------------------------------
+-- L'avis dans toutes les bulles d'objets (butin, récompenses, marchand, sac…)
+-- ---------------------------------------------------------------------------
+
+function ns.bullesActives()
+  return ns.db and ns.db.actif and ns.db.conseilsBulles ~= false
+end
+
+-- Une ligne en rouge dans la bulle : le jeu dit « tu ne peux pas ».
+local function rougeDans(tip)
+  local nom = tip.GetName and tip:GetName()
+  if not nom then return nil end
+  local rouge = false
+  for l = 2, tip:NumLines() or 0 do
+    for _, cote in ipairs({ "Left", "Right" }) do
+      local t = _G[nom .. "Text" .. cote .. l]
+      local mot = t and t:IsShown() and t:GetText()
+      -- Une durabilité en rouge se répare : on l'ignore.
+      if mot and not mot:find("%d+%s*/%s*%d+") then
+        local r, g, b = t:GetTextColor()
+        if r > 0.9 and g < 0.2 and b < 0.2 then rouge = true end
+      end
+    end
+  end
+  return rouge
+end
+
+local function ajouterAvis(tip)
+  if not ns.bullesActives() then return end
+  -- Pas dans les bulles de comparaison (ce que tu portes déjà).
+  if tip ~= GameTooltip and tip ~= ItemRefTooltip then return end
+  local ok, _, lien = pcall(tip.GetItem, tip)
+  if not ok or not lien then return end
+  local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+  local _, _, _, _, _, _, _, _, typeObjet, _, _, classe, sousClasse = f(lien)
+  if not typeObjet or not ns.emplacementsPour(typeObjet, aDistance) then return end
+  local id = tonumber(lien:match("item:(%d+)"))
+  if ns.estOutilMetier and ns.estOutilMetier(classe, sousClasse, id) then return end
+  if ns.utilisable and not ns.utilisable(classe, sousClasse, ns.competences and ns.competences(), rougeDans(tip)) then
+    return
+  end
+  local okC, c = pcall(ns.conseil, lien)
+  if not okC or not c then return end
+  if not principale then lireSpecialisation() end
+  tip:AddLine(" ")
+  tip:AddLine("Mieux pour " .. (nomSpe or "toi") .. " : " .. (c.raison or ""), 0.12, 1, 0, true)
+  if c.remplace then tip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
+end
+
+if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ajouterAvis)
+else
+  for _, tip in ipairs({ GameTooltip, ItemRefTooltip }) do
+    if tip and tip.HookScript then pcall(tip.HookScript, tip, "OnTooltipSetItem", ajouterAvis) end
+  end
+end
+
 function ns.nomSpecialisation()
   if not principale then lireSpecialisation() end
   return nomSpe
