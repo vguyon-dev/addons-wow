@@ -131,6 +131,17 @@ end
 
 local rafraichirTout -- défini plus bas : carte et panneau
 
+-- Pour les autres addons (le sac rangé de Sacs rangés) : cet objet est-il un
+-- des livres à rendre ? Il est alors rangé avec les objets de quête.
+function LivresBiblio_EstUnLivre(nomObjet)
+  if not nomObjet then return false end
+  local o = ns.simplifier(nomObjet)
+  for _, l in ipairs(ns.LIVRES) do
+    if ns.estCeLivre(o, l) then return true end
+  end
+  return false
+end
+
 -- Un livre trouvé dans tes sacs passe « à rendre ». Sauf si tu l'as remis
 -- « à trouver » à la main (perso.ignores) : on respecte ton choix.
 local function noterObjet(nomObjet)

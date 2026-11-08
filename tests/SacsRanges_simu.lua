@@ -135,4 +135,9 @@ verifie("couteau à dépecer (arme divers, 14) : Métiers", "metier", ns.categor
 verifie("outil de métier Retail (classe 19) : Métiers", "metier", ns.categorie(19, 1, false, true, 0, 1))
 verifie("une vraie dague reste de l'équipement", "equip", ns.categorie(2, 2, false, true, 15, 2092))
 verifie("un outil d'objet de quête reste en Quête", "quete", ns.categorie(2, 1, true, true, 14, 7005))
+-- Livres de bibliothèque et objets liés sans usage d'artisanat
+verifie("livre de bibliothèque : Quête (à rendre)", "quete", ns.categorie(15, 3, false, true, 0, 1, { livre = true }))
+verifie("objet lié, classe composant, pas d'artisanat : Divers", "divers", ns.categorie(7, 3, false, true, 0, 1, { lie = true, artisanat = false }))
+verifie("vrai composant lié (artisanat) : Composants", "compo", ns.categorie(7, 1, false, true, 0, 1, { lie = true, artisanat = true }))
+verifie("composant non lié : Composants", "compo", ns.categorie(7, 1, false, true, 0, 1, { lie = false, artisanat = false }))
 os.exit(ok and 0 or 1)

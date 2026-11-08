@@ -37,12 +37,18 @@ local CLASSES = { [0] = "conso", [2] = "equip", [4] = "equip", [5] = "compo", [7
 -- La section d'un objet. Gris ou équipement que tu ne peux pas porter : à vendre.
 -- Un objet de quête reste en « Quête » même s'il est gris (on ne le vend pas).
 -- Un outil de métier (canne à pêche, couteau à dépecer…) va dans « Métiers ».
-function ns.categorie(classe, qualite, quete, utilisable, sousClasse, id)
-  if quete or classe == 12 then return "quete" end
+-- extra (facultatif) = { livre = vrai si c'est un livre de bibliothèque à rendre,
+--   lie = vrai si l'objet est lié quand ramassé, artisanat = faux si le jeu dit
+--   qu'il ne sert à aucun artisanat }.
+function ns.categorie(classe, qualite, quete, utilisable, sousClasse, id, extra)
+  extra = extra or {}
+  if quete or classe == 12 or extra.livre then return "quete" end
   if ns.estOutilMetier and ns.estOutilMetier(classe, sousClasse, id) then return "metier" end
   if qualite == 0 then return "vendre" end
   local c = CLASSES[classe]
   if c == "equip" and utilisable == false then return "vendre" end
+  -- Lié et inutile à l'artisanat (un journal, un souvenir) : pas un composant.
+  if c == "compo" and extra.lie and extra.artisanat == false then return "divers" end
   return c or "divers"
 end
 
@@ -329,11 +335,13 @@ local function lire()
       total = total + 1
       local icone, nombre, verrou, qualite, lien, idObjet = infoCase(sac, case)
       if icone and lien then
-        local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse = infoObjet(lien)
+        local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, _, _, artisanat = infoObjet(lien)
         qualite = qualite or q or 1
         local utilisable = true
         if classe == 2 or classe == 4 then utilisable = ns.utilisableCase and ns.utilisableCase(sac, case, lien) end
-        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet)
+        local estLivre = LivresBiblio_EstUnLivre and nom and LivresBiblio_EstUnLivre(nom) or false
+        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet,
+          { livre = estLivre, lie = liaison == 1, artisanat = artisanat })
         local conseil
         if categorie == "equip" and ns.db and ns.db.conseils ~= false and ns.conseil then
           local ok, c = pcall(ns.conseil, lien)

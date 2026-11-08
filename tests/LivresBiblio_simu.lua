@@ -94,4 +94,6 @@ local cx, cy = ns.versContinent(0.5, 0.5, { 0.4, 0.6, 0.2, 0.4 })
 verifie("continent : x", 0.5, math.floor(cx * 1000 + 0.5) / 1000)
 verifie("continent : y", 0.3, math.floor(cy * 1000 + 0.5) / 1000)
 
+verifie("pour Sacs rangés : le journal de Théocritus est un livre", true, LivresBiblio_EstUnLivre("Journal de recherche de l'archimage Théocritus"))
+verifie("pour Sacs rangés : une potion n'est pas un livre", false, LivresBiblio_EstUnLivre("Potion de soins"))
 os.exit(ok and 0 or 1)
