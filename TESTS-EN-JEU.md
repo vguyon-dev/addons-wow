@@ -92,12 +92,13 @@ Avant de commencer :
 
 Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates ou Plater est installé, le désactiver pour ce test.
 
-- [ ] En combat contre un monstre seul : la barre devient rouge quand il te tape.
-- [ ] En groupe avec ton frère : verte quand il tape ton frère, orange quand il commence à te viser.
-- [ ] Le pourcentage de vie s'affiche au milieu de la barre et descend.
-- [ ] Un élite a une marque dorée à gauche de sa barre, un rare une marque argentée.
-- [ ] La barre de ta cible est un peu plus grande ; décocher l'option la remet comme avant.
-- [ ] En donjon : pas d'erreur. Si la couleur reste celle du jeu, c'est normal (le jeu cache la menace).
+- [ ] Les barres ont l'apparence du jeu (aucune couleur, aucun texte ajoutés quand les options sont décochées).
+- [ ] Un monstre de quête : grand « ! » jaune tout en haut de sa barre.
+- [ ] Un monstre qui fait tomber un objet de quête : « 2/6 » sous le « ! », avec l'icône de l'objet ; le chiffre monte quand tu ramasses.
+- [ ] Un monstre à tuer pour une quête : « 3/10 » avec une petite épée.
+- [ ] Quête finie : le « ! » et le chiffre disparaissent.
+- [ ] Options à essayer (réglages /bv) : couleur selon la menace, pourcentage, marques rare/élite, cible plus grande.
+- [ ] En donjon : pas d'erreur (le jeu peut cacher la menace et la bulle des monstres).
 - [ ] Après un combat : aucun message « fonction protégée » ni « taint » dans BugSack.
 
 ## Plus anciens, jamais confirmés

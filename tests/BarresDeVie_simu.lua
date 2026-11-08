@@ -43,5 +43,23 @@ verifie("rare élite : rare", "rare", ns.etoile("rareelite"))
 verifie("élite", "elite", ns.etoile("elite"))
 verifie("normal : rien", nil, ns.etoile("normal"))
 
+-- Quêtes lues dans la bulle du monstre
+local T = { titre = 17, objectif = 8 }
+local objs = ns.objectifs({
+  { type = 16, leftText = "Loup des bois" },
+  { type = 17, leftText = "Des crocs pour le forgeron" },
+  { type = 8, leftText = "Croc de loup : 2/6" },
+  { type = 8, leftText = "Loups des bois tués : 8/8", completed = true },
+  { type = 17, leftText = "La chasse" },
+  { type = 8, leftText = "Loups des bois tués : 3/10" },
+}, T)
+verifie("deux objectifs pas finis", 2, #objs)
+verifie("objet à ramasser : 2/6", "2/6", objs[1] and (objs[1].fait .. "/" .. objs[1].total))
+verifie("objet à ramasser : genre objet", "objet", objs[1] and objs[1].genre)
+verifie("objet à ramasser : son nom", "Croc de loup", objs[1] and objs[1].nom)
+verifie("monstre à tuer : genre tuer", "tuer", objs[2] and objs[2].genre)
+verifie("objectif fini par les chiffres : ignoré", 0, #ns.objectifs({ { type = 8, leftText = "Croc : 6/6" } }, T))
+verifie("monstre sans quête : rien", 0, #ns.objectifs({ { type = 16, leftText = "Kobold" } }, T))
+
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)
