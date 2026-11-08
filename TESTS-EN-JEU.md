@@ -64,6 +64,7 @@ Avant de commencer :
 - [ ] Ctrl + clic droit sur la carte du monde : une balise apparaît à cet endroit.
 - [ ] L'épingle du jeu (carte et minimap) suit la balise suivie.
 - [ ] Arrivé à moins de 10 m : un son, la balise disparaît, la suivante prend le relais.
+- [ ] La flèche est grosse au départ ; le curseur « Taille de la flèche » (60 à 300 %) la change aussitôt.
 - [ ] Clic droit sur la flèche : la balise est retirée. Glisser la flèche, puis « Replacer la flèche ».
 - [ ] Réglages : la liste des balises (la suivie marquée d'un « > »), la croix, « Balise ici », « Tout effacer ».
 - [ ] `/reload` : les balises sont toujours là.
@@ -104,6 +105,8 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).
 - [ ] Alerte rare : l'alerte des coffres et trésors.
 - [ ] Métiers auto : la flèche vers le filon connu le plus proche, et l'alerte « filon pas fini ».
+- [ ] Métiers auto : avec un personnage dépeceur (sans minage ni herboristerie), aucune flèche de minerai ; un herboriste ne voit que les herbes.
+- [ ] Métiers auto : ouvrir un coffre ne crée pas de nouvel « endroit connu ».
 - [ ] Quêtes auto : la récompense choisie seule (journal dans `/re`), le partage de quêtes avec le groupe.
 - [ ] Quêtes du groupe : le panneau en groupe avec ton frère.
 - [ ] Marchand auto : le rachat du stock.

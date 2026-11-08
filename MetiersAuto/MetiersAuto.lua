@@ -60,24 +60,52 @@ end
 
 -- Ajoute un endroit récolté à la liste d'une carte, sauf s'il y est déjà
 -- (même endroit à 15 m près). Renvoie true si c'est un nouvel endroit.
-function ns.memoriser(liste, x, y, nom, largeur, hauteur)
+function ns.memoriser(liste, x, y, nom, largeur, hauteur, genre)
   for _, p in ipairs(liste) do
     if ns.distance(p[1], p[2], x, y, largeur, hauteur) < 15 then
       p[3] = nom or p[3]
+      p[4] = genre or p[4]
       return false
     end
   end
-  liste[#liste + 1] = { x, y, nom }
+  liste[#liste + 1] = { x, y, nom, genre }
   if #liste > 400 then table.remove(liste, 1) end -- les plus anciens partent
   return true
 end
 
+-- Minerai ou herbe ? D'après ce qui est tombé : métal et pierre (classe 7,
+-- sous-classe 7) = minerai, herbe (7, 9) = herbe. Rien de tel (un coffre, un
+-- objet de quête) : nil, et l'endroit n'est pas retenu.
+function ns.genreDepuisButin(objets)
+  for _, o in ipairs(objets or {}) do
+    if o.classe == 7 and o.sousClasse == 7 then return "minerai" end
+    if o.classe == 7 and o.sousClasse == 9 then return "herbe" end
+  end
+  return nil
+end
+
+-- Pour les endroits notés avant : minerai si le nom le dit, sinon herbe.
+local MOTS_MINERAI = { "filon", "gisement", "veine", "depot", "dépôt", "minerai", "vein", "deposit", "ore", "lode" }
+function ns.genreDepuisNom(nom)
+  local n = tostring(nom or ""):lower()
+  for _, m in ipairs(MOTS_MINERAI) do
+    if n:find(m, 1, true) then return "minerai" end
+  end
+  return "herbe"
+end
+
 -- Le point connu le plus proche, en sautant ceux à moins de 20 m (celui que tu
 -- viens de finir) et ceux récoltés il y a peu (recent[point] = moment).
-function ns.plusProche(liste, x, y, largeur, hauteur, recent, maintenant)
+-- genres : [« minerai » | « herbe »] = vrai pour ce que ton personnage sait
+-- récolter (nil = tout).
+function ns.plusProche(liste, x, y, largeur, hauteur, recent, maintenant, genres)
   local meilleur, dMin
   for _, p in ipairs(liste) do
-    local d = ns.distance(x, y, p[1], p[2], largeur, hauteur)
+    -- Un endroit que ce personnage ne sait pas récolter est sauté (d = -1).
+    local d = -1
+    if not genres or genres[p[4] or ns.genreDepuisNom(p[3])] then
+      d = ns.distance(x, y, p[1], p[2], largeur, hauteur)
+    end
     local frais = recent and recent[p] and maintenant - recent[p] < 180
     if d >= 20 and not frais and (not dMin or d < dMin) then meilleur, dMin = p, d end
   end
@@ -375,14 +403,36 @@ local function ici()
   return carte, x, y, largeur, hauteur
 end
 
-local function memoriserIci()
+-- Ce que ce personnage sait récolter, d'après ses métiers (minage 186,
+-- herboristerie 182). Les endroits sont gardés pour tout le compte : sans ce
+-- filtre, un dépeceur voyait les filons notés par ton mineur.
+local genresCache, genresDate = nil, -100
+local function genresConnus()
+  if GetTime() - genresDate < 5 then return genresCache end
+  genresDate = GetTime()
+  genresCache = {}
+  if GetProfessions and GetProfessionInfo then
+    local metiers = { GetProfessions() } -- peut contenir des trous (nil)
+    for i = 1, 5 do
+      local index = metiers[i]
+      if index then
+        local skillLine = select(7, GetProfessionInfo(index))
+        if skillLine == 186 then genresCache.minerai = true end
+        if skillLine == 182 then genresCache.herbe = true end
+      end
+    end
+  end
+  return genresCache
+end
+
+local function memoriserIci(genre)
   local carte, x, y, l, h = ici()
-  if not carte then return end
+  if not carte or not genre then return end
   local nom = UnitName and UnitName("softinteract")
   if estSecret(nom) then nom = nil end
   db.filons[carte] = db.filons[carte] or {}
   local liste = db.filons[carte]
-  ns.memoriser(liste, x, y, nom, l, h)
+  ns.memoriser(liste, x, y, nom, l, h, genre)
   -- Le point qu'on vient de récolter est « frais » : la flèche le saute 3 minutes.
   for _, q in ipairs(liste) do
     if ns.distance(q[1], q[2], x, y, l, h) < 20 then recent[q] = GetTime() end
@@ -449,7 +499,7 @@ moteur:SetScript("OnUpdate", function(_, ecoule)
   local liste = carte and db.filons[carte]
   local p, d
   if liste and orientation and not estSecret(orientation) then
-    p, d = ns.plusProche(liste, x, y, l, h, recent, GetTime())
+    p, d = ns.plusProche(liste, x, y, l, h, recent, GetTime(), genresConnus())
   end
   if not p then fleche:Hide() return end
   image:SetRotation(ns.angleFleche(x, y, p[1], p[2], l, h, orientation))
@@ -479,8 +529,19 @@ local function verifierFilon(essai)
 end
 
 local function surButinRecolte()
-  -- Seulement un objet du monde (filon, herbe), pas un monstre ni la pêche.
-  if objetRecolte and not modePeche then memoriserIci() end
+  -- Seulement un objet du monde (filon, herbe), pas un monstre ni la pêche, et
+  -- seulement si le butin contient du minerai ou une herbe (pas un coffre).
+  if not objetRecolte or modePeche then return end
+  local objets = {}
+  for i = 1, (GetNumLootItems and GetNumLootItems() or 0) do
+    local lien = GetLootSlotLink and GetLootSlotLink(i)
+    local infos = lien and ((C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant)
+    if infos then
+      local _, _, _, _, _, classe, sousClasse = infos(lien)
+      objets[#objets + 1] = { classe = classe, sousClasse = sousClasse }
+    end
+  end
+  memoriserIci(ns.genreDepuisButin(objets))
 end
 
 local function surButinFerme()

@@ -22,6 +22,7 @@ local NOM_ADDON, ns = ...
 local DEFAUTS = {
   actif = true,
   fleche = true,        -- la flèche à l'écran
+  taille = 160,         -- taille de la flèche, en % (grosse par défaut : on ne la rate pas)
   epingle = true,       -- la balise suivie devient aussi l'épingle du jeu
   plusProche = true,    -- suivre la balise la plus proche (sinon la dernière posée)
   arrivee = true,       -- son et retrait de la balise à l'arrivée
@@ -263,6 +264,7 @@ end)
 fleche:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local function placerFleche()
+  fleche:SetScale((db.taille or 160) / 100)
   fleche:ClearAllPoints()
   local p = db.positionFleche
   if p then fleche:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else fleche:SetPoint("TOP", UIParent, "TOP", 0, -160) end
@@ -426,6 +428,9 @@ ns.reglages = ns.creerReglages({
       aide = "Balises par /way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte du monde." },
     { cle = "fleche", libelle = "La flèche à l'écran",
       aide = "Direction (verte quand tu vas dans le bon sens), distance et temps restant, même au-delà de 1 000 m. Glisser pour la déplacer, clic droit pour retirer la balise." },
+    { cle = "taille", type = "nombre", libelle = "Taille de la flèche", min = 60, max = 300, pas = 10,
+      format = function(v) return v .. " %" end,
+      aide = "Glisse la flèche à l'écran pour la placer où tu veux ; « Replacer la flèche » la remet en haut." },
     { cle = "epingle", libelle = "Épingle du jeu sur la balise suivie",
       aide = "La balise suivie apparaît aussi sur la carte et la minimap comme une épingle du jeu." },
     { cle = "suivreQuete", libelle = "Sans balise, suivre la quête suivie",
@@ -476,6 +481,7 @@ ns.reglages = ns.creerReglages({
     placerFleche()
   end,
   surChangement = function(d)
+    placerFleche()
     if not d.actif or not d.epingle then poserEpingle(nil) end
     suivie = nil
   end,

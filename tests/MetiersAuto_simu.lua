@@ -149,4 +149,18 @@ verifie("bouton du mode pêche", true, (cliquer("Démarrer le mode pêche")))
 essaie("commande /mt filons sans erreur", SlashCmdList.METIERSAUTO, "filons")
 essaie("commande /mt filons oublier sans erreur", SlashCmdList.METIERSAUTO, "filons oublier")
 
+-- Minerai ou herbe, et la flèche selon les métiers du personnage
+verifie("butin de cuivre : minerai", "minerai", ns.genreDepuisButin({ { classe = 7, sousClasse = 7 } }))
+verifie("butin de pacifique : herbe", "herbe", ns.genreDepuisButin({ { classe = 0, sousClasse = 0 }, { classe = 7, sousClasse = 9 } }))
+verifie("butin d'un coffre : rien de retenu", nil, ns.genreDepuisButin({ { classe = 4, sousClasse = 2 } }))
+verifie("ancien point « Filon de cuivre » : minerai", "minerai", ns.genreDepuisNom("Filon de cuivre"))
+verifie("ancien point « Pacifique » : herbe", "herbe", ns.genreDepuisNom("Pacifique"))
+local pts = { { 0.50, 0.50, "Filon de cuivre" }, { 0.60, 0.50, "Pacifique", "herbe" } }
+local p1 = ns.plusProche(pts, 0.40, 0.50, 1000, 1000, {}, 0, { herbe = true })
+verifie("herboriste : le filon plus proche est ignoré", "Pacifique", p1 and p1[3])
+local p2 = ns.plusProche(pts, 0.40, 0.50, 1000, 1000, {}, 0, {})
+verifie("dépeceur seul : aucune flèche", nil, p2)
+local p3 = ns.plusProche(pts, 0.40, 0.50, 1000, 1000, {}, 0, { minerai = true, herbe = true })
+verifie("mineur herboriste : le plus proche", "Filon de cuivre", p3 and p3[3])
+
 os.exit(ok and 0 or 1)
