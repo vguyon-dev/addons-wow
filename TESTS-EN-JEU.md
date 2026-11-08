@@ -101,6 +101,33 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] En donjon : pas d'erreur (le jeu peut cacher la menace et la bulle des monstres).
 - [ ] Après un combat : aucun message « fonction protégée » ni « taint » dans BugSack.
 
+## Montures (nouveau)
+
+- [ ] Réglages /montures : « Choisir la touche », appuyer sur une touche, elle s'affiche en vert.
+- [ ] La touche au sol : une monture terrestre ; réappuyer : tu descends.
+- [ ] Là où on peut voler : une volante. Dans l'eau : une aquatique (si tu en as une).
+- [ ] « Seulement mes favorites » : seulement celles marquées d'une étoile dans le journal des montures.
+- [ ] Le bouton à l'écran : clic pour monter, glisser pour le déplacer, clic droit pour les réglages.
+- [ ] En combat : message « pas de monture en combat », sans erreur.
+
+## Confort (nouveau)
+
+- [ ] Ton frère t'invoque : accepté tout seul, message dans le chat.
+- [ ] Ton frère te ressuscite : accepté tout seul.
+- [ ] Ton frère (ami ou guilde) t'invite en groupe : accepté ; un inconnu : la fenêtre reste.
+- [ ] Un inconnu te provoque en duel : refusé tout seul.
+- [ ] Caméra plus loin : tu peux dézoomer davantage ; décocher remet comme avant.
+- [ ] Masquer les griffons : ils disparaissent de la barre d'action (sur Forever et Retail).
+
+## Familier du chasseur (nouveau)
+
+- [ ] Renvoyer le familier hors ville : alerte « Ton familier n'est pas appelé » ; le bouton l'appelle.
+- [ ] Familier mort : alerte et bouton « Ressusciter le familier ».
+- [ ] Forever : le jeu donne-t-il l'humeur du familier ? Si oui, alerte « a faim » et le bouton « Nourrir » avec une nourriture qu'il aime.
+- [ ] Liste « Nourriture qu'il aime » dans les réglages : glisser sa viande, elle passe en premier.
+- [ ] En ville (auberge, capitale) : pas d'alerte « pas appelé ».
+- [ ] Pas d'erreur « fonction protégée » quand l'alerte change juste après un combat.
+
 ## Plus anciens, jamais confirmés
 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).

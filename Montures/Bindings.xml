@@ -1,0 +1,6 @@
+<!-- Raccourci : Échap > Options > Raccourcis > Montures (ou « Choisir la touche » dans les réglages). -->
+<Bindings>
+  <Binding name="MONTURES_MONTER" header="MONTURES" category="ADDONS">
+    Montures_Monter()
+  </Binding>
+</Bindings>
