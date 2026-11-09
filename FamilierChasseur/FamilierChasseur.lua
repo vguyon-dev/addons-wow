@@ -193,8 +193,11 @@ end
 
 local function verifier()
   if not db or not CHASSEUR then return end
-  if not db.actif then afficher(nil) return end
   if InCombatLockdown() then return end
+  -- Pas encore de familier (chasseur de bas niveau, sort « Appel du familier »
+  -- pas appris) : l'addon reste silencieux.
+  local connu = (IsPlayerSpell and IsPlayerSpell(883)) or (IsSpellKnown and IsSpellKnown(883))
+  if not db.actif or not connu then if etatAffiche then afficher(nil) end return end
   local existe = UnitExists("pet")
   local humeur = GetPetHappiness and (GetPetHappiness()) or nil
   local etat = ns.etat({
@@ -267,7 +270,7 @@ ns.reglages = ns.creerReglages({
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "UNIT_PET", "PET_UI_UPDATE", "UNIT_HAPPINESS", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD",
-  "PLAYER_UPDATE_RESTING", "BAG_UPDATE_DELAYED", "UNIT_HEALTH" }) do
+  "PLAYER_UPDATE_RESTING", "BAG_UPDATE_DELAYED", "UNIT_HEALTH", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 local prevu = false

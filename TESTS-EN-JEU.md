@@ -103,6 +103,7 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 
 ## Montures (nouveau)
 
+- [ ] Sans aucune monture (ton chasseur actuel) : pas de bouton à l'écran ; la touche dit « tu n'as pas encore de monture ». Le bouton apparaît avec ta première monture.
 - [ ] Réglages /montures : « Choisir la touche », appuyer sur une touche, elle s'affiche en vert.
 - [ ] La touche au sol : une monture terrestre ; réappuyer : tu descends.
 - [ ] Là où on peut voler : une volante. Dans l'eau : une aquatique (si tu en as une).
@@ -121,6 +122,7 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 
 ## Familier du chasseur (nouveau)
 
+- [ ] Avant d'avoir un familier (sort « Appel du familier » pas appris) : aucune alerte. Elles commencent une fois le sort appris.
 - [ ] Renvoyer le familier hors ville : alerte « Ton familier n'est pas appelé » ; le bouton l'appelle.
 - [ ] Familier mort : alerte et bouton « Ressusciter le familier ».
 - [ ] La croix ferme l'alerte ; elle ne revient que si la situation change (familier appelé puis renvoyé, mort…).

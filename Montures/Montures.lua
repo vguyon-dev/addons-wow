@@ -114,7 +114,10 @@ function Montures_Monter()
     groupe = IsInGroup and IsInGroup() or false,
   }
   local m = ns.choisir(lireMontures(), lieu, db, math.random)
-  if not m then ns.reglages.dire("aucune monture utilisable ici.") return end
+  if not m then
+    ns.reglages.dire(#lireMontures() == 0 and "tu n'as pas encore de monture." or "aucune monture utilisable ici.")
+    return
+  end
   C_MountJournal.SummonByID(m.id)
 end
 
@@ -155,7 +158,8 @@ local function placerBouton()
   bouton:ClearAllPoints()
   local p = db.positionBouton
   if p then bouton:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else bouton:SetPoint("CENTER", UIParent, "CENTER", 300, -200) end
-  bouton:SetShown(db.actif and db.bouton)
+  -- Pas encore de monture : pas de bouton (il apparaîtra avec la première).
+  bouton:SetShown(db.actif and db.bouton and #lireMontures() > 0)
 end
 
 -- Choisir la touche : on écoute la touche suivante (Échap annule).
@@ -232,6 +236,13 @@ ns.reglages = ns.creerReglages({
   auChargement = function(d) db = d end,
   surChangement = function() placerBouton() end,
 })
+
+-- Une nouvelle monture apprise : le bouton peut apparaître.
+local ecouteurMontures = CreateFrame("Frame")
+for _, e in ipairs({ "NEW_MOUNT_ADDED", "COMPANION_LEARNED", "PLAYER_ENTERING_WORLD" }) do
+  pcall(ecouteurMontures.RegisterEvent, ecouteurMontures, e)
+end
+ecouteurMontures:SetScript("OnEvent", function() if db then placerBouton() end end)
 
 SLASH_MONTURES1 = "/montures"
 SLASH_MONTURES2 = "/monture"
