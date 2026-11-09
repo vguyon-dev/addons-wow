@@ -71,6 +71,7 @@ Avant de commencer :
 - [ ] `/reload` : les balises sont toujours là.
 - [ ] Livres de bibliothèque : « Balise vers le livre le plus proche » passe par le GPS.
 - [ ] Sans aucune balise : la flèche montre l'objectif de la quête suivie (celle cliquée dans le suivi des objectifs), avec son titre.
+- [ ] Plusieurs quêtes suivies : cliquer une quête dans le suivi des objectifs la sélectionne, et la flèche suit celle-là (comme TomTom).
 - [ ] Quête finie : la flèche montre le PNJ à qui la rendre (« Rendre : … »).
 - [ ] Quête dans une autre zone : la flèche passe par le chemin du jeu (portail, bateau) quand il y en a un.
 - [ ] Une épingle posée à la main sur la carte du jeu : la flèche la suit, avant la quête.

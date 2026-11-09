@@ -276,12 +276,16 @@ end
 
 -- La quête à suivre : celle choisie dans le suivi des objectifs (super-suivi),
 -- sinon la première de la liste de suivi.
--- Toutes les quêtes candidates, dans l'ordre : la super-suivie, puis les suivies,
--- puis le reste du journal (on prendra la première dont le jeu donne la place).
+-- Les quêtes candidates : la quête sélectionnée dans le suivi des objectifs s'il
+-- y en a une (et elle seule), sinon les suivies puis le reste du journal (on
+-- prendra la première dont le jeu donne la place).
 local function quetesCandidates()
   local l, vues = {}, {}
   local function ajouter(id) if id and id ~= 0 and not vues[id] then vues[id] = true; l[#l + 1] = id end end
-  if C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID then ajouter(C_SuperTrack.GetSuperTrackedQuestID()) end
+  -- Une quête sélectionnée dans le suivi des objectifs (comme TomTom) : c'est
+  -- elle, et seulement elle.
+  local choisie = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+  if choisie and choisie ~= 0 then return { choisie }, true end
   if C_QuestLog.GetNumQuestWatches and C_QuestLog.GetQuestIDForQuestWatchIndex then
     for i = 1, C_QuestLog.GetNumQuestWatches() or 0 do ajouter(C_QuestLog.GetQuestIDForQuestWatchIndex(i)) end
   end
@@ -329,14 +333,16 @@ local function cibleAuto(carteIci)
   end
   -- La quête suivie.
   if not auto and db.suivreQuete then
-    local quetes = quetesCandidates()
+    local quetes, selectionnee = quetesCandidates()
     local id, carte, x, y
     for _, q in ipairs(quetes) do
       carte, x, y = lieuQuete(q, carteIci)
       if carte then id = q break end
     end
     if not carte then
-      diagnostic = #quetes == 0 and "aucune quête dans ton journal"
+      local titre = selectionnee and C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(quetes[1])
+      diagnostic = selectionnee and ("la quête sélectionnée « " .. (titre or "?") .. " » n'a pas de place donnée par le jeu")
+        or #quetes == 0 and "aucune quête dans ton journal"
         or (#quetes .. " quête(s), mais le jeu ne donne la place d'aucune (pas de marque de quête sur la carte ici)")
     end
     if carte then
