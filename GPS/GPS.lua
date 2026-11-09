@@ -276,13 +276,24 @@ end
 
 -- La quête à suivre : celle choisie dans le suivi des objectifs (super-suivi),
 -- sinon la première de la liste de suivi.
-local function queteSuivie()
-  local id = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
-  if (not id or id == 0) and C_QuestLog.GetQuestIDForQuestWatchIndex then
-    id = C_QuestLog.GetQuestIDForQuestWatchIndex(1)
+-- Toutes les quêtes candidates, dans l'ordre : la super-suivie, puis les suivies,
+-- puis le reste du journal (on prendra la première dont le jeu donne la place).
+local function quetesCandidates()
+  local l, vues = {}, {}
+  local function ajouter(id) if id and id ~= 0 and not vues[id] then vues[id] = true; l[#l + 1] = id end end
+  if C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID then ajouter(C_SuperTrack.GetSuperTrackedQuestID()) end
+  if C_QuestLog.GetNumQuestWatches and C_QuestLog.GetQuestIDForQuestWatchIndex then
+    for i = 1, C_QuestLog.GetNumQuestWatches() or 0 do ajouter(C_QuestLog.GetQuestIDForQuestWatchIndex(i)) end
   end
-  if id and id ~= 0 then return id end
+  if C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo then
+    for i = 1, C_QuestLog.GetNumQuestLogEntries() or 0 do
+      local info = C_QuestLog.GetInfo(i)
+      if info and not info.isHeader and info.questID then ajouter(info.questID) end
+    end
+  end
+  return l
 end
+local diagnostic = "pas encore calculé"
 
 -- Où aller pour cette quête : le prochain point du jeu (portail, bateau…), sinon
 -- la marque de la quête sur la carte où tu es ou sur ses cartes parentes.
@@ -307,6 +318,7 @@ local function cibleAuto(carteIci)
   if GetTime() - autoCalcule < 0.5 then return auto end
   autoCalcule = GetTime()
   auto = nil
+  diagnostic = "aucune balise ni épingle, et « suivre la quête » est décoché"
   -- Une épingle que tu as posée toi-même sur la carte du jeu.
   if db.suivreEpingle and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
     local p = C_Map.GetUserWaypoint()
@@ -317,8 +329,16 @@ local function cibleAuto(carteIci)
   end
   -- La quête suivie.
   if not auto and db.suivreQuete then
-    local id = queteSuivie()
-    local carte, x, y = id and lieuQuete(id, carteIci)
+    local quetes = quetesCandidates()
+    local id, carte, x, y
+    for _, q in ipairs(quetes) do
+      carte, x, y = lieuQuete(q, carteIci)
+      if carte then id = q break end
+    end
+    if not carte then
+      diagnostic = #quetes == 0 and "aucune quête dans ton journal"
+        or (#quetes .. " quête(s), mais le jeu ne donne la place d'aucune (pas de marque de quête sur la carte ici)")
+    end
     if carte then
       local titre = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id) or "Quête"
       local fini = C_QuestLog.IsComplete and C_QuestLog.IsComplete(id)
@@ -336,7 +356,7 @@ moteur:SetScript("OnUpdate", function(_, ecoule)
   attente = attente + ecoule
   if attente < 0.1 then return end
   attente = 0
-  if not db or not db.actif then fleche:Hide() return end
+  if not db or not db.actif then diagnostic = "GPS coupé"; fleche:Hide() return end
   local moi, carteIci = ici()
   local b, d
   if #perso.balises > 0 then
@@ -357,7 +377,15 @@ moteur:SetScript("OnUpdate", function(_, ecoule)
     -- L'épingle du jeu ne suit que nos balises : la quête a déjà sa marque.
     if not (b and b.auto) then poserEpingle(b) end
   end
-  if not b or not d then fleche:Hide() return end
+  if not b then
+    if #perso.balises > 0 then diagnostic = "tes balises sont sur un autre continent" end
+    fleche:Hide() return
+  end
+  if not d then
+    diagnostic = moi and "« " .. (b.titre or "?") .. " » est sur un autre continent" or "ta position est inconnue ici (donjon ?)"
+    fleche:Hide() return
+  end
+  diagnostic = "suit « " .. (b.titre or "Balise") .. " », " .. math.floor(d + 0.5) .. " m"
 
   -- Arrivé (seulement pour nos balises : une quête se termine dans le jeu).
   if d < 10 and not b.auto then
@@ -377,7 +405,7 @@ moteur:SetScript("OnUpdate", function(_, ecoule)
   end
   derniere.d, derniere.t = d, maintenant
 
-  if not db.fleche then fleche:Hide() return end
+  if not db.fleche then diagnostic = diagnostic .. " (flèche décochée)"; fleche:Hide() return end
   local orientation = GetPlayerFacing and GetPlayerFacing()
   if orientation and not estSecret(orientation) then
     local a = ns.angle(moi.x, moi.y, b.monde.x, b.monde.y, orientation)
@@ -456,6 +484,15 @@ ns.reglages = ns.creerReglages({
     end },
   },
   contenu = function(f, y)
+    -- Ce que fait la flèche en ce moment, et sinon pourquoi elle est cachée.
+    local diag = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    diag:SetPoint("TOPLEFT", 20, y - 4)
+    diag:SetWidth(390)
+    diag:SetJustifyH("LEFT")
+    C_Timer.NewTicker(1, function()
+      if diag:IsVisible() then diag:SetText("|cffffd200En ce moment :|r " .. diagnostic) end
+    end)
+    y = y - 34
     local maj
     y, maj = ns.creerListe(f, y, {
       titre = "Balises", vide = "Aucune balise. /way 45.2 67.8 Titre",
@@ -502,6 +539,7 @@ local function commandeWay(message)
   local m = strtrim(message or "")
   local bas = m:lower()
   if bas == "" or bas == "liste" then ns.reglages.montrer() return end
+  if bas == "etat" or bas == "état" then ns.reglages.dire("en ce moment : " .. diagnostic) return end
   if bas == "effacer" or bas == "reset" then toutEffacer() ns.reglages.dire("balises effacées.") return end
   local _, carte = ici()
   local r, erreur = ns.lireWay(m, carte, cartes())

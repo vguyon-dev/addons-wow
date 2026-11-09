@@ -3,7 +3,7 @@
 ## Notes: Balises (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte) et une flèche avec distance et temps restant, même loin.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.3.0
+## Version: 0.3.1
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
 ## SavedVariables: GPSDB
 ## SavedVariablesPerCharacter: GPSPerso

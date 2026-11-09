@@ -58,6 +58,7 @@ Avant de commencer :
 
 ## GPS (nouveau)
 
+- [ ] `/gps etat` (ou la ligne « En ce moment » des réglages) dit ce que suit la flèche, ou pourquoi elle est cachée.
 - [ ] `/way 45.2 67.8 Test` : la flèche apparaît, avec le titre, la distance et le temps restant quand tu avances.
 - [ ] La flèche tourne dans le bon sens et devient verte quand tu marches droit vers la balise.
 - [ ] `/way Hurlevent 60 70` depuis Elwynn : la flèche montre une balise dans une autre zone.
