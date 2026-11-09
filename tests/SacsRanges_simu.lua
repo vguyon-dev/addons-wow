@@ -80,7 +80,21 @@ end
 verifie("compétences identiques à QuetesAuto", true, pareil)
 -- Vue par catégories : la section de chaque objet.
 verifie("catégorie : arme portable", "equip", ns.categorie(2, 2, false, true))
-verifie("catégorie : arme pas apprise, à vendre", "vendre", ns.categorie(2, 1, false, false))
+verifie("arme pas apprise, pas liée : Tu ne peux pas le porter", "pasPourToi", ns.categorie(2, 1, false, false))
+verifie("arme pas apprise et liée : À vendre", "vendre", ns.categorie(2, 1, false, false, 0, 1, { estLie = true, raison = "autre" }))
+verifie("liée mais seulement trop haut en niveau : Tu ne peux pas le porter", "pasPourToi",
+  ns.categorie(4, 2, false, false, 0, 1, { estLie = true, raison = "niveau" }))
+verifie("raison : niveau seul", "niveau", (ns.raisonPasPortable({ "Niveau 20 requis" })))
+verifie("raison : arme pas apprise", "autre", (ns.raisonPasPortable({ "Arc", "Niveau 20 requis" })))
+verifie("texte : gris", "objet gris", ns.texteRangement("vendre", 0, false))
+verifie("texte : pas lié, se donne", true,
+  (ns.texteRangement("pasPourToi", 2, false, "Arc") or ""):find("tu peux le donner", 1, true) ~= nil)
+local milice = { stats = { dps = 2.0 }, type = "INVTYPE_WEAPON", nom = "Dague de la milice" }
+verifie("moins bon : la dague usée face à la milice", "Dague de la milice",
+  ns.estMoinsBon({ stats = { dps = 0.9 }, type = "INVTYPE_WEAPON" }, { [16] = milice }, "agilite", false, false))
+verifie("emplacement vide : jamais « moins bon »", nil, ns.estMoinsBon({ stats = { agilite = 1 }, type = "INVTYPE_HAND" }, {}, "agilite"))
+verifie("meilleur : pas « moins bon »", nil,
+  ns.estMoinsBon({ stats = { dps = 3 }, type = "INVTYPE_WEAPON" }, { [16] = milice }, "agilite", false, false))
 verifie("catégorie : gris, à vendre", "vendre", ns.categorie(15, 0, false, true))
 verifie("catégorie : objet de quête gris reste en Quête", "quete", ns.categorie(15, 0, true, true))
 verifie("catégorie : classe quête", "quete", ns.categorie(12, 1, false, true))

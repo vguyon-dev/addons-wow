@@ -190,6 +190,7 @@ local function ligneRouge(sac, case)
   bulle:SetBagItem(sac, case)
   local n = bulle:NumLines() or 0
   local rouge = n > 0 and false or nil
+  local textes = {}
   for l = 2, n do -- la ligne 1 est le nom de l'objet
     for _, cote in ipairs({ "Left", "Right" }) do
       local t = _G["SacsRangesBulleText" .. cote .. l]
@@ -197,21 +198,40 @@ local function ligneRouge(sac, case)
       -- Une pièce cassée affiche sa durabilité en rouge : elle se répare, on l'ignore.
       if mot and not mot:find("%d+%s*/%s*%d+") then
         local r, g, b = t:GetTextColor()
-        if r > 0.9 and g < 0.2 and b < 0.2 then rouge = true end
+        if r > 0.9 and g < 0.2 and b < 0.2 then rouge = true; textes[#textes + 1] = mot end
       end
     end
   end
   bulle:Hide()
-  return rouge
+  return rouge, textes
+end
+
+-- Pourquoi on ne peut pas le porter, d'après les lignes rouges de la bulle :
+-- « niveau » quand c'est seulement le niveau (tu pourras le porter plus tard),
+-- « autre » sinon (classe, arme ou armure pas apprise, race…). Rend aussi le texte.
+function ns.raisonPasPortable(textes)
+  local niveau = ITEM_MIN_LEVEL and ITEM_MIN_LEVEL:gsub("%%d", "%%d+") or nil
+  local autre
+  for _, t in ipairs(textes or {}) do
+    local estNiveau = (niveau and t:find(niveau)) or t:find("^Niveau %d+ requis") or t:find("^Requires Level %d+")
+    if not estNiveau then autre = autre or t end
+  end
+  if autre then return "autre", autre end
+  if textes and textes[1] then return "niveau", textes[1] end
+  return "autre", nil
 end
 
 -- Peut-on porter l'objet de cette case ? (vrai pour tout ce qui n'est pas de
 -- l'équipement). Sert à la vue par catégories pour la section « À vendre ».
+-- Rend aussi la raison (« niveau » ou « autre ») et son texte quand on ne peut pas.
 function ns.utilisableCase(sac, case, lien)
   local typ, _, _, classeObjet, sousClasse = select(9, infoObjet(lien))
   if not (typ and EMPLACEMENTS[typ]) then return true end
-  local lu, rouge = pcall(ligneRouge, sac, case)
-  return ns.utilisable(classeObjet, sousClasse, competences(), lu and rouge or nil)
+  local lu, rouge, textes = pcall(ligneRouge, sac, case)
+  local ok = ns.utilisable(classeObjet, sousClasse, competences(), lu and rouge or nil)
+  if ok then return true end
+  if lu and rouge then return false, ns.raisonPasPortable(textes) end
+  return false, "autre", "arme ou armure pas apprise"
 end
 ns.nbCases = nbCases
 

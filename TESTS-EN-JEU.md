@@ -36,6 +36,10 @@ Avant de commencer :
 - [ ] Section « Métiers » : canne à pêche et couteau à dépecer (déjà vu, à reconfirmer après les dernières versions).
 - [ ] Le livre de bibliothèque est rangé dans « Quête » (déjà vu, à reconfirmer).
 - [ ] Bulles d'objets : la ligne verte « Mieux pour <spécialisation> » sur une récompense de quête, un objet de marchand et un butin. Rien sur un objet moins bon ou que tu ne peux pas porter.
+- [ ] Section « Tu ne peux pas le porter » : équipement pas lié que tu ne peux pas porter, ou seulement trop haut en niveau.
+- [ ] Section « À vendre » : les gris, et l'équipement lié que ta classe ne peut pas porter.
+- [ ] Bulle d'un objet de ces sections : « Rangé ici : … » avec la raison.
+- [ ] Équipement moins bon que ce que tu portes : flèche rouge vers le bas, et « Moins bon que … » dans la bulle.
 - [ ] Apparence « cadre du jeu » et nouveau visuel.
 - [ ] Retail : le sac rangé et ses cases (tout n'a été vu que sur Forever).
 - [ ] Barre Ranger, Analyse et Banque collée au sac du jeu, quand le sac rangé est décoché.

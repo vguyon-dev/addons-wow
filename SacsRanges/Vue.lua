@@ -26,6 +26,7 @@ ns.SECTIONS = {
   { id = "metier", nom = "Métiers", couleur = { 0.55, 0.80, 0.85 } },
   { id = "quete", nom = "Quête", couleur = { 1.00, 0.82, 0.20 } },
   { id = "divers", nom = "Divers", couleur = { 0.75, 0.70, 0.62 } },
+  { id = "pasPourToi", nom = "Tu ne peux pas le porter", couleur = { 0.88, 0.48, 0.37 } },
   { id = "vendre", nom = "À vendre", couleur = { 0.62, 0.62, 0.62 } },
 }
 
@@ -46,7 +47,13 @@ function ns.categorie(classe, qualite, quete, utilisable, sousClasse, id, extra)
   if ns.estOutilMetier and ns.estOutilMetier(classe, sousClasse, id) then return "metier" end
   if qualite == 0 then return "vendre" end
   local c = CLASSES[classe]
-  if c == "equip" and utilisable == false then return "vendre" end
+  -- Équipement que tu ne peux pas porter : lié (ni donnable ni vendable à
+  -- l'hôtel des ventes) et pas une simple question de niveau -> à vendre ;
+  -- sinon il se donne, se vend aux enchères ou se portera plus tard.
+  if c == "equip" and utilisable == false then
+    if extra.estLie and extra.raison ~= "niveau" then return "vendre" end
+    return "pasPourToi"
+  end
   -- Lié et inutile à l'artisanat (un journal, un souvenir) : pas un composant.
   if c == "compo" and extra.lie and extra.artisanat == false then return "divers" end
   return c or "divers"
@@ -54,6 +61,18 @@ end
 
 -- Range les objets lus ({ sac, case, categorie, nom, qualite }) par section, et
 -- dans chaque section par qualité (la meilleure d'abord) puis par nom.
+-- La phrase « pourquoi c'est rangé ici », pour la bulle de l'objet.
+function ns.texteRangement(categorie, qualite, estLie, texte)
+  if categorie == "vendre" then
+    if qualite == 0 then return "objet gris" end
+    return "lié, et tu ne pourras pas le porter" .. (texte and (" (" .. texte .. ")") or "")
+  end
+  if categorie == "pasPourToi" then
+    return (texte or "tu ne peux pas le porter") .. (estLie and "" or " ; pas lié : tu peux le donner ou le vendre aux enchères")
+  end
+  return nil
+end
+
 function ns.repartir(objets)
   local parSection = {}
   for _, s in ipairs(ns.SECTIONS) do parSection[s.id] = {} end
@@ -92,10 +111,10 @@ local function infoCase(sac, case)
   if C_Container and C_Container.GetContainerItemInfo then
     local i = C_Container.GetContainerItemInfo(sac, case)
     if not i then return nil end
-    return i.iconFileID, i.stackCount, i.isLocked, i.quality, i.hyperlink, i.itemID
+    return i.iconFileID, i.stackCount, i.isLocked, i.quality, i.hyperlink, i.itemID, i.isBound
   end
   local icone, nombre, verrou, qualite, _, _, lien, _, _, id = GetContainerItemInfo(sac, case)
-  return icone, nombre, verrou, qualite, lien, id
+  return icone, nombre, verrou, qualite, lien, id, nil
 end
 
 local function infoQuete(sac, case)
@@ -272,16 +291,37 @@ local function caseDe(sac, case)
   b.fleche:SetSize(22, 22)
   b.fleche:SetPoint("TOPLEFT", -5, 5)
   b.fleche:Hide()
-  -- La raison du conseil, ajoutée à la bulle d'aide de l'objet (sauf si l'avis
-  -- est déjà ajouté à toutes les bulles par Conseils.lua).
+  -- La flèche rouge vers le bas : moins bon que ce que tu portes.
+  b.moins = b:CreateTexture(nil, "OVERLAY", nil, 7)
+  b.moins:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+  b.moins:SetVertexColor(1, 0.25, 0.2)
+  b.moins:SetSize(20, 20)
+  b.moins:SetPoint("TOPLEFT", -5, 5)
+  b.moins:Hide()
+  -- Dans la bulle de l'objet : pourquoi il est rangé là, s'il est moins bon, et
+  -- la raison du conseil (sauf si l'avis est déjà dans toutes les bulles).
   b:HookScript("OnEnter", function(self)
+    if not GameTooltip:IsShown() then return end
+    local ajoute = false
+    if self.raison then
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddLine("Rangé ici : " .. self.raison, 1, 0.82, 0, true)
+      ajoute = true
+    end
+    if self.moinsQue then
+      if not ajoute then GameTooltip:AddLine(" ") end
+      GameTooltip:AddLine("Moins bon que " .. self.moinsQue .. " (ce que tu portes).", 1, 0.3, 0.25, true)
+      ajoute = true
+    end
     local c = self.conseil
-    if not c or not GameTooltip:IsShown() or (ns.bullesActives and ns.bullesActives()) then return end
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
-      .. " : " .. (c.raison or ""), 0.12, 1, 0)
-    if c.remplace then GameTooltip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
-    GameTooltip:Show()
+    if c and not (ns.bullesActives and ns.bullesActives()) then
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
+        .. " : " .. (c.raison or ""), 0.12, 1, 0)
+      if c.remplace then GameTooltip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
+      ajoute = true
+    end
+    if ajoute then GameTooltip:Show() end
   end)
   cases[cle] = b
   return b
@@ -302,8 +342,9 @@ local function remplir(b, icone, nombre, verrou, qualite, lien)
   if SetItemButtonDesaturated then SetItemButtonDesaturated(b, verrou) end
   if SetItemButtonQuality then pcall(SetItemButtonQuality, b, qualite, lien) end
   b.libres:SetText("")
-  b.conseil = nil
+  b.conseil, b.raison, b.moinsQue = nil, nil, nil
   b.fleche:Hide()
+  b.moins:Hide()
 end
 
 -- Les lignes de la section « À équiper » : le nom de l'objet et la raison, à droite de la case.
@@ -334,23 +375,30 @@ local function lire()
     local n = ns.nbCases and ns.nbCases(sac) or 0
     for case = 1, n do
       total = total + 1
-      local icone, nombre, verrou, qualite, lien, idObjet = infoCase(sac, case)
+      local icone, nombre, verrou, qualite, lien, idObjet, estLie = infoCase(sac, case)
       if icone and lien then
         local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, _, _, artisanat = infoObjet(lien)
         qualite = qualite or q or 1
-        local utilisable = true
-        if classe == 2 or classe == 4 then utilisable = ns.utilisableCase and ns.utilisableCase(sac, case, lien) end
+        local utilisable, raison, texteRaison = true, nil, nil
+        if (classe == 2 or classe == 4) and ns.utilisableCase then
+          utilisable, raison, texteRaison = ns.utilisableCase(sac, case, lien)
+        end
         local estLivre = LivresBiblio_EstUnLivre and nom and LivresBiblio_EstUnLivre(nom) or false
         local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet,
-          { livre = estLivre, lie = liaison == 1, artisanat = artisanat })
-        local conseil
+          { livre = estLivre, lie = liaison == 1, artisanat = artisanat, estLie = estLie, raison = raison })
+        local conseil, moins
         if categorie == "equip" and ns.db and ns.db.conseils ~= false and ns.conseil then
           local ok, c = pcall(ns.conseil, lien)
           if ok then conseil = c end
+          if not conseil and ns.moinsBon then
+            local okM, m = pcall(ns.moinsBon, lien)
+            if okM then moins = m end
+          end
         end
         objets[#objets + 1] = {
           sac = sac, case = case, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite, lien = lien,
-          nom = nom or lien, categorie = categorie, conseil = conseil,
+          nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins,
+          raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
       else
         libres = libres + 1
@@ -451,6 +499,8 @@ local function majVue()
             b:SetPoint("TOPLEFT", contenu, "TOPLEFT", col * (TAILLE + ECART), -(y + ligne * (TAILLE + ECART)))
           end
           remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
+          b.raison, b.moinsQue = o.raison, o.moins
+          if o.moins then b.moins:Show() end
           b:SetAlpha(visible(o) and 1 or 0.2)
           b:Show()
         end

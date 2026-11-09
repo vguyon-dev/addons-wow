@@ -135,6 +135,29 @@ function ns.comparer(objet, portes, principale, aEmplacementDistance, ambidextre
   return nil
 end
 
+-- Moins bon que ce que tu portes ? Renvoie le nom de l'objet porté qui est
+-- meilleur, ou nil (emplacement vide, ou pas moins bon). Pour une bague ou un
+-- bijou, on compare au moins bon des deux portés.
+function ns.estMoinsBon(objet, portes, principale, aEmplacementDistance, ambidextre)
+  local emplacements = ns.emplacementsPour(objet.type, aEmplacementDistance)
+  if not emplacements then return nil end
+  if objet.type == "INVTYPE_WEAPON" and not ambidextre then emplacements = { 16 } end
+  local pire, notePire
+  for _, e in ipairs(emplacements) do
+    local porte = portes[e]
+    if not porte then return nil end -- un emplacement vide : il servirait
+    local n = ns.note(porte.stats, principale)
+    if not notePire or n < notePire then pire, notePire = porte, n end
+  end
+  local n = ns.note(objet.stats, principale)
+  if n > 0 or notePire > 0 then
+    if n < notePire * 0.98 - 0.05 then return pire.nom or "ce que tu portes" end
+    return nil
+  end
+  if (objet.niveau or 0) < (pire.niveau or 0) then return pire.nom or "ce que tu portes" end
+  return nil
+end
+
 -- Caractéristique principale d'une classe (quand la spécialisation est inconnue).
 ns.PRINCIPALE_CLASSE = {
   WARRIOR = "force", PALADIN = "force", DEATHKNIGHT = "force",
@@ -149,6 +172,7 @@ if not CreateFrame or not GetInventoryItemLink then return end -- hors jeu : la 
 -- Accès au jeu
 -- ---------------------------------------------------------------------------
 
+local moins = {}       -- lien -> nom de l'objet porté meilleur, ou false
 local cache = {}       -- lien -> résultat (vidé quand l'équipement ou la spé change)
 local principale, nomSpe
 
@@ -239,11 +263,20 @@ function ns.conseil(lien)
     end
     for e, v in pairs(portes) do if v == false then portes[e] = nil end end
     local ambidextre = CanDualWield and CanDualWield() or false
-    resultat = ns.comparer({ stats = statsDe(lien), niveau = niveau, type = typeObjet }, portes, principale, aDistance,
-      ambidextre) or false
+    local objet = { stats = statsDe(lien), niveau = niveau, type = typeObjet }
+    resultat = ns.comparer(objet, portes, principale, aDistance, ambidextre) or false
+    -- On garde aussi « moins bon » pour la marque du sac (ns.moinsBon).
+    moins[lien] = (not resultat) and ns.estMoinsBon(objet, portes, principale, aDistance, ambidextre) or false
   end
   cache[cle] = resultat
   return resultat or nil
+end
+
+-- Le nom de l'objet porté qui est meilleur, ou nil.
+function ns.moinsBon(lien)
+  if not lien then return nil end
+  if moins[lien] == nil then ns.conseil(lien) end
+  return moins[lien] or nil
 end
 
 -- ---------------------------------------------------------------------------
@@ -315,6 +348,7 @@ for _, e in ipairs({ "PLAYER_EQUIPMENT_CHANGED", "PLAYER_SPECIALIZATION_CHANGED"
 end
 ecouteur:SetScript("OnEvent", function()
   cache = {}
+  moins = {}
   principale = nil
   if ns.vueMaj then ns.vueMaj() end
 end)
