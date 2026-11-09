@@ -100,6 +100,17 @@ if alerte.SetBackdrop then
   alerte:SetBackdropBorderColor(1, 0.3, 0.2, 1)
 end
 alerte:Hide()
+-- L'alerte se déplace en la faisant glisser (position gardée).
+alerte:SetMovable(true)
+alerte:SetClampedToScreen(true)
+alerte:EnableMouse(true)
+alerte:RegisterForDrag("LeftButton")
+alerte:SetScript("OnDragStart", alerte.StartMoving)
+alerte:SetScript("OnDragStop", function(self)
+  self:StopMovingOrSizing()
+  local p, _, rp, x, y = self:GetPoint()
+  db.positionAlerte = { p, rp, x, y }
+end)
 local texte = alerte:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 texte:SetPoint("TOP", 0, -12)
 texte:SetTextColor(1, 0.35, 0.25)
@@ -115,9 +126,39 @@ action:SetAttribute("type", "macro")
 action:Hide()
 
 local etatAffiche
+local ferme -- l'état que tu as fermé avec la croix : plus d'alerte tant qu'il dure
+
+-- La croix : ferme l'alerte jusqu'à ce que la situation change. En combat, le jeu
+-- interdit de cacher un bouton d'action : on le rend invisible, et on le cache
+-- vraiment à la fin du combat.
+local croix = CreateFrame("Button", nil, alerte, "UIPanelCloseButton")
+croix:SetPoint("TOPRIGHT", 0, 0)
+croix:SetScript("OnClick", function()
+  ferme = etatAffiche
+  if InCombatLockdown() then
+    alerte:SetAlpha(0); action:SetAlpha(0)
+  else
+    alerte:Hide(); action:Hide()
+  end
+end)
+croix:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  GameTooltip:AddLine("Fermer")
+  GameTooltip:AddLine("L'alerte revient seulement si la situation change. Pour ne plus jamais la voir : /familier (réglages).", 1, 1, 1, true)
+  GameTooltip:Show()
+end)
+croix:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local function placerAlerte()
+  alerte:ClearAllPoints()
+  local p = db.positionAlerte
+  if p then alerte:SetPoint(p[1], UIParent, p[2], p[3], p[4]) else alerte:SetPoint("TOP", UIParent, "TOP", 0, -200) end
+end
+
 local function afficher(etat, nomFamilier)
   if InCombatLockdown() then return end -- le bouton ne change qu'hors combat
   etatAffiche = etat
+  alerte:SetAlpha(1); action:SetAlpha(1)
   if not etat then alerte:Hide(); action:Hide() return end
   local appel, ressu, nourrir = nomSort(883), nomSort(982), nomSort(6991)
   local qui = nomFamilier or "Ton familier"
@@ -161,6 +202,15 @@ local function verifier()
     auRepos = IsResting and IsResting() or false, enCombat = InCombatLockdown(),
   }, db)
   if UnitOnTaxi and UnitOnTaxi("player") then etat = nil end
+  -- Fermée avec la croix : rien tant que la situation n'a pas changé.
+  if ferme then
+    if etat == ferme then
+      if alerte:IsShown() then alerte:Hide(); action:Hide(); alerte:SetAlpha(1); action:SetAlpha(1) end
+      etatAffiche = etat
+      return
+    end
+    ferme = nil
+  end
   if etat ~= etatAffiche then afficher(etat, existe and UnitName("pet") or nil) end
 end
 
@@ -206,7 +256,12 @@ ns.reglages = ns.creerReglages({
     })
     return y, maj
   end,
-  auChargement = function(d) db = d end,
+  boutons = {
+    { texte = "Replacer l'alerte", aide = "Remet l'alerte en haut de l'écran.", action = function()
+      db.positionAlerte = nil; placerAlerte()
+    end },
+  },
+  auChargement = function(d) db = d; placerAlerte() end,
   surChangement = function() etatAffiche = false; verifier() end,
 })
 

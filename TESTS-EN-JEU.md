@@ -123,6 +123,8 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 
 - [ ] Renvoyer le familier hors ville : alerte « Ton familier n'est pas appelé » ; le bouton l'appelle.
 - [ ] Familier mort : alerte et bouton « Ressusciter le familier ».
+- [ ] La croix ferme l'alerte ; elle ne revient que si la situation change (familier appelé puis renvoyé, mort…).
+- [ ] L'alerte se déplace en la faisant glisser ; « Replacer l'alerte » dans les réglages la remet en haut.
 - [ ] Forever : le jeu donne-t-il l'humeur du familier ? Si oui, alerte « a faim » et le bouton « Nourrir » avec une nourriture qu'il aime.
 - [ ] Liste « Nourriture qu'il aime » dans les réglages : glisser sa viande, elle passe en premier.
 - [ ] En ville (auberge, capitale) : pas d'alerte « pas appelé ».

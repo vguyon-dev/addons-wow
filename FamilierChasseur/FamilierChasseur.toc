@@ -3,7 +3,7 @@
 ## Notes: Prévient quand ton familier a faim, est mort ou n'est pas appelé, avec le bon bouton (Nourrir, Ressusciter, Appeler).
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.1.1
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastCall
 ## SavedVariables: FamilierChasseurDB
 ## AddonCompartmentFunc: FamilierChasseur_OuvrirReglages
