@@ -298,33 +298,42 @@ local function caseDe(sac, case)
   b.moins:SetSize(20, 20)
   b.moins:SetPoint("TOPLEFT", -5, 5)
   b.moins:Hide()
-  -- Dans la bulle de l'objet : pourquoi il est rangé là, s'il est moins bon, et
-  -- la raison du conseil (sauf si l'avis est déjà dans toutes les bulles).
-  b:HookScript("OnEnter", function(self)
-    if not GameTooltip:IsShown() then return end
-    local ajoute = false
-    if self.raison then
-      GameTooltip:AddLine(" ")
-      GameTooltip:AddLine("Rangé ici : " .. self.raison, 1, 0.82, 0, true)
-      ajoute = true
-    end
-    if self.moinsQue then
-      if not ajoute then GameTooltip:AddLine(" ") end
-      GameTooltip:AddLine("Moins bon que " .. self.moinsQue .. " (ce que tu portes).", 1, 0.3, 0.25, true)
-      ajoute = true
-    end
-    local c = self.conseil
-    if c and not (ns.bullesActives and ns.bullesActives()) then
-      GameTooltip:AddLine(" ")
-      GameTooltip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
-        .. " : " .. (c.raison or ""), 0.12, 1, 0)
-      if c.remplace then GameTooltip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
-      ajoute = true
-    end
-    if ajoute then GameTooltip:Show() end
-  end)
+  b.estCaseSacsRanges = true -- pour la bulle (voir ajouterRangement plus bas)
   cases[cle] = b
   return b
+end
+
+-- Dans la bulle d'un objet du sac rangé : pourquoi il est rangé là, s'il est
+-- moins bon, et la raison du conseil (sauf si l'avis est déjà dans toutes les
+-- bulles). Passe par le crochet des bulles du jeu : tant que la souris reste
+-- sur une case, le jeu redessine la bulle sans arrêt, ce qui effaçait des lignes
+-- ajoutées une seule fois au survol (vu en jeu le 09/11).
+local function ajouterRangement(tip)
+  if tip ~= GameTooltip then return end
+  local case = tip.GetOwner and tip:GetOwner()
+  if not (case and case.estCaseSacsRanges) then return end
+  local ajoute = false
+  if case.raison then
+    tip:AddLine(" ")
+    tip:AddLine("Rangé ici : " .. case.raison, 1, 0.82, 0, true)
+    ajoute = true
+  end
+  if case.moinsQue then
+    if not ajoute then tip:AddLine(" ") end
+    tip:AddLine("Moins bon que " .. case.moinsQue .. " (ce que tu portes).", 1, 0.3, 0.25, true)
+  end
+  local c = case.conseil
+  if c and not (ns.bullesActives and ns.bullesActives()) then
+    tip:AddLine(" ")
+    tip:AddLine("À équiper" .. (ns.nomSpecialisation and ns.nomSpecialisation() and (" (" .. ns.nomSpecialisation() .. ")") or "")
+      .. " : " .. (c.raison or ""), 0.12, 1, 0)
+    if c.remplace then tip:AddLine("Remplace : " .. c.remplace, 0.6, 0.6, 0.6) end
+  end
+end
+if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ajouterRangement)
+elseif GameTooltip and GameTooltip.HookScript then
+  GameTooltip:HookScript("OnTooltipSetItem", ajouterRangement)
 end
 
 local function titreDe(i)
