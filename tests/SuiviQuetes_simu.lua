@@ -965,5 +965,20 @@ verifie("sans tag : le donjon tombe dans Général", true, affichage():find("Q:[
 
 print = io.write and function(...) io.write(table.concat({ ... }, " "), "\n") end or print
 io.write(string.format("%d vérifications OK\n", nbOK))
+-- Quête de métier reconnue par le texte de ses objectifs (relevé en jeu : Forever ne donne pas d'étiquette)
+do
+  local M = { "Secourisme", "Cuisine", "Pêche", "Forge" }
+  local function egal(nom, attendu, obtenu)
+    if attendu ~= obtenu then print("ECHEC  " .. nom .. " : attendu " .. tostring(attendu) .. ", obtenu " .. tostring(obtenu)); os.exit(1) end
+    print("OK  " .. nom)
+  end
+  egal("métier : compétence en secourisme", true, ns.parleDeMetier("Atteindre une compétence de 20 en secourisme", M))
+  egal("métier : nom de métier sans le mot compétence", false, ns.parleDeMetier("Apporter la caisse à la forge", M))
+  egal("métier : compétence sans métier connu", false, ns.parleDeMetier("Atteindre une compétence de 20 en escalade", M))
+  egal("métier : texte vide", false, ns.parleDeMetier("", M))
+  egal("genre : objectif de métier -> Métiers", "metiers", ns.genreQuete({ rubrique = "Campement", texte = "Atteindre une compétence de 20 en secourisme" }, { metiers = M }))
+  egal("genre : quête ordinaire -> Général", "general", ns.genreQuete({ rubrique = "Marche de l'Ouest", texte = "Dynamite basique : 0/10" }, { metiers = M }))
+end
+
 if ok then io.write("Tout est bon.\n") end
 os.exit(ok and 0 or 1)

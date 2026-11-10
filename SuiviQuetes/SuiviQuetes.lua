@@ -148,6 +148,19 @@ local function dansListe(liste, texte)
   return false
 end
 
+-- Sur Forever, le jeu ne dit presque rien du genre (relevé en jeu le 10/11 : pas d'étiquette
+-- hors « Donjon », rubrique = la zone). Pour les métiers, on lit donc le texte des objectifs :
+-- « Atteindre une compétence de 20 en secourisme » parle de compétence ET nomme un métier.
+function ns.parleDeMetier(texte, metiers)
+  local t = sansAccents(texte)
+  if t == "" or not (t:find("competence", 1, true) or t:find("skill", 1, true)) then return false end
+  for _, n in ipairs(metiers or {}) do
+    local m = sansAccents(n)
+    if m ~= "" and t:find(m, 1, true) then return true end
+  end
+  return false
+end
+
 -- Le genre d'une quête. Fonction pure : tout ce qu'il faut vient des deux tables.
 --   infos : ce que dit le jeu { numero, rubrique, tagID, tagName, classification, campaignID,
 --           frequency, suggestedGroup, elite, tradeskill, fini }
@@ -172,7 +185,7 @@ function ns.genreQuete(infos, contexte)
   end
   local ligneMetier = tonumber(infos.tradeskill)
   if (tag and TAG_METIER and tag == TAG_METIER) or (ligneMetier and ligneMetier ~= 0)
-     or dansListe(contexte.metiers, rubrique) then
+     or dansListe(contexte.metiers, rubrique) or ns.parleDeMetier(infos.texte, contexte.metiers) then
     return "metiers"
   end
 
@@ -488,10 +501,16 @@ local function fiche(id, info, rubrique, zones, contexte)
       elite = tag.isElite, tradeskill = tag.tradeskillLineID, fini = fini,
     },
   }
-  q.genre = ns.genreQuete(q.infos, contexte)
-  q.manuel = db and db.genres and db.genres[id] ~= nil
   local objectifs = ql("GetQuestObjectives", id)
   q.objectifs = type(objectifs) == "table" and objectifs or {}
+  -- Le texte des objectifs sert aussi à reconnaître une quête de métier (voir ns.parleDeMetier).
+  local morceaux = {}
+  for _, o in ipairs(q.objectifs) do
+    if type(o) == "table" and type(o.text) == "string" then morceaux[#morceaux + 1] = o.text end
+  end
+  q.infos.texte = table.concat(morceaux, " ")
+  q.genre = ns.genreQuete(q.infos, contexte)
+  q.manuel = db and db.genres and db.genres[id] ~= nil
   if fini and q.index then
     local fin = sur(GetQuestLogCompletionText, q.index)
     if type(fin) == "string" then q.texteFin = fin end
