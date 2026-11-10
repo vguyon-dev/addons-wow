@@ -108,6 +108,7 @@ for _, f in ipairs({ "Reglages.lua", "Donnees.lua", "Logique.lua", "Conseiller.l
   assert(loadfile(dossier .. f))("Conseiller", ns)
 end
 local D = ns.DONNEES
+local BUILDS_CHASSEUR = D.BUILDS.HUNTER -- les vrais builds du chasseur : les essais ci-dessous les remplacent par les leurs
 
 local ok = true
 local function verifie(libelle, attendu, obtenu)
@@ -172,7 +173,7 @@ verifie("cleSpe druide, rang 3 sur 3 (Forever) : Restauration", "restauration", 
 verifie("cleSpe druide, rang 3 sans le nombre : ambigu, rien", nil, ns.cleSpe("DRUID", nil, 3))
 verifie("cleSpe druide, rang 1 sans le nombre : Équilibre", "equilibre", ns.cleSpe("DRUID", nil, 1))
 verifie("cleSpe : Gardien est un tank", "tank", D.CLASSES.DRUID.specs.gardien.role)
-verifie("stats : Gardien, endurance d'abord", "ITEM_MOD_STAMINA_SHORT", ns.ordreStats("DRUID", "gardien")[1])
+verifie("stats : Gardien, défense d'abord (fiche)", "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT", ns.ordreStats("DRUID", "gardien")[1])
 
 -- valeurs secrètes dans les rôles
 local rS, devS = ns.roleDe({ role = SECRET, classe = "WARRIOR" })
@@ -192,7 +193,7 @@ c = ns.speConseillee("PALADIN", "groupe", ns.analyserGroupe(membres({ "TANK", "W
 verifie("paladin, groupe complet : vindicte", "vindicte", c.cle)
 verifie("paladin, groupe complet : pas de rôle comblé", nil, c.parManque)
 c = ns.speConseillee("HUNTER", "groupe", ns.analyserGroupe(membres({ "HEALER", "PRIEST" }, { "DAMAGER", "MAGE" }, { "DAMAGER", "ROGUE" }, { "DAMAGER", "HUNTER" })))
-verifie("chasseur ne peut pas tanker : précision", "precision", c.cle)
+verifie("chasseur ne peut pas tanker : reste en maîtrise des bêtes", "bete", c.cle)
 verifie("chasseur, tank manquant : pas de rôle comblé", nil, c.parManque)
 verifie("chasseur seul : maîtrise des bêtes", "bete", ns.speConseillee("HUNTER", "solo").cle)
 verifie("classe inconnue : nil", nil, ns.speConseillee("BOUDIN", "solo"))
@@ -228,6 +229,145 @@ verifie("prochain nœud : rang 2 sur 3", 2, r2)
 rangs[12] = 3
 verifie("prochain nœud : tout est pris", nil, ns.prochainNoeud(ns.buildPour("HUNTER", "bete", "solo"), rangDe))
 verifie("prochain nœud : build nil sans erreur", nil, ns.prochainNoeud(nil, rangDe))
+
+-- ================================================================ builds sans numéro de nœud
+-- L'arbre lu dans le jeu : des nœuds avec leurs entrées (entryID, spellID, nom dans la langue du jeu).
+local noeudsArbre = {
+  { nodeID = 101, entrees = { { entryID = 1001, spellID = 19577, nom = "Intimidation" } } },
+  { nodeID = 102, entrees = { { entryID = 1002, spellID = 555, nom = "Frénésie" } } },
+  { nodeID = 103, entrees = { { entryID = 1003, spellID = 556, nom = "Bestial Wrath" } } },
+  { nodeID = 104, entrees = { { entryID = 1004, spellID = 557, nom = "Maître d’armes" }, { entryID = 1005, spellID = 558, nom = "Autre choix" } } },
+}
+local indexA = ns.indexArbre(noeudsArbre)
+verifie("index de l'arbre : 4 nœuds lus", 4, indexA.nb)
+verifie("index de l'arbre : par spellID", 102, indexA.parSpell[555].nodeID)
+verifie("index de l'arbre : par nom simplifié, accents et casse ignorés", 102, indexA.parNom[ns.cleTalent("FRENESIE")].nodeID)
+verifie("nom de talent : l'apostrophe courbe vaut l'apostrophe droite", ns.cleTalent("Maître d'armes"), ns.cleTalent("Maître d’armes"))
+local resolu = ns.resoudreBuild({
+  { sorts = { 19577 }, nom = "Mauvais nom", nomEN = "Faux", rangs = 1 },     -- par le spellID, même si le nom est faux
+  { sorts = {}, nom = "FRÉNÉSIE", nomEN = "Frenzy", rangs = 5 },             -- par le nom français (accents et casse ignorés)
+  { nom = "Courroux inconnu", nomEN = "Bestial Wrath", rangs = 1 },          -- par le nom anglais, le français n'existe pas
+  { sorts = { 1 }, nom = "Talent fantôme", nomEN = "Ghost", rangs = 2 },     -- introuvable : sauté
+  { nom = "Maître d'armes", rangs = 2 },                                      -- apostrophe droite contre courbe
+  { nodeID = 9, rangs = 1 },                                                  -- la forme exacte reste acceptée
+  { sorts = { 2 } },                                                          -- sans nom : « talent 7 »
+}, indexA)
+verifie("résolution : par spellID", 101, resolu.entrees[1] and resolu.entrees[1].nodeID)
+verifie("résolution : par nom français", 102, resolu.entrees[2] and resolu.entrees[2].nodeID)
+verifie("résolution : par nom anglais", 103, resolu.entrees[3] and resolu.entrees[3].nodeID)
+verifie("résolution : l'entrée désigne l'entrée du nœud", 1003, resolu.entrees[3] and resolu.entrees[3].entryID)
+verifie("résolution : par nom, apostrophe courbe", 104, resolu.entrees[4] and resolu.entrees[4].nodeID)
+verifie("résolution : la forme { nodeID } passe telle quelle", 9, resolu.entrees[5] and resolu.entrees[5].nodeID)
+verifie("résolution : le rang voulu est gardé", 5, resolu.entrees[2] and resolu.entrees[2].rangs)
+verifie("résolution : les entrées introuvables sont comptées", 2, #resolu.nonReconnus)
+verifie("résolution : leur nom est gardé pour l'affichage", "Talent fantôme", resolu.nonReconnus[1])
+verifie("résolution : sans nom, une étiquette", "talent 7", resolu.nonReconnus[2])
+verifie("résolution : sans arbre, rien n'est reconnu sauf la forme exacte", 1, #ns.resoudreBuild({ { nom = "Intimidation" }, { nodeID = 3 } }, nil).entrees)
+verifie("résolution : build nil sans erreur", 0, #ns.resoudreBuild(nil, indexA).entrees)
+
+-- Le prochain talent quand le palier n'est pas atteint : on passe à la suivante qui s'achète.
+local rangsT = { [101] = 1, [102] = 0, [103] = 0, [104] = 0 }
+local achetable = { [101] = true, [102] = false, [103] = true, [104] = true }
+local suiv = { { nodeID = 101, rangs = 1 }, { nodeID = 102, rangs = 3 }, { nodeID = 103, rangs = 1 }, { nodeID = 104, rangs = 2 } }
+local function rangT(id) return rangsT[id] end
+local function peutT(id) return achetable[id] end
+local e1, r1, place1 = ns.prochainNoeud(suiv, rangT, peutT)
+verifie("prochain talent : le palier de la deuxième n'est pas atteint, on prend la troisième", 103, e1 and e1.nodeID)
+verifie("prochain talent : sa place dans le build", 3, place1)
+achetable[103], achetable[104] = false, false
+local e2, _, _, bloque = ns.prochainNoeud(suiv, rangT, peutT)
+verifie("prochain talent : aucun achetable, rien", nil, e2)
+verifie("prochain talent : la première bloquée est rendue", 102, bloque and bloque.nodeID)
+achetable[102] = true
+verifie("prochain talent : le palier atteint, elle redevient la prochaine", 102, (ns.prochainNoeud(suiv, rangT, peutT) or {}).nodeID)
+achetable[102] = nil -- le jeu ne dit rien (nil) : on essaie
+verifie("prochain talent : achat inconnu (nil), on essaie", 102, (ns.prochainNoeud(suiv, rangT, peutT) or {}).nodeID)
+verifie("prochain talent : sans fonction d'achat, comme avant", 102, (ns.prochainNoeud(suiv, rangT) or {}).nodeID)
+
+-- Conditions ajoutées : points de combo, et « absent » pour un sort inconnu.
+local apiCombo = { pointsCombo = function() return 4 end }
+verifie("points de combo : 4 sur 5 requis, non", false, ns.evaluerCondition("pointsCombo>=5", "X", {}, apiCombo))
+apiCombo.pointsCombo = function() return 5 end
+verifie("points de combo : 5 sur 5 requis, oui", true, ns.evaluerCondition("pointsCombo>=5", "X", {}, apiCombo))
+apiCombo.pointsCombo = function() return SECRET end
+verifie("points de combo : valeur secrète, non évaluable", nil, ns.evaluerCondition("pointsCombo>=5", "X", {}, apiCombo))
+verifie("points de combo : API absente, non évaluable", nil, ns.evaluerCondition("pointsCombo>=5", "X", {}, {}))
+GetComboPoints = function() return jeu.combo end
+jeu.combo = 3
+verifie("api.pointsCombo : lit GetComboPoints", 3, ns.apiJeu.pointsCombo())
+jeu.combo = SECRET
+verifie("api.pointsCombo : secret = nil", nil, ns.apiJeu.pointsCombo())
+GetComboPoints = nil
+verifie("api.pointsCombo : ni GetComboPoints ni UnitPower = nil", nil, ns.apiJeu.pointsCombo())
+verifie("absent pour un autre sort que tu ne connais pas : vrai", true,
+  ns.evaluerCondition({ "buffAbsent", "INCONNU" }, "X", {}, { buffAbsent = function() return false end }))
+verifie("debuffAbsent pour un autre sort inconnu : vrai", true,
+  ns.evaluerCondition({ "debuffAbsent", "INCONNU" }, "X", {}, { debuffAbsent = function() return false end }))
+
+-- Résolution d'un sort par son nom anglais (second repli)
+local apiEN = { connu = function() return false end, nomSort = function() return nil end,
+  chercherParNom = function(nom) if nom == "Serpent Sting Test" then return 4242 end end }
+local sEN = ns.resoudreSort({ nom = "Faux nom", nomEN = "Serpent Sting Test", ids = {} }, apiEN)
+verifie("sort : le nom français ne donne rien, le nom anglais oui", 4242, sEN and sEN.id)
+verifie("sort : par l'index du grimoire, nom anglais", 77,
+  (ns.resoudreSort({ nom = "Faux nom", nomEN = "Frost Test", ids = {} }, apiEN, { ["frost test"] = 77 }) or {}).id)
+verifie("sort : ni l'un ni l'autre", nil, ns.resoudreSort({ nom = "Faux", nomEN = "Faux aussi", ids = {} }, apiEN, {}))
+
+-- Une rotation de voleur de bout en bout : les points de combo décident entre le débondage, l'éviscération et le coup de base.
+do
+  local sortsV = {}
+  for cle, def in pairs(D.SORTS.ROGUE) do sortsV[cle] = { id = def.ids[1] or 1, nom = def.nom, ids = {}, cle = cle } end
+  local pts, debond = 0, true
+  local apiV = {
+    pret = function() return true end, buffAbsent = function(sp) return sp.cle == "DEBONDAGE" and debond or false end,
+    debuffAbsent = function() return false end, ennemis = function() return 1 end,
+    vie = function() return 100 end, pointsCombo = function() return pts end,
+  }
+  local listeV = D.ROTATIONS.ROGUE.combat
+  pts, debond = 1, true
+  verifie("voleur : 1 point, pas de débondage, on construit", "DELUGE", ns.evaluerRotation(listeV, sortsV, apiV).cle)
+  pts, debond = 2, true
+  verifie("voleur : 2 points sans débondage actif, débondage", "DEBONDAGE", ns.evaluerRotation(listeV, sortsV, apiV).cle)
+  pts, debond = 5, false
+  sortsV.DELUGE, sortsV.POUSSEE = nil, nil
+  verifie("voleur : 5 points, débondage actif, éviscération", "EVISCERATION", ns.evaluerRotation(listeV, sortsV, apiV).cle)
+  pts = 1
+  verifie("voleur : 1 point, débondage actif, attaque de base", "SINISTRE", ns.evaluerRotation(listeV, sortsV, apiV).cle)
+  -- Paladin de protection : le Sceau de piété attend, tant que le Sceau de fureur est connu et actif
+  local sortsPP = {}
+  for cle, def in pairs(D.SORTS.PALADIN) do sortsPP[cle] = { id = def.ids[1] or 1, nom = def.nom, ids = {}, cle = cle } end
+  local actifs = { FUREUR = true, SCEAU_FUREUR = true }
+  local apiPP = { pret = function() return false end, buffAbsent = function(sp) return not actifs[sp.cle] end,
+    debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return 100 end }
+  verifie("paladin protection : Sceau de fureur actif, pas de Sceau de piété", nil, ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPP).cle)
+  actifs.SCEAU_FUREUR = nil
+  verifie("paladin protection : plus de Sceau de fureur, on le refait", "SCEAU_FUREUR", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPP).cle)
+  sortsPP.SCEAU_FUREUR = nil -- Sceau de fureur inconnu (niveau trop bas) : le Sceau de piété prend la place
+  verifie("paladin protection : sans Sceau de fureur, le Sceau de piété", "SCEAU_PIETE", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPP).cle)
+  -- Paladin de protection : Rempart du templier sous 40 % de vie (fiche), avant les sceaux
+  local vieR = 30
+  local apiPR = { pret = function(sp) return sp.cle == "REMPART" end, buffAbsent = function() return true end,
+    debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return vieR end }
+  verifie("paladin protection : sous 40 % de vie, Rempart du templier", "REMPART", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR).cle)
+  vieR = 80
+  verifie("paladin protection : à 80 % de vie, pas de Rempart", "FUREUR", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR).cle)
+  -- Paladin de protection : le Jugement passe avant le Bouclier sacré (ordre de la fiche)
+  local apiPJ = { pret = function(sp) return sp.cle == "JUGEMENT" or sp.cle == "BOUCLIER_SACRE" end, buffAbsent = function() return false end,
+    debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return 100 end }
+  verifie("paladin protection : Jugement avant Bouclier sacré", "JUGEMENT", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPJ).cle)
+  -- Chaman restaurateur : jamais le Bouclier de foudre par-dessus un Bouclier d'eau actif
+  local sortsSR = {}
+  for cle, def in pairs(D.SORTS.SHAMAN) do sortsSR[cle] = { id = def.ids[1] or 1, nom = def.nom, ids = {}, cle = cle } end
+  local eauActive = true
+  local apiSR = { pret = function() return false end,
+    buffAbsent = function(sp) if sp.cle == "BOUCLIER_EAU" then return not eauActive end return true end,
+    debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return 100 end }
+  verifie("chaman restauration : Bouclier d'eau actif, pas de Bouclier de foudre", nil, ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
+  eauActive = false
+  verifie("chaman restauration : Bouclier d'eau absent, on le pose", "BOUCLIER_EAU", ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
+  sortsSR.BOUCLIER_EAU = nil
+  verifie("chaman restauration : sans Bouclier d'eau appris, le Bouclier de foudre", "BOUCLIER_FOUDRE", ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
+end
 
 -- ================================================================ résolution des sorts
 local sorts = {}
@@ -342,7 +482,7 @@ verifie("tout illisible : marqué illisible", true, res.illisible)
 verifie("tout illisible : réglage auto passe au mode C", "C", ns.modeEffectif(1, res.illisible))
 verifie("réglage forcé en A malgré l'illisible", "A", ns.modeEffectif(2, true))
 verifie("réglage forcé en C même si lisible", "C", ns.modeEffectif(3, false))
-verifie("la liste reste complète en mode C", 7, #res.lignes)
+verifie("la liste reste complète en mode C (11 lignes des sorts connus)", 11, #res.lignes)
 -- Paladin : les urgences sont en tête, et Exorcisme demande un mort-vivant ou un démon
 local lp = D.ROTATIONS.PALADIN.vindicte
 verifie("paladin : Imposition des mains en tête", "IMPOSITION", lp[1].sort)
@@ -476,15 +616,80 @@ for _, cl in ipairs(TOUTES) do
   donneesOk = donneesOk and bon
 end
 verifie("données : les 9 classes sont complètes", true, donneesOk)
-local rotOk = true
-for _, cl in ipairs({ "HUNTER", "PALADIN" }) do
-  for _, cle in ipairs(D.CLASSES[cl].ordre) do
-    local l = D.ROTATIONS[cl] and D.ROTATIONS[cl][cle]
-    rotOk = rotOk and type(l) == "table" and #l > 0
-    for _, entree in ipairs(l or {}) do rotOk = rotOk and D.SORTS[cl][entree.sort] ~= nil end
+-- Chaque classe : une spécialisation conseillée pour chaque situation, une priorité non vide pour chacune
+-- de ses spécialisations, des sorts déclarés, des conseils seul et en groupe, un build dont chaque entrée a un nom.
+D.BUILDS.HUNTER = BUILDS_CHASSEUR
+local PROBLEMES = {}
+local function probleme(cl, texte) PROBLEMES[#PROBLEMES + 1] = cl .. " : " .. texte end
+local totalEntrees, totalBuilds = 0, 0
+for _, cl in ipairs(TOUTES) do
+  local cd = D.CLASSES[cl]
+  local rotations = D.ROTATIONS[cl] or {}
+  local sortsCl = D.SORTS[cl] or {}
+  -- les sorts : un nom français, un nom anglais, des identifiants numériques
+  for cle, def in pairs(sortsCl) do
+    if type(def.nom) ~= "string" or def.nom == "" then probleme(cl, "sort " .. cle .. " sans nom français") end
+    if type(def.nomEN) ~= "string" or def.nomEN == "" then probleme(cl, "sort " .. cle .. " sans nom anglais") end
+    for _, id in ipairs(def.ids or {}) do if type(id) ~= "number" then probleme(cl, "sort " .. cle .. " : identifiant non numérique") end end
   end
+  -- une spécialisation conseillée pour chaque situation, avec sa rotation
+  for _, sit in ipairs(D.SITUATIONS) do
+    local c = ns.speConseillee(cl, sit, nil)
+    if not c or not c.cle then probleme(cl, "pas de spécialisation conseillée en " .. sit)
+    elseif type(rotations[c.cle]) ~= "table" or #rotations[c.cle] == 0 then probleme(cl, "rotation vide pour " .. c.cle .. " (" .. sit .. ")") end
+    if c and (type(c.raison) ~= "string" or c.raison == "") then probleme(cl, "pas de raison en " .. sit) end
+  end
+  -- le rôle qui manque
+  for role, cle in pairs(cd.parRole or {}) do
+    local c = ns.speConseillee(cl, "donjon", { manques = { role }, manque = role })
+    if not c or c.cle ~= cle or c.parManque ~= role then probleme(cl, "rôle manquant " .. role .. " : " .. tostring(c and c.cle)) end
+    if type(rotations[cle]) ~= "table" or #rotations[cle] == 0 then probleme(cl, "rotation vide pour " .. cle .. " (rôle " .. role .. ")") end
+    if not ns.buildPour(cl, cle, "groupe") then probleme(cl, "pas de build de groupe pour " .. cle .. " (rôle " .. role .. ")") end
+  end
+  -- toutes les spécialisations ont une priorité dont chaque sort est déclaré
+  for _, cle in ipairs(cd.ordre) do
+    local l = rotations[cle]
+    if type(l) ~= "table" or #l == 0 then probleme(cl, "pas de priorité pour " .. cle)
+    else
+      for i, entree in ipairs(l) do
+        totalEntrees = totalEntrees + 1
+        if not sortsCl[entree.sort] then probleme(cl, cle .. " #" .. i .. " : sort non déclaré " .. tostring(entree.sort)) end
+        if type(entree.texte) ~= "string" or entree.texte == "" then probleme(cl, cle .. " #" .. i .. " sans texte") end
+        for _, cond in ipairs(entree.si or {}) do
+          if type(cond) == "table" and (cond[1] == "buffAbsent" or cond[1] == "debuffAbsent") and cond[2] and not sortsCl[cond[2]] then
+            probleme(cl, cle .. " #" .. i .. " : condition sur un sort non déclaré " .. tostring(cond[2]))
+          end
+        end
+      end
+    end
+  end
+  -- les conseils seul et en groupe
+  for _, sit in ipairs({ "solo", "groupe" }) do
+    local titre, liste = ns.conseilsASavoir(cl, sit)
+    if type(liste) ~= "table" or #liste < 3 then probleme(cl, "moins de 3 conseils " .. sit) end
+  end
+  -- les builds : montée de la spécialisation seul, groupe de celle du donjon ; chaque entrée a un nom
+  local builds = { { cd.choix.solo, "solo" }, { cd.choix.donjon, "donjon" }, { cd.choix.groupe, "groupe" }, { cd.choix.raid, "raid" } }
+  for _, b in ipairs(builds) do
+    local l = ns.buildPour(cl, b[1], b[2])
+    if b[2] == "solo" or b[2] == "donjon" then
+      if not l then probleme(cl, "pas de build " .. b[2] .. " pour " .. tostring(b[1])) end
+    end
+    if l then
+      totalBuilds = totalBuilds + 1
+      for i, e in ipairs(l) do
+        if type(e.nom) ~= "string" or e.nom == "" then probleme(cl, "build " .. b[1] .. " #" .. i .. " sans nom français") end
+        if type(e.nomEN) ~= "string" or e.nomEN == "" then probleme(cl, "build " .. b[1] .. " #" .. i .. " sans nom anglais") end
+        if type(e.rangs) ~= "number" or e.rangs < 1 then probleme(cl, "build " .. b[1] .. " #" .. i .. " sans rang") end
+      end
+    end
+  end
+  if type(D.DATES_BUILDS[cl]) ~= "string" or not D.DATES_BUILDS[cl]:match("^%d%d/%d%d/%d%d%d%d$") then probleme(cl, "date du build absente") end
 end
-verifie("données : rotations du chasseur et du paladin, sorts déclarés", true, rotOk)
+for _, p in ipairs(PROBLEMES) do io.write("   " .. p .. "\n") end
+verifie("données : chaque classe a une spécialisation, une priorité, des sorts déclarés et un build complets", 0, #PROBLEMES)
+verifie("données : plus de 150 entrées de priorité écrites (" .. totalEntrees .. ")", true, totalEntrees > 150)
+verifie("données : au moins 27 builds lus (" .. totalBuilds .. ")", true, totalBuilds >= 27)
 local perso = false
 local function cherche(t)
   for _, v in pairs(t) do
@@ -509,6 +714,9 @@ verifie("chargement : la sauvegarde existe", "table", type(ConseillerDB))
 verifie("chargement : réglages par défaut (rotation active)", true, ConseillerDB.rotation)
 verifie("chargement : sorts résolus", true, ns.sorts.AUTO ~= nil and ns.sorts.MARQUE ~= nil)
 
+-- Le build d'essai du chasseur (formes exactes), à la place des vrais builds rangés plus haut.
+D.BUILDS.HUNTER = { bete = { solo = { { nodeID = 10, rangs = 2 }, { nodeID = 11, rangs = 1 }, { nodeID = 12, rangs = 3 } }, groupe = { { nodeID = 20, rangs = 1 } } } }
+ns.talentsSale = true
 local etatJeu = ns.construireEtat()
 verifie("état : classe", "HUNTER", etatJeu.classe)
 verifie("état : spécialisation lue dans le jeu", "bete", etatJeu.speCle)
@@ -542,15 +750,21 @@ ns.talentsSale = true
 ns.prendreTalent()
 verifie("talent à choix : SetSelection appelé avec l'entryID du build", "10,101", jeu.selection and (jeu.selection[1] .. "," .. jeu.selection[2]))
 verifie("talent à choix : rang acheté ensuite", 1, jeu.noeuds[10].currentRank)
--- C_ClassTalents.CommitConfig prime, et un refus est dit
+-- La validation passe par C_Traits.CommitConfig (C_ClassTalents.CommitConfig attend une configuration
+-- sauvegardée, pas la configuration active : il ne doit jamais être appelé), et un refus est dit
 local messages = {}
 local printAvant = print
 print = function(t) messages[#messages + 1] = t end
-C_ClassTalents.CommitConfig = function() return false end
+local appelClasse = false
+C_ClassTalents.CommitConfig = function() appelClasse = true; return true end
+local commitAvant = C_Traits.CommitConfig
+C_Traits.CommitConfig = function() return false end
 ns.talentsSale = true
 ns.prendreTalent()
 print = printAvant
+C_Traits.CommitConfig = commitAvant
 C_ClassTalents.CommitConfig = nil
+verifie("validation : jamais C_ClassTalents.CommitConfig", false, appelClasse)
 verifie("validation refusée : message clair", true, contient(messages[#messages], "talent acheté, mais le jeu a refusé de valider"))
 jeu.noeuds[10].currentRank = 1
 D.BUILDS.HUNTER = { bete = { solo = { { nodeID = 10, rangs = 2 }, { nodeID = 11, rangs = 1 }, { nodeID = 12, rangs = 3 } } } }
@@ -559,6 +773,11 @@ jeu.enCombat = true
 ns.prendreTalent()
 verifie("prendre un talent : refusé en combat", 1, jeu.noeuds[10].currentRank)
 jeu.enCombat = false
+-- le jeu dit que les talents ne peuvent pas changer maintenant (CanEditTalents) : rien n'est acheté
+C_ClassTalents.CanEditTalents = function() return false, "tu es dans une clé mythique" end
+ns.prendreTalent()
+verifie("prendre un talent : refusé quand le jeu l'interdit", 1, jeu.noeuds[10].currentRank)
+C_ClassTalents.CanEditTalents = nil
 D.BUILDS.HUNTER = {}
 verifie("talents : plus de build écrit", "vide", ns.construireEtat().talents.etat)
 verifie("onglet Talents : message clair quand le build manque", true, contient(ns.vueTalents(ns.construireEtat()), "/cs export"))
@@ -580,13 +799,112 @@ verifie("export : classe et situation notées", "HUNTER", ConseillerDB.export.cl
 verifie("export : le grimoire est écrit", 2, #ConseillerDB.export.grimoire)
 verifie("grimoire : retrouver un sort par son nom, sans accents", 3045, ns.apiJeu.chercherParNom("TIR RAPIDE"))
 
+-- Un build écrit sans numéro de nœud : lu dans l'arbre par spellID, par nom français, par nom anglais ;
+-- les talents introuvables sont comptés, montrés, nommés dans /cs etat ; un palier pas atteint est sauté.
+do
+  local sauveNoms, sauveBuild = jeu.noms, D.BUILDS.HUNTER
+  local sauveEntry, sauveDef = C_Traits.GetEntryInfo, C_Traits.GetDefinitionInfo
+  local sauveConfig, sauveNodes, sauveNoeuds = C_Traits.GetConfigInfo, C_Traits.GetTreeNodes, jeu.noeuds
+  local spellParEntree = { [1001] = 19577, [1002] = 555, [1003] = 556, [1004] = 557 }
+  jeu.noms = { [19577] = "Intimidation", [555] = "Frénésie", [556] = "Bestial Wrath", [557] = "Rapidité bestiale" }
+  C_Traits.GetConfigInfo = function() return { treeIDs = { 5 } } end
+  C_Traits.GetTreeNodes = function() return { 101, 102, 103, 104 } end
+  C_Traits.GetEntryInfo = function(_, id) return { definitionID = id + 5000 } end
+  C_Traits.GetDefinitionInfo = function(id) return { spellID = spellParEntree[id - 5000] } end
+  jeu.noeuds = {
+    [101] = { ID = 101, maxRanks = 1, currentRank = 1, entryIDs = { 1001 } },
+    [102] = { ID = 102, maxRanks = 3, currentRank = 0, entryIDs = { 1002 }, canPurchaseRank = false }, -- palier pas atteint
+    [103] = { ID = 103, maxRanks = 1, currentRank = 0, entryIDs = { 1003 }, canPurchaseRank = true },
+    [104] = { ID = 104, maxRanks = 2, currentRank = 0, entryIDs = { 1004 }, canPurchaseRank = false },
+  }
+  D.BUILDS.HUNTER = { bete = { solo = {
+    { sorts = { 19577 }, nom = "Faux nom", nomEN = "Faux", rangs = 1 },
+    { sorts = {}, nom = "Frénésie", nomEN = "Frenzy", rangs = 5 },
+    { nom = "Courroux inconnu", nomEN = "Bestial Wrath", rangs = 1 },
+    { nom = "Talent fantôme", nomEN = "Ghost", rangs = 2 },
+    { nom = "Rapidité bestiale", nomEN = "Bestial Swiftness", rangs = 1 },
+    { nom = "Autre fantôme", nomEN = "Ghost 2", rangs = 1 },
+  } } }
+  ns.arbreSale = true
+  ns.talentsSale = true
+  local eT = ns.construireEtat()
+  verifie("talents sans nœud : prochain, le palier de la 2e n'est pas atteint", 103, eT.talents.nodeID)
+  verifie("talents sans nœud : état « suivant »", "suivant", eT.talents.etat)
+  verifie("talents sans nœud : son nom, dans la langue du jeu", "Bestial Wrath", eT.talents.nom)
+  verifie("talents sans nœud : deux talents non reconnus comptés", 2, eT.talents.nbNonReconnus)
+  verifie("talents sans nœud : leurs noms", "Talent fantôme,Autre fantôme", table.concat(eT.talents.nonReconnus, ","))
+  local vT = ns.vueTalents(eT)
+  verifie("onglet Talents : « 2 talents du build n'ont pas été reconnus »", true, contient(vT, "2 talents du build n'ont pas été reconnus"))
+  verifie("onglet Talents : renvoie à /cs export", true, contient(vT, "/cs export"))
+  verifie("onglet Talents : la date du build", true, contient(vT, "Build croisé entre plusieurs guides, mis à jour le 10/11/2026"))
+  verifie("onglet Talents : les noms non reconnus", true, contient(vT, "Talent fantôme, Autre fantôme"))
+  -- un seul talent non reconnu : singulier
+  D.BUILDS.HUNTER.bete.solo[6] = nil
+  ns.talentsSale = true
+  verifie("onglet Talents : « 1 talent du build n'a pas été reconnu »", true, contient(ns.vueTalents(ns.construireEtat()), "1 talent du build n'a pas été reconnu"))
+  -- /cs etat liste les noms
+  local dits = {}
+  local printAvantT = print
+  print = function(t) dits[#dits + 1] = t end
+  SlashCmdList.CONSEILLER("etat")
+  print = printAvantT
+  local ditNoms = false
+  for _, d in ipairs(dits) do if contient(d, "non reconnus (1)") and contient(d, "Talent fantôme") then ditNoms = true end end
+  verifie("/cs etat : liste les talents non reconnus", true, ditNoms)
+  -- on prend le talent : un rang acheté sur le nœud 103
+  ns.prendreTalent()
+  verifie("prendre le talent sans nœud : rang acheté sur le bon nœud", 1, jeu.noeuds[103].currentRank)
+  -- le suivant n'est pas encore achetable : état « attente », avec le nom du premier bloqué
+  ns.talentsSale = true
+  local eA = ns.construireEtat()
+  verifie("talents : plus rien d'achetable, état « attente »", "attente", eA.talents.etat)
+  verifie("talents : le premier bloqué est nommé", "Frénésie", eA.talents.nom)
+  verifie("onglet Talents : l'attente est expliquée", true, contient(ns.vueTalents(eA), "palier pas atteint"))
+  -- le palier est atteint : la Frénésie devient la prochaine, son rang voulu (5) est ramené au maximum du nœud (3)
+  jeu.noeuds[102].canPurchaseRank = true
+  jeu.noeuds[102].currentRank = 3
+  jeu.noeuds[104].canPurchaseRank = true
+  ns.talentsSale = true
+  verifie("talents : rang voulu au-dessus du maximum du nœud, ramené au maximum (la suivante prend le relais)", 104, ns.construireEtat().talents.nodeID)
+  jeu.noeuds[104].currentRank = 1
+  jeu.noeuds[104].canPurchaseRank = false
+  ns.talentsSale = true
+  verifie("talents : tout ce qui est reconnu est pris, état « fini »", "fini", ns.construireEtat().talents.etat)
+  -- aucun talent reconnu : état « horsArbre »
+  D.BUILDS.HUNTER.bete.solo = { { nom = "Inconnu 1", nomEN = "Unknown 1", rangs = 1 }, { nom = "Inconnu 2", nomEN = "Unknown 2", rangs = 1 } }
+  ns.talentsSale = true
+  local eH = ns.construireEtat()
+  verifie("talents : aucun reconnu, état « horsArbre »", "horsArbre", eH.talents.etat)
+  verifie("talents : aucun reconnu, tous comptés", 2, eH.talents.nbNonReconnus)
+  verifie("onglet Talents : aucun reconnu, message clair", true, contient(ns.vueTalents(eH), "aucun de ses talents n'a été reconnu"))
+  -- l'arbre est gardé tant qu'il ne change pas : une seule lecture
+  local lectures = 0
+  C_Traits.GetTreeNodes = function() lectures = lectures + 1; return { 101, 102, 103, 104 } end
+  ns.arbreSale = true
+  ns.construireEtat(); ns.construireEtat(); ns.construireEtat()
+  verifie("arbre : lu une seule fois, gardé ensuite", 1, lectures)
+  ns.arbreSale = true
+  ns.construireEtat()
+  verifie("arbre : relu quand il est marqué à refaire", 2, lectures)
+
+  jeu.noms, D.BUILDS.HUNTER, jeu.noeuds = sauveNoms, sauveBuild, sauveNoeuds
+  C_Traits.GetEntryInfo, C_Traits.GetDefinitionInfo = sauveEntry, sauveDef
+  C_Traits.GetConfigInfo, C_Traits.GetTreeNodes = sauveConfig, sauveNodes
+  ns.arbreSale = true
+  ns.talentsSale = true
+end
+
 -- Rotation, équipement, métiers, race
 local tRot = ns.vueRotation(etatJeu)
 verifie("onglet Rotation : l'ordre de priorité", true, contient(tRot, "Ordre de priorité"))
 verifie("onglet Rotation : à savoir seul", true, contient(tRot, "Seul : à savoir"))
 jeu.classe, jeu.spe, jeu.nomSpe = "MAGE", 2, "Feu"
 evt("PLAYER_SPECIALIZATION_CHANGED")
+local rotationMage = D.ROTATIONS.MAGE
+D.ROTATIONS.MAGE = nil -- une classe dont la rotation manquerait : message propre, sans erreur
 local tMage = ns.vueRotation(ns.construireEtat())
+D.ROTATIONS.MAGE = rotationMage
+verifie("rotation écrite pour le mage (Feu)", true, contient(ns.vueRotation(ns.construireEtat()), "Ordre de priorité"))
 verifie("rotation pas écrite : message propre", true, contient(tMage, "Rotation pas encore écrite pour Mage, Feu"))
 verifie("rotation pas écrite : les conseils restent", true, contient(tMage, "Seul : à savoir"))
 verifie("équipement : mage feu, puissance des sorts d'abord", true, contient(ns.vueEquipement(ns.construireEtat()), "Puissance des sorts  >"))
@@ -619,7 +937,7 @@ evt("GROUP_ROSTER_UPDATE")
 local eg = ns.construireEtat()
 verifie("groupe : situation détectée", "groupe", eg.situation)
 verifie("groupe : le tank manque", "tank", eg.groupe and eg.groupe.manque)
-verifie("groupe : le chasseur reste en précision", "precision", eg.conseil.cle)
+verifie("groupe : le chasseur reste en maîtrise des bêtes", "bete", eg.conseil.cle)
 local tg = ns.vueTalents(eg)
 verifie("onglet Talents : bloc « Ton groupe »", true, contient(tg, "Ton groupe") and contient(tg, "Il manque un tank"))
 verifie("onglet Talents : ta classe ne peut pas le jouer", true, contient(tg, "ta classe ne peut pas le jouer"))

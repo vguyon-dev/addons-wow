@@ -18,6 +18,21 @@ ns.estSecret = secret
 
 local simple = ns.simpleRecherche or function(t) return tostring(t or ""):lower() end
 
+-- Les mêmes noms (effets, spécialisation, type de cible) reviennent à chaque passage de la rotation
+-- (10 fois par seconde) : on garde leur forme simplifiée au lieu de la recalculer. Ne reçoit jamais de
+-- valeur secrète (chaque appel la teste avant).
+local memoSimple, memoNb = {}, 0
+local function simpleMemo(t)
+  local r = memoSimple[t]
+  if r == nil then
+    if memoNb >= 400 then memoSimple, memoNb = {}, 0 end
+    r = simple(t)
+    memoSimple[t] = r
+    memoNb = memoNb + 1
+  end
+  return r
+end
+
 -- ============================================================ situation et groupe
 
 -- infos : { typeInstance = "party" | "raid" | "none"…, groupe = bool, raid = bool }
@@ -33,11 +48,11 @@ end
 -- Le rôle d'un membre : celui que le jeu a attribué, sinon le plus courant pour sa classe (deviné).
 local ROLE_PAR_CLASSE = { WARRIOR = "TANK", PALADIN = "HEALER", PRIEST = "HEALER", DRUID = "HEALER", SHAMAN = "HEALER" }
 function ns.roleDe(membre)
-  local r = type(membre) == "table" and membre.role or nil
+  local r, classe
+  if type(membre) == "table" then r, classe = membre.role, membre.classe end -- (sans « x or y » : une valeur secrète ne se teste pas)
   if secret(r) then r = "NONE" end -- valeur cachée par le jeu : rôle inconnu
   if r == "TANK" or r == "HEALER" or r == "DAMAGER" then return r, false end
-  local classe = type(membre) == "table" and membre.classe or ""
-  if secret(classe) then classe = "" end
+  if secret(classe) or classe == nil then classe = "" end
   return ROLE_PAR_CLASSE[classe] or "DAMAGER", true
 end
 
@@ -77,7 +92,7 @@ function ns.cleSpe(classe, nomJeu, index, nbSpes)
   local c = D.CLASSES[classe]
   if not c then return nil end
   if type(nomJeu) == "string" and nomJeu ~= "" then
-    local n = simple(nomJeu)
+    local n = simpleMemo(nomJeu)
     for _, cle in ipairs(c.ordre) do
       for _, alias in ipairs(c.specs[cle].noms) do
         if alias == n then return cle end
@@ -119,8 +134,23 @@ function ns.speConseillee(classe, situation, groupe)
 end
 
 -- ============================================================ builds de talents
+--
+-- Une entrée d'un build désigne un talent de deux façons (hors du jeu on ne connaît pas les numéros
+-- de nœuds de Forever) :
+--   { sorts = { spellID, … }, nom = "nom français", nomEN = "nom anglais", rangs = n }
+--       résolue au chargement de l'arbre : par spellID d'abord, sinon par le nom simplifié (français,
+--       puis anglais) ;
+--   { nodeID = n, rangs = n [, entryID = n] }
+--       la forme exacte, avec le numéro que « /cs export » écrit.
 
--- La liste ordonnée { nodeID, rangs } d'une classe, d'une spécialisation et d'une situation
+-- Un nom de talent réduit à des lettres et des chiffres, sans accents, sans casse, sans apostrophes
+-- (le jeu écrit parfois une apostrophe courbe, nos données une droite).
+local function cleTalent(t)
+  return (simple(t):gsub("[^%w]", ""))
+end
+ns.cleTalent = cleTalent
+
+-- La liste ordonnée des entrées d'une classe, d'une spécialisation et d'une situation
 -- (donjon et raid retombent sur « groupe »). nil s'il n'y en a pas d'écrit.
 function ns.buildPour(classe, spe, situation)
   local c = D.BUILDS[classe]
@@ -132,15 +162,83 @@ function ns.buildPour(classe, spe, situation)
   return nil
 end
 
--- Le prochain nœud à prendre : le premier du build dont le rang n'est pas atteint.
--- rangDe(nodeID) rend le rang pris, ou nil si le nœud n'existe pas dans l'arbre du personnage (sauté).
--- Renvoie l'entrée, le rang actuel et sa place dans le build ; nil quand tout est pris.
-function ns.prochainNoeud(build, rangDe)
-  for i, e in ipairs(build or {}) do
-    local rang = rangDe(e.nodeID)
-    if rang ~= nil and rang < (e.rangs or 1) then return e, rang, i end
+-- La date de mise à jour du build d'une classe (« 10/11/2026 »), ou nil.
+function ns.dateBuild(classe)
+  return D.DATES_BUILDS and D.DATES_BUILDS[classe] or nil
+end
+
+-- noeuds : { { nodeID, entrees = { { entryID, spellID, nom } } } } (lu dans l'arbre du personnage).
+-- Rend les deux tables de correspondance parSpell[spellID] et parNom[nom simplifié], chacune vers
+-- { nodeID, entryID, nom } ; nb = nombre de nœuds lus.
+function ns.indexArbre(noeuds)
+  local idx = { parSpell = {}, parNom = {}, nb = 0 }
+  for _, n in ipairs(noeuds or {}) do
+    idx.nb = idx.nb + 1
+    for _, en in ipairs(n.entrees or {}) do
+      local ref = { nodeID = n.nodeID, entryID = en.entryID, nom = en.nom }
+      if en.spellID ~= nil and idx.parSpell[en.spellID] == nil then idx.parSpell[en.spellID] = ref end
+      if type(en.nom) == "string" and en.nom ~= "" then
+        local k = cleTalent(en.nom)
+        if idx.parNom[k] == nil then idx.parNom[k] = ref end
+      end
+    end
+  end
+  return idx
+end
+
+-- Retrouve le nœud d'une entrée : { nodeID, entryID, nom } ou nil.
+function ns.resoudreEntree(e, index)
+  if type(e) ~= "table" then return nil end
+  if e.nodeID then return { nodeID = e.nodeID, entryID = e.entryID } end
+  if not index then return nil end
+  for _, id in ipairs(e.sorts or {}) do
+    local r = index.parSpell[id]
+    if r then return r end
+  end
+  if type(e.nom) == "string" and e.nom ~= "" then
+    local r = index.parNom[cleTalent(e.nom)]
+    if r then return r end
+  end
+  if type(e.nomEN) == "string" and e.nomEN ~= "" then
+    local r = index.parNom[cleTalent(e.nomEN)]
+    if r then return r end
   end
   return nil
+end
+
+-- Résout toutes les entrées d'un build. Rend
+--   { entrees = { { nodeID, entryID, rangs, nom, place } } (dans l'ordre du build, les reconnues seulement),
+--     nonReconnus = { noms } (sautées : à compter et à montrer) }.
+function ns.resoudreBuild(build, index)
+  local res = { entrees = {}, nonReconnus = {} }
+  for i, e in ipairs(build or {}) do
+    local r = ns.resoudreEntree(e, index)
+    if r then
+      res.entrees[#res.entrees + 1] = { nodeID = r.nodeID, entryID = e.entryID or r.entryID, rangs = e.rangs or 1,
+        nom = e.nom or e.nomEN or r.nom, place = i }
+    else
+      res.nonReconnus[#res.nonReconnus + 1] = e.nom or e.nomEN or ("talent " .. i)
+    end
+  end
+  return res
+end
+
+-- Le prochain talent à prendre : la première entrée dont le rang voulu n'est pas atteint ET que le jeu
+-- laisse acheter maintenant (palier atteint, point disponible) ; sinon on passe à la suivante.
+-- rangDe(nodeID, entrée) rend le rang pris, ou nil si le nœud n'existe pas dans l'arbre (sauté) ;
+-- peutAcheter(nodeID, entrée) rend false quand le jeu refuse l'achat (nil = on ne sait pas : on essaie).
+-- Renvoie l'entrée, le rang actuel et sa place dans la liste ; ou nil, nil, nil et la première entrée
+-- encore à prendre mais bloquée (palier pas atteint) quand aucune ne peut être achetée.
+function ns.prochainNoeud(build, rangDe, peutAcheter)
+  local bloque
+  for i, e in ipairs(build or {}) do
+    local rang = rangDe(e.nodeID, e)
+    if rang ~= nil and rang < (e.rangs or 1) then
+      if not peutAcheter or peutAcheter(e.nodeID, e) ~= false then return e, rang, i end
+      bloque = bloque or e
+    end
+  end
+  return nil, nil, nil, bloque
 end
 
 -- ============================================================ ordre des statistiques
@@ -177,8 +275,10 @@ function ns.indexGrimoire(liste)
   return t
 end
 
--- def = { nom, ids } ; api = { connu(id), nomSort(id), chercherParNom(nom) }
+-- def = { nom, nomEN, ids } ; api = { connu(id), nomSort(id), chercherParNom(nom) }
 -- parNom (facultatif) : résultat de indexGrimoire, qui évite de reparcourir le grimoire pour chaque sort.
+-- Ordre : un identifiant connu (du rang le plus haut au plus bas), puis le nom français dans le grimoire,
+-- puis le nom anglais (client en anglais, ou nom français mal retenu).
 -- Renvoie { id, nom, ids = ensemble } ou nil si le personnage ne connaît pas ce sort.
 function ns.resoudreSort(def, api, parNom)
   for _, id in ipairs(def.ids or {}) do
@@ -186,13 +286,17 @@ function ns.resoudreSort(def, api, parNom)
       return { id = id, nom = api.nomSort(id) or def.nom, ids = ensemble(def.ids) }
     end
   end
-  if def.nom and (parNom or api.chercherParNom) then
-    local id
-    if parNom then id = parNom[simple(def.nom)] else id = api.chercherParNom(def.nom) end
-    if id then
-      local ids = ensemble(def.ids)
-      ids[id] = true
-      return { id = id, nom = api.nomSort(id) or def.nom, ids = ids }
+  if parNom or api.chercherParNom then
+    for _, nom in ipairs({ def.nom or "", def.nomEN or "" }) do
+      if nom ~= "" then
+        local id
+        if parNom then id = parNom[simple(nom)] else id = api.chercherParNom(nom) end
+        if id then
+          local ids = ensemble(def.ids)
+          ids[id] = true
+          return { id = id, nom = api.nomSort(id) or def.nom or nom, ids = ids }
+        end
+      end
     end
   end
   return nil
@@ -215,7 +319,7 @@ end
 
 -- ============================================================ le moteur de priorité
 
--- Une condition : une chaîne ("pret", "ennemisProches>=3", "vie<20") ou une table
+-- Une condition : une chaîne ("pret", "ennemisProches>=3", "vie<20", "pointsCombo>=5") ou une table
 -- ({ "debuffAbsent", AUTRE_CLE }, { "vie", "moi", 30 }, { "typeCible", { "Mort-vivant", "Démon" } }).
 -- Rend true, false, ou nil quand la valeur est illisible (secrète, absente).
 function ns.evaluerCondition(cond, cleSort, sorts, api)
@@ -226,6 +330,11 @@ function ns.evaluerCondition(cond, cleSort, sorts, api)
   if seuil then nom, a1 = "ennemisProches", tonumber(seuil) end
   local pct = nom:match("^vie<(%d+)$")
   if pct then nom, a1, a2 = "vie", "cible", tonumber(pct) end
+  local pts = nom:match("^pointsCombo>=(%d+)$")
+  if pts then nom, a1 = "pointsCombo", tonumber(pts) end
+
+  -- « { "buffAbsent", AUTRE_CLE } » : un autre sort que tu ne connais pas ne peut pas être actif, donc absent.
+  if (nom == "buffAbsent" or nom == "debuffAbsent") and a1 and not sorts[a1] then return true end
 
   if nom == "pret" then
     return api.pret(sorts[a1 or cleSort])
@@ -237,11 +346,16 @@ function ns.evaluerCondition(cond, cleSort, sorts, api)
     local n = api.ennemis()
     if type(n) ~= "number" or secret(n) then return nil end
     return n >= (a1 or 2)
+  elseif nom == "pointsCombo" then
+    -- points de combo sur la cible (voleur, druide en félin) ; valeur secrète ou API absente : non évaluable.
+    local n = api.pointsCombo and api.pointsCombo()
+    if type(n) ~= "number" or secret(n) then return nil end
+    return n >= (a1 or 1)
   elseif nom == "typeCible" then
     -- a1 = liste des noms de types (localisés) acceptés ; type secret ou absent : non évaluable.
     local t = api.typeCible and api.typeCible()
     if type(t) ~= "string" or secret(t) or type(a1) ~= "table" then return nil end
-    local voulu = simple(t)
+    local voulu = simpleMemo(t)
     for _, n in ipairs(a1) do
       if simple(n) == voulu then return true end
     end
@@ -256,7 +370,7 @@ end
 
 -- Évalue une liste de priorité.
 --   liste : { { sort = CLE, si = { conditions }, texte = "…" }, … }
---   sorts : résultat de resoudreSorts ; api : { pret, debuffAbsent, buffAbsent, ennemis, vie, typeCible }
+--   sorts : résultat de resoudreSorts ; api : { pret, debuffAbsent, buffAbsent, ennemis, vie, typeCible, pointsCombo }
 -- Renvoie { choix = entrée à lancer (ou nil), cle, illisible = vrai quand la plupart des entrées
 -- à conditions (plus de la moitié) sont illisibles : alors on ne recommande rien et on passe au mode liste, lignes = { { sort, texte, verdict } } }.
 -- Verdict : true (à lancer), false (pas maintenant), nil (illisible).
@@ -324,7 +438,7 @@ function ns.boutonsPourSort(s, boutons, api)
     local trouve = b.slot ~= nil and slots[b.slot] or false
     if not trouve and b.slot ~= nil then
       local ok, t, id = pcall(api.infoAction, b.slot)
-      if ok and t == "spell" and type(id) == "number" and not secret(id) then
+      if ok and not secret(t) and t == "spell" and type(id) == "number" and not secret(id) then
         if id == s.id or (s.ids and s.ids[id]) then
           trouve = true
         else
@@ -392,7 +506,7 @@ function api.grimoire()
       if type(ligne) == "table" and type(ligne.itemIndexOffset) == "number" then
         for i = ligne.itemIndexOffset + 1, ligne.itemIndexOffset + (ligne.numSpellBookItems or 0) do
           local info = C_SpellBook.GetSpellBookItemInfo(i, banque)
-          if type(info) == "table" and info.spellID and not secret(info.spellID) then
+          if type(info) == "table" and not secret(info.spellID) and info.spellID then
             local nom, sous = info.name, info.subName
             if not nom and C_SpellBook.GetSpellBookItemName then nom, sous = C_SpellBook.GetSpellBookItemName(i, banque) end
             local horsSpe = not secret(info.isOffSpec) and info.isOffSpec == true or nil
@@ -441,14 +555,14 @@ function api.pret(s)
   local debut, duree
   if C_Spell and C_Spell.GetSpellCooldown then
     local i = C_Spell.GetSpellCooldown(s.id)
-    if i == nil then return nil end
-    if secret(i) or type(i) ~= "table" then return nil end
+    if secret(i) then return nil end
+    if i == nil or type(i) ~= "table" then return nil end
     debut, duree = i.startTime, i.duration
   elseif GetSpellCooldown then
     debut, duree = GetSpellCooldown(s.id)
   end
-  if debut == nil or duree == nil then return nil end
   if secret(debut) or secret(duree) then return nil end
+  if debut == nil or duree == nil then return nil end
   if not utilisable then return false end
   if duree <= 1.5 then return true end -- seulement la recharge commune : on peut déjà y penser
   return (debut + duree - GetTime()) <= 0.1
@@ -459,14 +573,15 @@ local function chercherEffet(unite, filtre, s)
   if not s then return nil end
   if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
   if UnitExists and not UnitExists(unite) then return nil end
-  local nomVoulu = s.nom and simple(s.nom)
+  local nomVoulu = s.nom and simpleMemo(s.nom)
   for i = 1, 60 do
     local a = C_UnitAuras.GetAuraDataByIndex(unite, i, filtre)
+    if secret(a) then return nil end -- par prudence : une valeur secrète ne se teste pas
     if not a then return false end
-    if secret(a) or type(a) ~= "table" then return nil end
+    if type(a) ~= "table" then return nil end
     local id, nom = a.spellId, a.name
     if secret(id) or secret(nom) then return nil end
-    if (id and s.ids and s.ids[id]) or id == s.id or (nomVoulu and type(nom) == "string" and simple(nom) == nomVoulu) then
+    if (id and s.ids and s.ids[id]) or id == s.id or (nomVoulu and type(nom) == "string" and simpleMemo(nom) == nomVoulu) then
       return true
     end
   end
@@ -509,6 +624,18 @@ function api.typeCible()
   local t = UnitCreatureType("target")
   if type(t) ~= "string" or secret(t) then return nil end
   return t
+end
+
+-- Les points de combo sur la cible (voleur, félin) ; nil si le jeu ne les donne pas ou les cache.
+function api.pointsCombo()
+  local n
+  if GetComboPoints then
+    n = GetComboPoints("player", "target")
+  elseif UnitPower and Enum and Enum.PowerType and Enum.PowerType.ComboPoints then
+    n = UnitPower("player", Enum.PowerType.ComboPoints)
+  end
+  if type(n) ~= "number" or secret(n) then return nil end
+  return n
 end
 
 function api.vie(unite)
@@ -579,19 +706,40 @@ function ns.vueTalents(e)
     L[#L + 1] = titre("Prochain talent : " .. tostring(t.nom or "?"))
     L[#L + 1] = string.format("Rang %d sur %d. Dans la fenêtre des talents du jeu, il est entouré en vert (si l'option est cochée).",
       t.rang or 0, t.rangs or 1)
+  elseif t.etat == "attente" then
+    L[#L + 1] = titre("Prochain talent : " .. tostring(t.nom or "?"))
+    L[#L + 1] = "Le jeu ne permet pas de le prendre pour l'instant (palier pas atteint, ou plus de point à dépenser). Il s'allumera dès que ce sera possible."
   elseif t.etat == "fini" then
     L[#L + 1] = titre("Talents")
     L[#L + 1] = VERT .. "Tous les talents de ce build sont pris." .. FIN
   elseif t.etat == "horsArbre" then
     L[#L + 1] = titre("Talents")
-    L[#L + 1] = "Le build écrit ne correspond pas à l'arbre de ton personnage (numéros de nœuds introuvables). Fais " .. BLEU .. "/cs export" .. FIN .. " puis " .. BLEU .. "/reload" .. FIN .. " pour qu'on le corrige."
+    L[#L + 1] = "Le build écrit ne correspond pas à l'arbre de ton personnage : aucun de ses talents n'a été reconnu. Fais " .. BLEU .. "/cs export" .. FIN .. " puis " .. BLEU .. "/reload" .. FIN .. " pour qu'on le corrige."
   elseif t.etat == "sansArbre" then
     L[#L + 1] = titre("Talents")
     L[#L + 1] = "Le jeu ne donne pas (encore) l'arbre de talents de ton personnage : configuration active introuvable."
   else
     L[#L + 1] = titre("Talents")
     L[#L + 1] = string.format("Build pas encore écrit pour %s, %s, %s. Fais %s/cs export%s puis %s/reload%s : l'arbre complet de ton personnage et ton grimoire sont écrits dans la sauvegarde (ConseillerDB, dossier WTF) pour qu'on écrive le build avec les vrais numéros de nœuds.",
-      c.nom, e.conseil.nom, D.NOMS_SITUATIONS[e.situation] or e.situation, BLEU, FIN, BLEU, FIN)
+      c.nom, e.speNom or e.conseil.nom, D.NOMS_SITUATIONS[e.situation] or e.situation, BLEU, FIN, BLEU, FIN)
+  end
+  -- Les talents du build que l'arbre du personnage n'a pas permis de reconnaître (sautés, jamais devinés).
+  local nb = t.nbNonReconnus or 0
+  if nb > 0 then
+    L[#L + 1] = ""
+    L[#L + 1] = ROUGE .. (nb == 1 and "1 talent du build n'a pas été reconnu" or (nb .. " talents du build n'ont pas été reconnus"))
+      .. " : " .. FIN .. "fais " .. BLEU .. "/cs export" .. FIN .. " puis " .. BLEU .. "/reload" .. FIN .. " pour qu'on corrige leurs noms."
+    local noms = {}
+    for i, n in ipairs(t.nonReconnus or {}) do
+      if i > 6 then noms[#noms + 1] = "…"; break end
+      noms[#noms + 1] = tostring(n)
+    end
+    if #noms > 0 then L[#L + 1] = GRIS .. table.concat(noms, ", ") .. FIN end
+  end
+  -- La provenance du build : croisé entre plusieurs guides, daté (une date par classe dans les données).
+  if t.date and t.etat ~= "vide" and t.etat ~= "sansArbre" then
+    L[#L + 1] = ""
+    L[#L + 1] = GRIS .. "Build croisé entre plusieurs guides, mis à jour le " .. t.date .. "." .. FIN
   end
   return table.concat(L, "\n")
 end

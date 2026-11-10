@@ -3,7 +3,7 @@
 ## Notes: Lit ton personnage (classe, spécialisation, race, niveau) et ta situation (seul, en groupe, donjon, raid) : spécialisation et talents conseillés, prochain sort allumé sur ta barre d'action, ordre des statistiques, métiers et capacités de race.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.2.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## SavedVariables: ConseillerDB
 ## AddonCompartmentFunc: Conseiller_OuvrirReglages

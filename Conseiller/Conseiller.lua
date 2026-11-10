@@ -5,14 +5,17 @@
 --   /cs export               écrit l'arbre de talents et le grimoire dans la sauvegarde
 --                            (ConseillerDB.export) : fais ensuite /reload pour que le fichier soit écrit
 --   /cs mode auto|a|c        le mode de la rotation (auto, contour sur la barre, liste seule)
---   /cs etat                 ce que Conseiller a compris (classe, spécialisation, sorts, mode)
+--   /cs etat                 ce que Conseiller a compris (classe, spécialisation, sorts, mode, et les
+--                            talents du build qu'il n'a pas reconnus dans l'arbre)
 --
 -- Ce qu'il lit : classe, spécialisation, race, niveau, et ta situation (seul, en groupe, donjon,
 -- raid) avec les rôles de ton groupe. Rien n'est lancé à ta place : la rotation entoure en
 -- bleu, sur TA barre d'action, le bouton du prochain sort (un cadre à nous, posé par-dessus : aucun
 -- bouton du jeu n'est modifié, donc aucun « taint »). Si le jeu cache les temps de recharge en
 -- combat, Conseiller passe tout seul à la liste de priorité.
--- Les données (sorts, rotations, conseils) sont dans Donnees.lua, la logique dans Logique.lua.
+-- Les données (sorts, rotations, builds de talents, conseils : les 9 classes) sont dans Donnees.lua, tirées des
+-- fiches de outils/donnees-conseiller/ ; la logique est dans Logique.lua. Un build de talents désigne chaque
+-- talent par ses sorts et ses noms (français, anglais) : Conseiller le retrouve dans l'arbre du jeu.
 -- ============================================================================
 
 local NOM_ADDON, ns = ...
@@ -82,8 +85,9 @@ local function lireMembres()
         -- Une valeur secrète veut dire « inconnu » : rôle NONE, classe inconnue.
         local _, classe = UnitClass(u)
         if ns.estSecret(classe) then classe = nil end
-        local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(u) or "NONE"
-        if ns.estSecret(role) then role = "NONE" end
+        -- (pas de « x or "NONE" » : cela testerait la valeur avant qu'on sache si elle est secrète)
+        local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(u)
+        if ns.estSecret(role) or role == nil then role = "NONE" end
         local nom = UnitName(u)
         if ns.estSecret(nom) then nom = nil end
         m[#m + 1] = { role = role, classe = classe, nom = nom }
@@ -163,54 +167,161 @@ local function idConfig()
   return nil
 end
 
-local function rangDuNoeud(configID, nodeID)
+-- Le rang pris d'un nœud (nil si le nœud n'existe pas dans l'arbre du personnage : il est sauté).
+-- Quand le nœud est « à choix » et qu'un autre choix est actif, l'entrée voulue n'est pas prise : rang 0.
+local function rangDuNoeud(configID, nodeID, entryID)
   if not (C_Traits and C_Traits.GetNodeInfo) then return nil end
   local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
   if not ok or type(n) ~= "table" or ns.estSecret(n) then return nil end
   if not n or n.ID ~= nodeID or (n.maxRanks or 0) == 0 then return nil end -- le nœud n'existe pas dans cet arbre
   local rang = n.currentRank
   if type(rang) ~= "number" then rang = n.ranksPurchased end
-  return type(rang) == "number" and rang or 0
+  if type(rang) ~= "number" then rang = 0 end
+  if entryID and type(n.entryIDs) == "table" and #n.entryIDs > 1 and type(n.activeEntry) == "table"
+    and n.activeEntry.entryID and n.activeEntry.entryID ~= entryID then
+    return 0
+  end
+  return rang, n.maxRanks
 end
 
-local function nomDuNoeud(configID, nodeID)
+-- Le jeu laisse-t-il acheter un rang de ce nœud maintenant (palier atteint, point à dépenser) ?
+-- true / false, ou nil quand le jeu ne le dit pas (on essaiera).
+local function peutAcheter(configID, nodeID)
   local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
-  if not ok or type(n) ~= "table" then return nil end
-  local entree = n.activeEntry and n.activeEntry.entryID or (n.entryIDs and n.entryIDs[1])
-  if not entree then return nil end
-  local okE, e = pcall(C_Traits.GetEntryInfo, configID, entree)
-  if not okE or type(e) ~= "table" or not e.definitionID then return nil end
-  local okD, d = pcall(C_Traits.GetDefinitionInfo, e.definitionID)
-  if not okD or type(d) ~= "table" or not d.spellID then return nil end
-  return ns.apiJeu.nomSort(d.spellID), d.spellID
+  if not ok or type(n) ~= "table" or ns.estSecret(n) then return nil end
+  if n.canPurchaseRank == false or n.isAvailable == false then return false end
+  return true
 end
 
--- Le prochain talent du build : { etat = "vide" | "sansArbre" | "suivant" | "fini", nodeID, nom, rang, rangs, configID }.
+-- Le sort et le nom (dans la langue du jeu) du talent d'une entrée de l'arbre.
+local function sortDeLEntree(configID, entryID)
+  if not (C_Traits and C_Traits.GetEntryInfo and C_Traits.GetDefinitionInfo) then return nil, nil end
+  local okE, e = pcall(C_Traits.GetEntryInfo, configID, entryID)
+  if not okE or type(e) ~= "table" or not e.definitionID then return nil, nil end
+  local okD, d = pcall(C_Traits.GetDefinitionInfo, e.definitionID)
+  if not okD or type(d) ~= "table" then return nil, nil end
+  local spellID = d.spellID
+  if ns.estSecret(spellID) then return nil, nil end
+  local nom = spellID and ns.apiJeu.nomSort(spellID) or nil
+  if type(nom) ~= "string" or ns.estSecret(nom) then nom = nil end
+  if not nom and type(d.overrideName) == "string" and not ns.estSecret(d.overrideName) then nom = d.overrideName end
+  return spellID, nom
+end
+
+local function nomDuNoeud(configID, nodeID, entryID)
+  if not entryID then
+    local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
+    if not ok or type(n) ~= "table" then return nil end
+    entryID = n.activeEntry and n.activeEntry.entryID or (n.entryIDs and n.entryIDs[1])
+  end
+  if not entryID then return nil end
+  local spellID, nom = sortDeLEntree(configID, entryID)
+  return nom, spellID
+end
+
+-- L'arbre du personnage sous forme de liste pure : { { nodeID, entrees = { { entryID, spellID, nom } } } }.
+function ns.lireArbre(configID)
+  local res = {}
+  if not (C_Traits and C_Traits.GetConfigInfo and C_Traits.GetTreeNodes and C_Traits.GetNodeInfo) then return res end
+  local okC, info = pcall(C_Traits.GetConfigInfo, configID)
+  if not okC or type(info) ~= "table" or ns.estSecret(info) then return res end
+  for _, treeID in ipairs(info.treeIDs or {}) do
+    local okN, ids = pcall(C_Traits.GetTreeNodes, treeID)
+    for _, nodeID in ipairs(okN and type(ids) == "table" and ids or {}) do
+      local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
+      if ok and type(n) == "table" and not ns.estSecret(n) then
+        local noeud = { nodeID = nodeID, entrees = {} }
+        for _, entryID in ipairs(n.entryIDs or {}) do
+          local spellID, nom = sortDeLEntree(configID, entryID)
+          noeud.entrees[#noeud.entrees + 1] = { entryID = entryID, spellID = spellID, nom = nom }
+        end
+        res[#res + 1] = noeud
+      end
+    end
+  end
+  return res
+end
+
+-- La table de correspondance des talents, gardée tant que l'arbre ne change pas (ns.arbreSale la rend à refaire).
+local cacheArbre = {}
+ns.arbreSale = true
+local function indexDeLArbre(configID)
+  if not ns.arbreSale and cacheArbre.index and cacheArbre.configID == configID then return cacheArbre.index end
+  local index = ns.indexArbre(ns.lireArbre(configID))
+  -- Un arbre vide (pas encore chargé) n'est pas gardé : on relira au prochain appel.
+  if index.nb > 0 then cacheArbre = { configID = configID, index = index }; ns.arbreSale = false end
+  return index
+end
+
+-- Le prochain talent du build : { etat = "vide" | "sansArbre" | "horsArbre" | "suivant" | "attente" | "fini",
+--   nodeID, entryID, nom, rang, rangs, configID, nonReconnus = { noms }, nbNonReconnus, date }.
 function ns.infoTalents(classe, speCle, situationVue)
   local build = ns.buildPour(classe, speCle, situationVue)
   if not build then return { etat = "vide" } end
+  local date = ns.dateBuild(classe)
   local configID = idConfig()
-  if not configID or not (C_Traits and C_Traits.GetNodeInfo) then return { etat = "sansArbre" } end
-  local entree, rang = ns.prochainNoeud(build, function(nodeID) return rangDuNoeud(configID, nodeID) end)
-  if not entree then
-    -- Aucun nœud du build n'existe dans l'arbre du personnage : le build n'est pas fait pour lui.
-    local existe = false
-    for _, e in ipairs(build) do
-      if rangDuNoeud(configID, e.nodeID) ~= nil then existe = true; break end
-    end
-    return { etat = existe and "fini" or "horsArbre", configID = configID }
+  if not configID or not (C_Traits and C_Traits.GetNodeInfo) then return { etat = "sansArbre", date = date } end
+  -- La table de correspondance ne sert que si une entrée est désignée par son sort ou son nom.
+  local index
+  for _, e in ipairs(build) do
+    if not e.nodeID then index = indexDeLArbre(configID); break end
   end
-  return { etat = "suivant", configID = configID, nodeID = entree.nodeID, entryID = entree.entryID, rang = rang, rangs = entree.rangs or 1,
-    nom = nomDuNoeud(configID, entree.nodeID) or ("nœud " .. tostring(entree.nodeID)) }
+  local resolu = ns.resoudreBuild(build, index)
+  local valides, absents = {}, resolu.nonReconnus
+  for _, e in ipairs(resolu.entrees) do
+    local rang, maxRangs = rangDuNoeud(configID, e.nodeID, e.entryID)
+    if rang ~= nil then
+      -- Un rang voulu au-dessus du maximum du nœud (rangs de Classic de mémoire) est ramené à ce maximum.
+      if type(maxRangs) == "number" and (e.rangs or 1) > maxRangs then e.rangs = maxRangs end
+      valides[#valides + 1] = e
+    else absents[#absents + 1] = e.nom or ("nœud " .. tostring(e.nodeID)) end
+  end
+  local info = { configID = configID, date = date, nonReconnus = absents, nbNonReconnus = #absents }
+  -- Aucun talent du build n'existe dans l'arbre du personnage : le build n'est pas fait pour lui.
+  if #valides == 0 then info.etat = "horsArbre"; return info end
+  local entree, rang, _, bloque = ns.prochainNoeud(valides,
+    function(nodeID, e) return rangDuNoeud(configID, nodeID, e.entryID) end,
+    function(nodeID) return peutAcheter(configID, nodeID) end)
+  if not entree then
+    if bloque then
+      info.etat = "attente"
+      info.nodeID, info.entryID = bloque.nodeID, bloque.entryID
+      info.nom = nomDuNoeud(configID, bloque.nodeID, bloque.entryID) or bloque.nom or ("nœud " .. tostring(bloque.nodeID))
+    else
+      info.etat = "fini"
+    end
+    return info
+  end
+  info.etat = "suivant"
+  info.nodeID, info.entryID, info.rang, info.rangs = entree.nodeID, entree.entryID, rang, entree.rangs or 1
+  info.nom = nomDuNoeud(configID, entree.nodeID, entree.entryID) or entree.nom or ("nœud " .. tostring(entree.nodeID))
+  return info
 end
 
 -- « Prendre ce talent » : jamais en combat, un seul point, validé tout de suite.
 function ns.prendreTalent()
   local dire = ns.reglages.dire
   if InCombatLockdown() then dire("pas de changement de talents en combat.") return end
+  if not (C_Traits and C_Traits.PurchaseRank and C_Traits.CommitConfig) then
+    dire("le jeu ne laisse pas un addon acheter un talent ici : fais-le dans la fenêtre des talents.")
+    return
+  end
+  -- Le jeu dit lui-même si les talents peuvent changer maintenant (zone, effet, clé mythique…).
+  if C_ClassTalents and C_ClassTalents.CanEditTalents then
+    local okE, peut, raison = pcall(C_ClassTalents.CanEditTalents)
+    if okE and peut == false then
+      dire("le jeu ne permet pas de changer de talents maintenant" .. (type(raison) == "string" and raison ~= "" and (" : " .. raison) or "") .. ".")
+      return
+    end
+  end
   local e = ns.construireEtat()
   local t = e.talents
-  if t.etat ~= "suivant" then dire("pas de talent à prendre : " .. (t.etat == "fini" and "tout le build est pris." or "pas de build écrit pour ce personnage.")) return end
+  if t.etat ~= "suivant" then
+    dire("pas de talent à prendre : " .. (t.etat == "fini" and "tout le build est pris."
+      or (t.etat == "attente" and "le jeu n'en laisse prendre aucun pour l'instant (palier ou points)."
+        or "pas de build écrit pour ce personnage.")))
+    return
+  end
   -- Nœud à choix (plusieurs entryIDs) : on choisit d'abord l'entrée voulue par le build.
   if t.entryID and C_Traits.SetSelection then
     local okN, n = pcall(C_Traits.GetNodeInfo, t.configID, t.nodeID)
@@ -221,8 +332,9 @@ function ns.prendreTalent()
   end
   local ok, reussi = pcall(C_Traits.PurchaseRank, t.configID, t.nodeID)
   if not ok or reussi == false then dire("le jeu refuse « " .. t.nom .. " » (plus de points, ou un talent à prendre avant).") return end
-  local valider = (C_ClassTalents and C_ClassTalents.CommitConfig) or C_Traits.CommitConfig
-  local okV, valide = pcall(valider, t.configID)
+  -- C_Traits.CommitConfig prend l'identifiant de la configuration active. (C_ClassTalents.CommitConfig, lui,
+  -- attend l'identifiant d'une configuration SAUVEGARDÉE : lui donner celui-ci ne validerait rien.)
+  local okV, valide = pcall(C_Traits.CommitConfig, t.configID)
   ns.talentsSale = true
   if ns.majFenetre then ns.majFenetre() end
   if not okV or valide == false then dire("talent acheté, mais le jeu a refusé de valider : " .. t.nom .. ".") return end
@@ -668,7 +780,8 @@ ecouteur:SetScript("OnEvent", function(_, ev)
   if ev == "SPELLS_CHANGED" or EVENEMENTS_SPE[ev] or ev == "PLAYER_ENTERING_WORLD" then pcall(resoudre) end
   if EVENEMENTS_GROUPE[ev] or EVENEMENTS_SPE[ev] then pcall(majGroupe) end
   if EVENEMENTS_BARRES[ev] then ns.cacheBoutonsSale = true end
-  if EVENEMENTS_TALENTS[ev] or EVENEMENTS_SPE[ev] then ns.talentsSale = true end
+  if EVENEMENTS_TALENTS[ev] or EVENEMENTS_SPE[ev] then ns.talentsSale = true; ns.arbreSale = true end
+  if ev == "PLAYER_LEVEL_UP" or ev == "PLAYER_ENTERING_WORLD" then ns.arbreSale = true end
   if ns.majFenetre and (EVENEMENTS_GROUPE[ev] or EVENEMENTS_SPE[ev] or EVENEMENTS_TALENTS[ev] or ev == "PLAYER_LEVEL_UP"
     or ev == "SKILL_LINES_CHANGED") then
     ns.majFenetre()
@@ -708,6 +821,11 @@ local function etatEnTexte()
   dire(string.format("%s niveau %s, %s, spécialisation %s, situation %s%s. Sorts connus : %d. Mode : %s%s.",
     e.classeNom, tostring(e.niveau), tostring(e.raceNom), tostring(e.speNom or "inconnue"), e.situation,
     ns.situationForcee and " (forcée)" or "", n, etatRotation.mode or "?", etatRotation.auto and " (auto)" or ""))
+  local t = e.talents
+  if t and (t.nbNonReconnus or 0) > 0 then
+    dire(string.format("talents du build non reconnus (%d) : %s. Fais /cs export puis /reload pour qu'on corrige leurs noms.",
+      t.nbNonReconnus, table.concat(t.nonReconnus, ", ")))
+  end
   if ns.derniereErreur then dire("dernière erreur : " .. ns.derniereErreur) end
 end
 
