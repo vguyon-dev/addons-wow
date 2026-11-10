@@ -11,6 +11,12 @@
 --   - à droite, la page de l'addon : interrupteur général, un onglet par
 --     section, des interrupteurs et des curseurs, les boutons d'action en bas ;
 --   - en haut, une recherche qui trouve un réglage dans tous les addons.
+--   - tout en haut de la liste, « Quoi de neuf » : une page (pas un addon : ni point ni
+--     interrupteur) qui montre ns.NOUVEAUTES. Chaque addon garde dans sa sauvegarde la date
+--     de la dernière nouveauté vue (db.nouveautesVues) ; s'il y en a une plus récente, un
+--     seul message au chat à la connexion et une pastille dorée sur l'entrée, jusqu'à
+--     l'ouverture de la page. Pour annoncer du neuf : une entrée EN TÊTE de ns.NOUVEAUTES,
+--     avec la date du jour.
 --
 -- Utilisation, dans le fichier principal de l'addon :
 --   local reglages = ns.creerReglages({
@@ -170,6 +176,91 @@ function ns.chercherReglages(entrees, texte)
     end
   end
   return resultats
+end
+
+
+-- ============================================================ quoi de neuf
+-- Les nouveautés, les plus récentes d'abord. Une date par entrée (AAAA-MM-JJ) :
+-- chaque addon retient dans sa sauvegarde la date de la dernière nouveauté vue.
+-- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
+-- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
+ns.NOUVEAUTES = {
+  { date = "2026-11-10", titre = "Sept améliorations d'un coup", lignes = {
+    "Tous les addons ont le même visuel sombre et doré : fond sombre, bordure dorée, titre doré.",
+    "Marchand auto peut vendre en plus l'équipement lié que ta classe ne peut pas porter. Jamais un objet épique, jamais un objet de ta liste à garder. Option coupée au départ.",
+    "Sacs rangés : la banque aussi se range par catégories, dans une seconde fenêtre à gauche du sac.",
+    "Enchères : quand tu déposes un objet à vendre, un prix conseillé s'affiche et un bouton le met dans le champ du jeu. C'est toujours toi qui valides la vente.",
+    "Courrier : des destinataires rapides (tes autres personnages, tes derniers destinataires) et un bilan dans le chat à la fin d'une récupération.",
+    "GPS : tu peux envoyer tes balises à ton groupe, et accepter celles de ton groupe.",
+    "Cette page « Quoi de neuf » : quand il y a du nouveau, un message le dit une seule fois dans le chat, et un point doré reste sur « Quoi de neuf » tant que tu n'as pas ouvert la page.",
+  } },
+  { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
+    "Les réglages des 17 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
+    "À gauche, la liste des addons avec un point vert (activé) ou rouge (coupé). Un clic droit active ou coupe un addon.",
+    "À droite, les réglages de l'addon choisi, rangés en onglets, avec des interrupteurs et des curseurs.",
+    "En haut, une recherche trouve un réglage dans tous les addons, même sans les accents.",
+  } },
+  { date = "2026-11-09", titre = "Trois nouveaux addons", lignes = {
+    "Montures : une seule touche pour monter la bonne monture (volante, aquatique ou terrestre). Réappuie pour descendre.",
+    "Confort : accepte tout seul les invocations, les résurrections et les invitations de tes amis et de ta guilde, refuse les duels, et masque ce qui gêne l'écran.",
+    "Familier du chasseur : une alerte avec le bon bouton quand le familier a faim, est mort ou n'est pas appelé.",
+  } },
+  { date = "2026-11-09", titre = "Barres de vie et GPS", lignes = {
+    "Barres de vie : un grand « ! » et ta progression (par exemple 2/6) au-dessus des monstres de tes quêtes, avec l'icône de l'objet à ramasser.",
+    "GPS : la flèche est plus grosse, sa taille se règle, et sans balise elle suit la quête suivie ou l'épingle posée sur la carte.",
+  } },
+  { date = "2026-11-08", titre = "Sac rangé par catégories et conseils d'équipement", lignes = {
+    "Sacs rangés peut remplacer tes sacs par une seule fenêtre en sections : équipement, consommables, composants, métiers, quêtes, divers, ce que tu ne peux pas porter, et ce qui est à vendre.",
+    "La bulle de chaque objet dit pourquoi il est rangé là, et une flèche rouge marque l'équipement moins bon que ce que tu portes.",
+    "Conseils d'équipement : les objets meilleurs pour ta spécialisation passent en tête avec une flèche verte et la raison, et une ligne verte s'ajoute dans les bulles d'objets.",
+  } },
+  { date = "2026-11-08", titre = "GPS, Courrier et Enchères", lignes = {
+    "GPS : des balises avec /way, ou Ctrl + clic droit sur la carte, et une flèche avec la distance et le temps restant.",
+    "Courrier : « Tout récupérer », « Or seulement » ou les courriers cochés, sans jamais payer un contre-remboursement.",
+    "Enchères : le relevé des prix, les prix dans les bulles d'objets et une liste de courses.",
+  } },
+}
+
+local function dateNouveaute(d) return type(d) == "string" and d:match("^%d%d%d%d%-%d%d%-%d%d$") ~= nil end
+
+-- La date de la nouveauté la plus récente (nil s'il n'y en a pas).
+function ns.derniereNouveaute(liste)
+  local derniere
+  for _, n in ipairs(type(liste) == "table" and liste or {}) do
+    if type(n) == "table" and dateNouveaute(n.date) and (not derniere or n.date > derniere) then derniere = n.date end
+  end
+  return derniere
+end
+
+-- Y a-t-il une nouveauté plus récente que la dernière date vue ? Une date absente ou
+-- abîmée veut dire « rien vu » : tout est nouveau.
+function ns.ilYADuNeuf(liste, vue)
+  local derniere = ns.derniereNouveaute(liste)
+  if not derniere then return false end
+  if not dateNouveaute(vue) then return true end
+  return derniere > vue
+end
+
+-- « 2026-11-10 » devient « 10/11/2026 ».
+function ns.dateLisible(d)
+  if not dateNouveaute(d) then return tostring(d or "") end
+  return d:sub(9, 10) .. "/" .. d:sub(6, 7) .. "/" .. d:sub(1, 4)
+end
+
+-- Le texte de la page : un titre doré par nouveauté, ses lignes en dessous.
+-- Avec « vue », ce qui est plus récent que cette date est marqué « nouveau ».
+function ns.texteNouveautes(liste, vue)
+  local morceaux = {}
+  for _, n in ipairs(type(liste) == "table" and liste or {}) do
+    if type(n) == "table" and dateNouveaute(n.date) then
+      local marque = (dateNouveaute(vue) and n.date > vue) and "  |cff3ddc3d[nouveau]|r" or ""
+      local bloc = { "|cffffd200" .. tostring(n.titre or "") .. "|r  |cff888888" .. ns.dateLisible(n.date) .. "|r" .. marque }
+      for _, ligne in ipairs(type(n.lignes) == "table" and n.lignes or {}) do bloc[#bloc + 1] = "- " .. tostring(ligne) end
+      morceaux[#morceaux + 1] = table.concat(bloc, "\n")
+    end
+  end
+  if #morceaux == 0 then return "Rien de nouveau pour l'instant." end
+  return table.concat(morceaux, "\n\n")
 end
 
 -- ============================================================ petits outils
@@ -416,6 +507,7 @@ local function leHub()
   if hub and hub.pret then return hub end
   hub = hub or {}
   hub.entrees = hub.entrees or {}
+  hub.speciales = hub.speciales or {} -- les pages qui ne sont pas des addons (Quoi de neuf…)
   _G.ValentinAddons = hub
 
   -- Si une copie précédente a échoué en route, on repart de sa fenêtre.
@@ -488,14 +580,24 @@ local function leHub()
   local lignesResultats = {}
 
   local lignes = {}
+  -- Les pages spéciales d'abord (Quoi de neuf…), puis les addons par ordre alphabétique.
+  local function toutesLesEntrees()
+    local liste = {}
+    for _, e in ipairs(hub.speciales) do liste[#liste + 1] = e end
+    for _, e in ipairs(hub.entrees) do liste[#liste + 1] = e end
+    return liste
+  end
+
   function hub.majCote()
     table.sort(hub.entrees, function(a, b) return a.titre < b.titre end)
-    for i, e in ipairs(hub.entrees) do
+    local liste = toutesLesEntrees()
+    local nSpeciales = #hub.speciales
+    for i, e in ipairs(liste) do
       local l = lignes[i]
       if not l then
         l = CreateFrame("Button", nil, cote)
         l:SetSize(COTE - 8, 24)
-        l:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 25)
+        l:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 25 - (i > nSpeciales and 8 or 0))
         l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         l.choisi = l:CreateTexture(nil, "BACKGROUND")
@@ -509,8 +611,14 @@ local function leHub()
         l.point = l:CreateTexture(nil, "OVERLAY")
         l.point:SetSize(8, 8)
         l.point:SetPoint("RIGHT", -6, 0)
+        -- La pastille dorée : il y a du nouveau sur cette page.
+        l.pastille = l:CreateTexture(nil, "OVERLAY")
+        l.pastille:SetSize(10, 10)
+        l.pastille:SetPoint("RIGHT", -5, 0)
+        l.pastille:SetColorTexture(1, 0.82, 0.30, 1)
         lignes[i] = l
       end
+      l.pastille:SetShown(e.pastille ~= nil and e.pastille() and true or false)
       l.icone:SetTexture(e.icone)
       l.nom:SetText(e.titre)
       local actif = e.actif and e.actif()
@@ -533,14 +641,14 @@ local function leHub()
       end)
       l:Show()
     end
-    for i = #hub.entrees + 1, #lignes do lignes[i]:Hide() end
+    for i = #liste + 1, #lignes do lignes[i]:Hide() end
     -- Beaucoup d'addons : la fenêtre grandit pour tous les montrer.
-    fenetre:SetHeight(math.max(HAUTEUR, #hub.entrees * 25 + 96))
+    fenetre:SetHeight(math.max(HAUTEUR, #liste * 25 + 104))
   end
 
   function hub.selectionner(e)
     hub.courant = e or hub.courant or hub.entrees[1]
-    for _, x in ipairs(hub.entrees) do
+    for _, x in ipairs(toutesLesEntrees()) do
       if x.page and x ~= hub.courant then x.page:Hide() end
     end
     resultats:Hide()
@@ -563,7 +671,7 @@ local function leHub()
   function hub.chercher(texte)
     local trouves = ns.chercherReglages(hub.entrees, texte)
     if simple(texte) == "" then hub.selectionner(hub.courant) return end
-    for _, x in ipairs(hub.entrees) do
+    for _, x in ipairs(toutesLesEntrees()) do
       if x.page then x.page:Hide() end
     end
     resultats:Show()
@@ -599,6 +707,90 @@ local function leHub()
     end
   end
   recherche:HookScript("OnTextChanged", function(self) hub.chercher(self:GetText()) end)
+
+  -- ----------------------------------------------------- Quoi de neuf
+  -- Une page à part, tout en haut de la liste : pas un addon, donc ni point ni interrupteur.
+  local pageNeuf = CreateFrame("Frame", nil, zone)
+  pageNeuf:SetAllPoints()
+  pageNeuf:Hide()
+  local entreeNeuf = { titre = "Quoi de neuf", icone = "Interface\\Icons\\INV_Misc_Note_01", page = pageNeuf, special = true }
+  hub.speciales[#hub.speciales + 1] = entreeNeuf
+
+  local titreNeuf = pageNeuf:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  titreNeuf:SetPoint("TOPLEFT", 10, -6)
+  titreNeuf:SetTextColor(1, 0.82, 0.30)
+  titreNeuf:SetText("Quoi de neuf")
+  local soustitreNeuf = pageNeuf:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  soustitreNeuf:SetPoint("TOPLEFT", titreNeuf, "BOTTOMLEFT", 0, -4)
+  soustitreNeuf:SetText("Ce qui a changé dans les addons, du plus récent au plus ancien.")
+
+  local okN, defileNeuf = pcall(CreateFrame, "ScrollFrame", "ValentinAddonsNeufDefile", pageNeuf, "UIPanelScrollFrameTemplate")
+  if not okN or not defileNeuf then defileNeuf = CreateFrame("ScrollFrame", nil, pageNeuf) end
+  defileNeuf:SetPoint("TOPLEFT", 6, -52)
+  defileNeuf:SetPoint("BOTTOMRIGHT", -26, 8)
+  defileNeuf:EnableMouseWheel(true)
+  defileNeuf:SetScript("OnMouseWheel", function(self, sens)
+    local maxi = nombre(self:GetVerticalScrollRange(), 0)
+    self:SetVerticalScroll(math.max(0, math.min(maxi, nombre(self:GetVerticalScroll(), 0) - sens * 40)))
+  end)
+  local contenuNeuf = CreateFrame("Frame", nil, defileNeuf)
+  contenuNeuf:SetSize(PAGE - 10, 10)
+  local texteNeuf = contenuNeuf:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  texteNeuf:SetPoint("TOPLEFT", 4, -4)
+  texteNeuf:SetWidth(PAGE - 34)
+  texteNeuf:SetJustifyH("LEFT")
+  if texteNeuf.SetJustifyV then texteNeuf:SetJustifyV("TOP") end
+  defileNeuf:SetScrollChild(contenuNeuf)
+
+  -- La plus ancienne date vue parmi les addons chargés (nil si l'un d'eux n'a rien vu) :
+  -- ce qui est plus récent est marqué « nouveau » dans la page.
+  local function plusAncienneVue()
+    local ancienne
+    for _, x in ipairs(hub.entrees) do
+      local v = x.db and x.db.nouveautesVues
+      if type(v) ~= "string" then return nil end
+      if not ancienne or v < ancienne then ancienne = v end
+    end
+    return ancienne
+  end
+
+  -- Il y a du nouveau pour au moins un addon chargé.
+  function hub.aDuNeuf()
+    for _, x in ipairs(hub.entrees) do
+      if x.db and ns.ilYADuNeuf(ns.NOUVEAUTES, x.db.nouveautesVues) then return true end
+    end
+    return false
+  end
+
+  -- La page a été ouverte : chaque addon retient la date de la dernière nouveauté.
+  function hub.marquerVu()
+    local derniere = ns.derniereNouveaute(ns.NOUVEAUTES)
+    if not derniere then return end
+    for _, x in ipairs(hub.entrees) do
+      if x.db then x.db.nouveautesVues = derniere end
+    end
+    hub.majCote()
+  end
+
+  entreeNeuf.pastille = function() return hub.aDuNeuf() end
+  pageNeuf:SetScript("OnShow", function()
+    texteNeuf:SetText(ns.texteNouveautes(ns.NOUVEAUTES, plusAncienneVue()))
+    contenuNeuf:SetHeight(nombre(texteNeuf:GetStringHeight(), 400) + 16)
+    defileNeuf:SetVerticalScroll(0)
+    hub.marquerVu()
+  end)
+
+  -- Un seul message par connexion, même avec 17 addons (le drapeau est dans le hub commun).
+  function hub.annoncerNouveautes()
+    if hub.messageNouveau then return end
+    hub.messageNouveau = true
+    local function dire()
+      if hub.aDuNeuf() then
+        print("|cffffd200Addons de Valentin|r : il y a du nouveau, clique sur l'engrenage (autour de la minimap) puis sur « Quoi de neuf ».")
+      end
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(5, dire) else dire() end
+  end
 
   -- L'icône commune autour de la minimap : un clic ouvre la fenêtre.
   if not _G.ValentinAddonsMinimap then
@@ -654,6 +846,7 @@ local function leHub()
         local etat = actif == nil and "" or (actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
         GameTooltip:AddDoubleLine(x.titre, etat, 1, 1, 1)
       end
+      if hub.aDuNeuf() then GameTooltip:AddLine("Il y a du nouveau : page « Quoi de neuf »", 1, 0.82, 0.30) end
       GameTooltip:AddLine("Clic : tous les réglages\nGlisser : déplacer", 0.7, 0.7, 0.7)
       GameTooltip:Show()
     end)
@@ -1093,6 +1286,8 @@ function ns.creerReglages(p)
     placerMini()
     if p.auChargement then p.auChargement(db) end
     r.appliquer()
+    -- Une nouveauté que cet addon n'a pas encore montrée : un seul message pour tous les addons.
+    if hub.annoncerNouveautes and ns.ilYADuNeuf(ns.NOUVEAUTES, db.nouveautesVues) then hub.annoncerNouveautes() end
   end)
 
   return r

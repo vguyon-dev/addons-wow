@@ -3,7 +3,7 @@
 ## Notes: En groupe, montre les quêtes de chacun : en commun (avec la progression de chacun), les siennes et les tiennes.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.3.0
+## Version: 0.4.0
 ## IconTexture: Interface\Icons\Achievement_GuildPerk_EverybodysFriend
 ## SavedVariables: QuetesDuGroupeDB
 ## AddonCompartmentFunc: QuetesDuGroupe_OuvrirReglages

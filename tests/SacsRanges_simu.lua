@@ -172,6 +172,96 @@ do
   verifie("habillage : options absurdes ignorées", "0.07", tostring(ns.styleHabillage({ fond = { "a" } }).fond[1]))
   verifie("habillage : options pas une table", "0.8", tostring(ns.styleHabillage("x").bordure[1]))
 end
+-- La page « Quoi de neuf » (Reglages.lua)
+do
+  local liste = {
+    { date = "2026-11-10", titre = "Récent", lignes = { "un", "deux" } },
+    { date = "2026-11-08", titre = "Ancien", lignes = { "x" } },
+  }
+  verifie("neuf : la dernière date", "2026-11-10", ns.derniereNouveaute(liste))
+  verifie("neuf : liste vide", "nil", tostring(ns.derniereNouveaute({})))
+  verifie("neuf : pas une table", "nil", tostring(ns.derniereNouveaute("x")))
+  verifie("neuf : date abîmée ignorée", "2026-11-08", ns.derniereNouveaute({ { date = "demain" }, { date = "2026-11-08" }, "x", 3 }))
+  verifie("neuf : rien vu, tout est nouveau", true, ns.ilYADuNeuf(liste, nil))
+  verifie("neuf : date vue abîmée, tout est nouveau", true, ns.ilYADuNeuf(liste, "hier"))
+  verifie("neuf : date vue pas un texte", true, ns.ilYADuNeuf(liste, 20261110))
+  verifie("neuf : vue plus ancienne", true, ns.ilYADuNeuf(liste, "2026-11-09"))
+  verifie("neuf : vue égale à la dernière", false, ns.ilYADuNeuf(liste, "2026-11-10"))
+  verifie("neuf : vue plus récente", false, ns.ilYADuNeuf(liste, "2027-01-01"))
+  verifie("neuf : liste vide, rien de nouveau", false, ns.ilYADuNeuf({}, nil))
+  verifie("neuf : pas de liste, rien de nouveau", false, ns.ilYADuNeuf(nil, nil))
+  verifie("neuf : date lisible", "10/11/2026", ns.dateLisible("2026-11-10"))
+  verifie("neuf : date lisible abîmée", "bof", ns.dateLisible("bof"))
+  local t = ns.texteNouveautes(liste, nil)
+  verifie("neuf : texte, titre et date", true, t:find("Récent|r  |cff888888" .. "10/11/2026", 1, true) ~= nil)
+  verifie("neuf : texte, une ligne par puce", true, t:find("\n- un\n- deux", 1, true) ~= nil)
+  verifie("neuf : texte, rien de marqué sans date vue", nil, t:find("[nouveau]", 1, true))
+  local t2 = ns.texteNouveautes(liste, "2026-11-09")
+  verifie("neuf : texte, marqué seulement ce qui est récent", 1, select(2, t2:gsub("%[nouveau%]", "")))
+  verifie("neuf : texte, liste vide", "Rien de nouveau pour l'instant.", ns.texteNouveautes({}, nil))
+  verifie("neuf : texte, entrée sans date sautée", "Rien de nouveau pour l'instant.", ns.texteNouveautes({ { titre = "x" } }, nil))
+  -- La vraie liste du dépôt : bien formée, les plus récentes d'abord, sans tiret cadratin.
+  local bien, ordre, tirets = true, true, false
+  local precedente = "9999-99-99"
+  for _, n in ipairs(ns.NOUVEAUTES) do
+    if type(n.date) ~= "string" or not n.date:match("^%d%d%d%d%-%d%d%-%d%d$") or type(n.titre) ~= "string"
+      or type(n.lignes) ~= "table" or #n.lignes == 0 then bien = false end
+    if n.date > precedente then ordre = false end
+    precedente = n.date
+    local tout = n.titre .. table.concat(n.lignes)
+    -- tiret cadratin et demi-cadratin, écrits en octets pour ne pas les mettre dans ce fichier
+    if tout:find("\226\128\148", 1, true) or tout:find("\226\128\147", 1, true) then tirets = true end
+  end
+  verifie("neuf : la liste du dépôt est bien formée", true, bien and #ns.NOUVEAUTES > 0)
+  verifie("neuf : la liste du dépôt va du plus récent au plus ancien", true, ordre)
+  verifie("neuf : pas de tiret cadratin dans la liste", false, tirets)
+end
+-- Le chargement d'un addon dans la fenêtre commune : un seul message « il y a du nouveau »
+-- pour plusieurs addons, la date vue retenue dans chaque sauvegarde.
+do
+  local ecouteurs = {}
+  local vrai = CreateFrame
+  CreateFrame = function()
+    local f = bidon()
+    local scripts = {}
+    rawset(f, "SetScript", function(_, nom, fn) scripts[nom] = fn end)
+    rawset(f, "RegisterEvent", function(self, ev) if ev == "ADDON_LOADED" then ecouteurs[#ecouteurs + 1] = scripts end end)
+    rawset(f, "UnregisterEvent", function() end)
+    return f
+  end
+  local dits = {}
+  local vraiPrint = print
+  print = function(...) dits[#dits + 1] = table.concat({ ... }, " ") end
+  _G.ValentinAddons.messageNouveau = nil
+  local function creer(nomAddon, nomDB)
+    local nsX = {}
+    assert(loadfile(reglagesLua))(nomAddon, nsX)
+    nsX.creerReglages({ titre = nomAddon, icone = "x", nomDB = nomDB, defauts = { actif = true },
+      options = { { cle = "actif", libelle = "Activer" } } })
+  end
+  creer("FauxA", "FauxADB")
+  creer("FauxB", "FauxBDB")
+  _G.FauxADB = nil
+  _G.FauxBDB = { nouveautesVues = "2026-11-08" }
+  for i, scripts in ipairs(ecouteurs) do scripts.OnEvent({ UnregisterEvent = function() end }, "ADDON_LOADED", i == 1 and "FauxA" or "FauxB") end
+  print = vraiPrint
+  CreateFrame = vrai
+  local hub = _G.ValentinAddons
+  verifie("chargement : un seul message pour deux addons", 1, #dits)
+  verifie("chargement : le message parle de « Quoi de neuf »", true, (dits[1] or ""):find("Quoi de neuf", 1, true) ~= nil)
+  verifie("chargement : le drapeau est dans le hub commun", true, hub.messageNouveau)
+  verifie("chargement : il y a du nouveau", true, hub.aDuNeuf())
+  hub.marquerVu()
+  verifie("page ouverte : la date vue est gardée (addon A)", ns.derniereNouveaute(ns.NOUVEAUTES), _G.FauxADB.nouveautesVues)
+  verifie("page ouverte : la date vue est gardée (addon B)", ns.derniereNouveaute(ns.NOUVEAUTES), _G.FauxBDB.nouveautesVues)
+  verifie("page ouverte : plus rien de nouveau", false, hub.aDuNeuf())
+  -- On retire nos deux faux addons du hub pour ne rien laisser aux autres tests.
+  for i = #hub.entrees, 1, -1 do
+    local t = hub.entrees[i].titre
+    if t == "FauxA" or t == "FauxB" then table.remove(hub.entrees, i) end
+  end
+  hub.messageNouveau = nil
+end
 -- La part de « À vendre » qui n'est pas grise, pour Marchand auto.
 local lus = {
   { sac = 0, case = 1, lien = "[Gris]", id = 1, qualite = 0, categorie = "vendre" },
