@@ -17,6 +17,7 @@ local DEFAUTS = {
   ecart = 0,               -- « moins bon » = au moins ce nombre de niveaux en dessous
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
+  banqueCategories = false, -- la banque aussi rangée en sections, dans une seconde fenêtre (dépend de vueCategories)
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
   conseilsBulles = true,   -- « Mieux pour <spé> » dans toutes les bulles d'objets
@@ -460,6 +461,8 @@ ns.reglages = ns.creerReglages({
     { titre = "Sac par catégories" },
     { cle = "vueCategories", libelle = "Sac rangé par catégories (remplace les sacs du jeu)",
       aide = "Un seul sac en sections : Équipement, Consommables, Composants, Métiers, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
+    { cle = "banqueCategories", libelle = "Banque rangée par catégories", dependDe = "vueCategories",
+      aide = "À l'ouverture de la banque, une seconde fenêtre à gauche du sac montre son contenu dans les mêmes sections. Clic droit sur un objet : le jeu le met dans tes sacs. La fenêtre de banque du jeu reste toujours visible." },
     { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)", dependDe = "vueCategories",
       aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
     { cle = "conseils", libelle = "Section « À équiper » et flèche verte", dependDe = "vueCategories",

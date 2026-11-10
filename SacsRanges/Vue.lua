@@ -104,6 +104,47 @@ function ns.filtrerAVendre(objets)
   return l
 end
 
+-- Combien de colonnes de cases selon le nombre de cases du sac ou de la banque.
+function ns.colonnesPour(total)
+  total = total or 0
+  return total > 110 and 14 or (total > 70 and 12 or 10)
+end
+
+-- Sépare les objets lus : ceux « À équiper » (qui portent un conseil, triés par
+-- nom) et les autres. Sans conseils (la banque), tout va dans les autres.
+function ns.separerConseils(objets, avecConseils)
+  local aEquiper, autres = {}, {}
+  for _, o in ipairs(objets or {}) do
+    if avecConseils and o.conseil then aEquiper[#aEquiper + 1] = o else autres[#autres + 1] = o end
+  end
+  table.sort(aEquiper, function(a, b) return (a.nom or "") < (b.nom or "") end)
+  return aEquiper, autres
+end
+
+-- Les numéros de sacs de la banque, dans l'ordre d'affichage. faits :
+--  onglets = numéros des onglets de banque du personnage (Retail récent), s'il y en a ;
+--  banque = numéro de la banque elle-même, premierSac et nbSacs = les sacs de banque
+--  achetés (Forever, Retail ancien). Les onglets l'emportent quand le jeu en donne.
+function ns.sacsBanque(faits)
+  faits = faits or {}
+  local l = {}
+  if type(faits.onglets) == "table" and #faits.onglets > 0 then
+    for _, id in ipairs(faits.onglets) do l[#l + 1] = id end
+    return l
+  end
+  if faits.banque then l[#l + 1] = faits.banque end
+  for i = 1, faits.nbSacs or 0 do l[#l + 1] = (faits.premierSac or 5) + i - 1 end
+  return l
+end
+
+-- La banque rangée se montre-t-elle ? Il faut la vue par catégories, l'option,
+-- la banque ouverte, et au moins une case lisible : si le jeu ne dit rien de la
+-- banque (nbCases = 0), on laisse la banque du jeu toute seule.
+function ns.banqueAMontrer(faits)
+  faits = faits or {}
+  return (faits.vue and faits.option and faits.ouverte and (faits.nbCases or 0) > 0) and true or false
+end
+
 -- Recherche sans accents ni majuscules : « etoffe » trouve « Étoffe de lin ».
 local ACCENTS = { ["à"] = "a", ["â"] = "a", ["ä"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e",
   ["î"] = "i", ["ï"] = "i", ["ô"] = "o", ["ö"] = "o", ["ù"] = "u", ["û"] = "u", ["ü"] = "u", ["ç"] = "c",
@@ -156,69 +197,106 @@ local function texteOr(cuivre)
 end
 
 -- ---------------------------------------------------------------------------
--- La fenêtre
+-- Les fenêtres : le sac et la banque sont deux fenêtres du même genre
+-- (creerVue), avec leurs propres cases et titres.
 -- ---------------------------------------------------------------------------
 
 local TAILLE, ECART, MARGE = 37, 4, 12
-local colonnes = 10
 
-local fenetre = CreateFrame("Frame", "SacsRangesSac", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-fenetre:SetSize(MARGE * 2 + colonnes * (TAILLE + ECART), 300)
-fenetre:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -90, 110)
-fenetre:SetFrameStrata("MEDIUM")
-fenetre:SetToplevel(true)
-fenetre:SetMovable(true)
-fenetre:SetClampedToScreen(true)
-fenetre:EnableMouse(true)
-fenetre:RegisterForDrag("LeftButton")
-fenetre:SetScript("OnDragStart", fenetre.StartMoving)
-fenetre:SetScript("OnDragStop", function(self)
-  self:StopMovingOrSizing()
-  if ns.db then
-    local p, _, rp, x, y = self:GetPoint()
-    ns.db.positionSac = { p, rp, x, y }
+-- nom : nom global de la fenêtre ; prefixe : début du nom de ses cases ;
+-- options.deplacable : la fenêtre se déplace à la souris et retient sa place.
+local function creerVue(nom, prefixe, nomRecherche, options)
+  options = options or {}
+  local v = { prefixe = prefixe, cases = {}, cadresSac = {}, titres = {}, lignesConseil = {}, colonnes = 10 }
+  local fenetre = CreateFrame("Frame", nom, UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  v.fenetre = fenetre
+  fenetre:SetSize(MARGE * 2 + v.colonnes * (TAILLE + ECART), 300)
+  fenetre:SetFrameStrata("MEDIUM")
+  fenetre:SetToplevel(true)
+  fenetre:SetClampedToScreen(true)
+  fenetre:EnableMouse(true)
+  if options.deplacable then
+    fenetre:SetMovable(true)
+    fenetre:RegisterForDrag("LeftButton")
+    fenetre:SetScript("OnDragStart", fenetre.StartMoving)
+    fenetre:SetScript("OnDragStop", function(self)
+      self:StopMovingOrSizing()
+      if ns.db then
+        local p, _, rp, x, y = self:GetPoint()
+        ns.db.positionSac = { p, rp, x, y }
+      end
+    end)
   end
-end)
-fenetre:Hide()
-tinsert(UISpecialFrames, "SacsRangesSac") -- Échap la ferme
+  fenetre:Hide()
 
--- Apparence « cadre du jeu » : le modèle de fenêtre habituel, posé derrière.
-local cadreWow = CreateFrame("Frame", nil, fenetre, "BasicFrameTemplateWithInset")
-cadreWow:SetAllPoints()
-cadreWow:SetFrameLevel(fenetre:GetFrameLevel())
-if cadreWow.CloseButton then cadreWow.CloseButton:SetScript("OnClick", function() fenetre:Hide() end) end
+  -- Apparence « cadre du jeu » : le modèle de fenêtre habituel, posé derrière.
+  local cadreWow = CreateFrame("Frame", nil, fenetre, "BasicFrameTemplateWithInset")
+  cadreWow:SetAllPoints()
+  cadreWow:SetFrameLevel(fenetre:GetFrameLevel())
+  if cadreWow.CloseButton then cadreWow.CloseButton:SetScript("OnClick", function() fenetre:Hide() end) end
 
--- Nouveau visuel : fond sombre, bordure dorée, titre or.
-local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
-fermer:SetPoint("TOPRIGHT", 2, 2)
-fermer:SetScript("OnClick", function() fenetre:Hide() end)
+  -- Nouveau visuel : fond sombre, bordure dorée, titre or.
+  local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
+  fermer:SetPoint("TOPRIGHT", 2, 2)
+  fermer:SetScript("OnClick", function() fenetre:Hide() end)
 
-local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-local function appliquerApparence()
-  local wow = ns.db and ns.db.apparenceWow
-  cadreWow:SetShown(wow)
-  fermer:SetShown(not wow)
-  titre:ClearAllPoints()
-  if wow then
-    if fenetre.SetBackdrop then fenetre:SetBackdrop(nil) end
-    titre:SetFontObject("GameFontNormal")
-    titre:SetPoint("TOP", 0, -5)
-  else
-    if fenetre.SetBackdrop then
-      fenetre:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-      })
-      fenetre:SetBackdropColor(0.07, 0.06, 0.045, 0.96)
-      fenetre:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
+  local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  v.titre = titre
+  function v.appliquerApparence()
+    local wow = ns.db and ns.db.apparenceWow
+    cadreWow:SetShown(wow)
+    fermer:SetShown(not wow)
+    titre:ClearAllPoints()
+    if wow then
+      if fenetre.SetBackdrop then fenetre:SetBackdrop(nil) end
+      titre:SetFontObject("GameFontNormal")
+      titre:SetPoint("TOP", 0, -5)
+    else
+      if fenetre.SetBackdrop then
+        fenetre:SetBackdrop({
+          bgFile = "Interface\\Buttons\\WHITE8X8",
+          edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
+          insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        fenetre:SetBackdropColor(0.07, 0.06, 0.045, 0.96)
+        fenetre:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
+      end
+      titre:SetFontObject("GameFontNormalLarge")
+      titre:SetPoint("TOPLEFT", MARGE, -9)
     end
-    titre:SetFontObject("GameFontNormalLarge")
-    titre:SetPoint("TOPLEFT", MARGE, -9)
   end
+
+  local okRecherche, recherche = pcall(CreateFrame, "EditBox", nomRecherche, fenetre, "SearchBoxTemplate")
+  if not okRecherche then recherche = CreateFrame("EditBox", nomRecherche, fenetre, "InputBoxTemplate") end
+  recherche:SetHeight(20)
+  recherche:SetAutoFocus(false)
+  v.recherche = recherche
+
+  -- Le contenu : un cadre par sac (son numéro sert aux cases du jeu), et les titres.
+  local contenu = CreateFrame("Frame", nil, fenetre)
+  contenu:SetPoint("TOPLEFT", MARGE, -58)
+  contenu:SetPoint("RIGHT", -MARGE, 0)
+  contenu:SetHeight(10)
+  v.contenu = contenu
+
+  v.pied = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  v.pied:SetPoint("BOTTOMLEFT", MARGE, 10)
+  v.argent = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  v.argent:SetPoint("BOTTOMRIGHT", -MARGE, 10)
+  return v
 end
 
--- La barre : Ranger, Analyse, recherche.
+local sac = creerVue("SacsRangesSac", "SacsRangesCase", "SacsRangesRecherche", { deplacable = true })
+local fenetre, recherche = sac.fenetre, sac.recherche
+fenetre:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -90, 110)
+tinsert(UISpecialFrames, "SacsRangesSac") -- Échap la ferme
+
+-- La banque : une seconde fenêtre, à gauche du sac. La fenêtre de banque du jeu
+-- n'est JAMAIS cachée ni touchée : on ne fait que montrer son contenu rangé.
+local banque = creerVue("SacsRangesBanque", "SacsRangesBanque", "SacsRangesBanqueRecherche")
+banque.fenetre:SetPoint("BOTTOMRIGHT", fenetre, "BOTTOMLEFT", -8, 0)
+
+-- La barre du sac : Ranger, Analyse, recherche.
 local function bouton(texte, largeur, aide, action)
   local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
   b:SetSize(largeur, 22)
@@ -239,49 +317,34 @@ local bAnalyse = bouton("Analyse", 70, "Équipement en double, moins bon que ce 
   function() if ns.basculerPanneau then ns.basculerPanneau() end end)
 bRanger:SetPoint("TOPLEFT", MARGE, -30)
 bAnalyse:SetPoint("LEFT", bRanger, "RIGHT", 4, 0)
-
-local okRecherche, recherche = pcall(CreateFrame, "EditBox", "SacsRangesRecherche", fenetre, "SearchBoxTemplate")
-if not okRecherche then recherche = CreateFrame("EditBox", "SacsRangesRecherche", fenetre, "InputBoxTemplate") end
-recherche:SetHeight(20)
 recherche:SetPoint("LEFT", bAnalyse, "RIGHT", 12, 0)
 recherche:SetPoint("RIGHT", fenetre, "RIGHT", -MARGE, 0)
-recherche:SetAutoFocus(false)
 
--- Le contenu : un cadre par sac (son numéro sert aux cases du jeu), et les titres.
-local contenu = CreateFrame("Frame", nil, fenetre)
-contenu:SetPoint("TOPLEFT", MARGE, -58)
-contenu:SetPoint("RIGHT", -MARGE, 0)
-contenu:SetHeight(10)
+banque.recherche:SetPoint("TOPLEFT", MARGE, -30)
+banque.recherche:SetPoint("RIGHT", banque.fenetre, "RIGHT", -MARGE, 0)
 
-local pied = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-pied:SetPoint("BOTTOMLEFT", MARGE, 10)
-local argent = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-argent:SetPoint("BOTTOMRIGHT", -MARGE, 10)
-
-local cadresSac, cases, titres = {}, {}, {}
-
-local function cadreDuSac(sac)
-  if not cadresSac[sac] then
-    local f = CreateFrame("Frame", nil, contenu)
-    f:SetID(sac)
+local function cadreDuSac(v, numero)
+  if not v.cadresSac[numero] then
+    local f = CreateFrame("Frame", nil, v.contenu)
+    f:SetID(numero)
     f:SetAllPoints()
     -- Ce que le code des cases du jeu peut demander à leur parent (Retail).
-    f.GetBagID = function() return sac end
+    f.GetBagID = function() return numero end
     f.IsCombinedBagContainer = function() return false end
     f.IsBankBag = function() return false end
-    cadresSac[sac] = f
+    v.cadresSac[numero] = f
   end
-  return cadresSac[sac]
+  return v.cadresSac[numero]
 end
 
--- Une case du jeu, créée une fois pour toutes pour (sac, case).
-local function caseDe(sac, case)
-  local cle = sac * 1000 + case
-  local b = cases[cle]
+-- Une case du jeu, créée une fois pour toutes pour (sac, case) de cette fenêtre.
+local function caseDe(v, numero, case)
+  local cle = numero * 1000 + case
+  local b = v.cases[cle]
   if b then return b end
   if InCombatLockdown() then return nil end
-  local parent = cadreDuSac(sac)
-  local nom = "SacsRangesCase" .. sac .. "_" .. case
+  local parent = cadreDuSac(v, numero)
+  local nom = v.prefixe .. numero .. "_" .. case
   local ok, nouveau = pcall(CreateFrame, "ItemButton", nom, parent, "ContainerFrameItemButtonTemplate")
   if not ok or not nouveau then
     nouveau = CreateFrame("Button", nom, parent, "ContainerFrameItemButtonTemplate")
@@ -292,7 +355,7 @@ local function caseDe(sac, case)
   -- une valeur posée par un addon « contamine » le clic, et le jeu refuse alors
   -- d'utiliser ou d'équiper l'objet (ADDON_ACTION_FORBIDDEN sur UseContainerItem,
   -- vu en jeu le 08/11). Sans SetBagID, le jeu lit le numéro du parent (SetID).
-  if b.SetBagID then pcall(b.SetBagID, b, sac) end
+  if b.SetBagID then pcall(b.SetBagID, b, numero) end
   b:SetSize(TAILLE, TAILLE)
   -- Le compteur de cases libres, sur la case vide qui les représente.
   b.libres = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
@@ -312,7 +375,7 @@ local function caseDe(sac, case)
   b.moins:SetPoint("TOPLEFT", -5, 5)
   b.moins:Hide()
   b.estCaseSacsRanges = true -- pour la bulle (voir ajouterRangement plus bas)
-  cases[cle] = b
+  v.cases[cle] = b
   return b
 end
 
@@ -349,13 +412,13 @@ elseif GameTooltip and GameTooltip.HookScript then
   GameTooltip:HookScript("OnTooltipSetItem", ajouterRangement)
 end
 
-local function titreDe(i)
-  if not titres[i] then
-    local t = contenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+local function titreDe(v, i)
+  if not v.titres[i] then
+    local t = v.contenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     t:SetJustifyH("LEFT")
-    titres[i] = t
+    v.titres[i] = t
   end
-  return titres[i]
+  return v.titres[i]
 end
 
 local function remplir(b, icone, nombre, verrou, qualite, lien)
@@ -370,43 +433,62 @@ local function remplir(b, icone, nombre, verrou, qualite, lien)
 end
 
 -- Les lignes de la section « À équiper » : le nom de l'objet et la raison, à droite de la case.
-local lignesConseil = {}
-local function ligneConseil(i)
-  if not lignesConseil[i] then
-    local nom = contenu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+local function ligneConseil(v, i)
+  if not v.lignesConseil[i] then
+    local nom = v.contenu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nom:SetJustifyH("LEFT")
-    local raison = contenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local raison = v.contenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     raison:SetJustifyH("LEFT")
     raison:SetTextColor(0.12, 1, 0)
-    local remplace = contenu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local remplace = v.contenu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     remplace:SetJustifyH("LEFT")
-    lignesConseil[i] = { nom = nom, raison = raison, remplace = remplace }
+    v.lignesConseil[i] = { nom = nom, raison = raison, remplace = remplace }
   end
-  return lignesConseil[i]
+  return v.lignesConseil[i]
 end
 
 -- ---------------------------------------------------------------------------
--- Mise à jour
+-- Les sacs lus : ceux du personnage, ceux de la banque
 -- ---------------------------------------------------------------------------
 
-local aRefaire = false -- une réorganisation attend la fin du combat
+local function sacsPersonnage()
+  local l = {}
+  for numero = 0, derniersSac() do l[#l + 1] = numero end
+  return l
+end
 
-local function lire(sansConseils)
+-- Les sacs de la banque, d'après ce que le jeu sait répondre : les onglets de
+-- banque du personnage (Retail récent, C_Bank), sinon la banque et ses sacs
+-- (Forever, Retail ancien). Les onglets de la banque de bataillon et la banque
+-- de composants ne sont pas repris : le jeu les garde dans sa propre fenêtre.
+local function sacsBanqueJeu()
+  local onglets
+  if C_Bank and C_Bank.FetchPurchasedBankTabIDs and Enum and Enum.BankType and Enum.BankType.Character then
+    local ok, ids = pcall(C_Bank.FetchPurchasedBankTabIDs, Enum.BankType.Character)
+    if ok and type(ids) == "table" then onglets = ids end
+  end
+  local banqueId = (Enum and Enum.BagIndex and Enum.BagIndex.Bank) or BANK_CONTAINER or -1
+  return ns.sacsBanque({
+    onglets = onglets, banque = banqueId, premierSac = derniersSac() + 1, nbSacs = NUM_BANKBAGSLOTS or 0,
+  })
+end
+
+local function lire(sacs, sansConseils)
   local objets, libres, total, premiereLibre = {}, 0, 0, nil
-  for sac = 0, derniersSac() do
-    local n = ns.nbCases and ns.nbCases(sac) or 0
+  for _, numero in ipairs(sacs) do
+    local n = ns.nbCases and ns.nbCases(numero) or 0
     for case = 1, n do
       total = total + 1
-      local icone, nombre, verrou, qualite, lien, idObjet, estLie = infoCase(sac, case)
+      local icone, nombre, verrou, qualite, lien, idObjet, estLie = infoCase(numero, case)
       if icone and lien then
         local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, _, _, artisanat = infoObjet(lien)
         qualite = qualite or q or 1
         local utilisable, raison, texteRaison = true, nil, nil
         if (classe == 2 or classe == 4) and ns.utilisableCase then
-          utilisable, raison, texteRaison = ns.utilisableCase(sac, case, lien)
+          utilisable, raison, texteRaison = ns.utilisableCase(numero, case, lien)
         end
         local estLivre = LivresBiblio_EstUnLivre and nom and LivresBiblio_EstUnLivre(nom) or false
-        local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet,
+        local categorie = ns.categorie(classe, qualite, infoQuete(numero, case), utilisable, sousClasse, idObjet,
           { livre = estLivre, lie = liaison == 1, artisanat = artisanat, estLie = estLie, raison = raison })
         local conseil, moins
         if categorie == "equip" and not sansConseils and ns.db and ns.db.conseils ~= false and ns.conseil then
@@ -418,54 +500,61 @@ local function lire(sansConseils)
           end
         end
         objets[#objets + 1] = {
-          sac = sac, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite, lien = lien,
-          nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins,
+          sac = numero, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite,
+          lien = lien, nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins,
           raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
       else
         libres = libres + 1
-        premiereLibre = premiereLibre or { sac = sac, case = case }
+        premiereLibre = premiereLibre or { sac = numero, case = case }
       end
     end
   end
   return objets, libres, total, premiereLibre
 end
 
+-- ---------------------------------------------------------------------------
+-- Mise à jour
+-- ---------------------------------------------------------------------------
+
+local aRefaire = false -- une réorganisation attend la fin du combat
+
 -- Pour les autres addons (Marchand auto) : les objets non gris de la section
 -- « À vendre », sans avoir besoin de la fenêtre (marche même si la vue par
 -- catégories est décochée). Rien en combat, ni si Sacs rangés est coupé.
 function SacsRanges_AVendre()
   if InCombatLockdown() or not (ns.db and ns.db.actif) then return {} end
-  local ok, objets = pcall(lire, true)
+  local ok, objets = pcall(lire, sacsPersonnage(), true)
   if not ok then return {} end
   return ns.filtrerAVendre(objets)
 end
 
-local function majVue()
-  if not fenetre:IsShown() then return end
+-- Dessine une fenêtre : les sections, les cases, le pied. Le sac garde les
+-- conseils « À équiper » ; la banque n'en a pas (le clic droit y envoie l'objet
+-- dans les sacs, il ne l'équipe pas).
+local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
+  if not v.fenetre:IsShown() then return end
   if InCombatLockdown() then aRefaire = true end
   local db = ns.db or {}
-  local objets, libres, total, premiereLibre = lire()
-  colonnes = total > 110 and 14 or (total > 70 and 12 or 10)
+  local objets, libres, total, premiereLibre = lire(sacs, not avecConseils)
+  v.colonnes = ns.colonnesPour(total)
+  local colonnes = v.colonnes
   local largeur = colonnes * (TAILLE + ECART) - ECART
-  if not InCombatLockdown() then fenetre:SetWidth(MARGE * 2 + largeur) end
+  if not InCombatLockdown() then v.fenetre:SetWidth(MARGE * 2 + largeur) end
 
+  local cases, contenu = v.cases, v.contenu
   for _, b in pairs(cases) do b.utilisee = false end
-  local filtre = ns.simplifier(recherche:GetText() or "")
+  local filtre = ns.simplifier(v.recherche:GetText() or "")
   local function visible(o) return filtre == "" or ns.simplifier(o.nom):find(filtre, 1, true) end
 
   -- Les objets à équiper sortent de leur section et passent en tête, une ligne chacun.
-  local aEquiper, autres = {}, {}
-  for _, o in ipairs(objets) do
-    if o.conseil then aEquiper[#aEquiper + 1] = o else autres[#autres + 1] = o end
-  end
-  table.sort(aEquiper, function(a, b) return (a.nom or "") < (b.nom or "") end)
+  local aEquiper, autres = ns.separerConseils(objets, avecConseils)
   local parSection = ns.repartir(autres)
   local y, it = 0, 0
 
   if #aEquiper > 0 then
     it = it + 1
-    local t = titreDe(it)
+    local t = titreDe(v, it)
     t:ClearAllPoints()
     t:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
     t:SetText("À équiper  |cff888888" .. #aEquiper .. "|r")
@@ -474,8 +563,8 @@ local function majVue()
     y = y + 16
   end
   for i, o in ipairs(aEquiper) do
-    local b = caseDe(o.sac, o.case)
-    local l = ligneConseil(i)
+    local b = caseDe(v, o.sac, o.case)
+    local l = ligneConseil(v, i)
     if b then
       b.utilisee = true
       if not InCombatLockdown() then
@@ -504,8 +593,8 @@ local function majVue()
     end
     y = y + TAILLE + ECART + 4
   end
-  for i = #aEquiper + 1, #lignesConseil do
-    local l = lignesConseil[i]
+  for i = #aEquiper + 1, #v.lignesConseil do
+    local l = v.lignesConseil[i]
     l.nom:Hide(); l.raison:Hide(); l.remplace:Hide()
   end
   if #aEquiper > 0 then y = y + 6 end
@@ -514,7 +603,7 @@ local function majVue()
     local liste = parSection[s.id]
     if #liste > 0 then
       it = it + 1
-      local t = titreDe(it)
+      local t = titreDe(v, it)
       t:ClearAllPoints()
       t:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
       t:SetText(s.nom .. "  |cff888888" .. #liste .. "|r")
@@ -522,7 +611,7 @@ local function majVue()
       t:Show()
       y = y + 16
       for i, o in ipairs(liste) do
-        local b = caseDe(o.sac, o.case)
+        local b = caseDe(v, o.sac, o.case)
         if b then
           b.utilisee = true
           if not InCombatLockdown() then
@@ -544,14 +633,14 @@ local function majVue()
   -- Une seule case vide pour déposer un objet, avec le nombre de cases libres.
   if premiereLibre then
     it = it + 1
-    local t = titreDe(it)
+    local t = titreDe(v, it)
     t:ClearAllPoints()
     t:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
     t:SetText("Cases libres  |cff888888" .. libres .. "|r")
     t:SetTextColor(0.6, 0.6, 0.6)
     t:Show()
     y = y + 16
-    local b = caseDe(premiereLibre.sac, premiereLibre.case)
+    local b = caseDe(v, premiereLibre.sac, premiereLibre.case)
     if b then
       b.utilisee = true
       if not InCombatLockdown() then
@@ -566,30 +655,43 @@ local function majVue()
     y = y + TAILLE + ECART
   end
 
-  for i = it + 1, #titres do titres[i]:Hide() end
+  for i = it + 1, #v.titres do v.titres[i]:Hide() end
   if not InCombatLockdown() then
     for _, b in pairs(cases) do if not b.utilisee then b:Hide() end end
     contenu:SetHeight(math.max(y, 10))
-    fenetre:SetHeight(58 + y + 30)
+    v.fenetre:SetHeight(58 + y + 30)
   end
 
-  titre:SetText("Sacs de " .. (UnitName("player") or "?"))
-  pied:SetText(libres .. " cases libres sur " .. total)
-  argent:SetText(texteOr(GetMoney()))
-  if db.apparenceWow ~= fenetre.apparence then
-    fenetre.apparence = db.apparenceWow
-    appliquerApparence()
+  v.titre:SetText(titreTexte)
+  v.pied:SetText(libres .. " cases libres sur " .. total)
+  if avecArgent then v.argent:SetText(texteOr(GetMoney())) else v.argent:SetText("") end
+  if db.apparenceWow ~= v.apparence then
+    v.apparence = db.apparenceWow
+    v.appliquerApparence()
   end
 end
 
+local function majVue()
+  dessiner(sac, sacsPersonnage(), true, "Sacs de " .. (UnitName("player") or "?"), true)
+end
+
+local function majBanque()
+  dessiner(banque, sacsBanqueJeu(), false, "Banque de " .. (UnitName("player") or "?"), false)
+end
+
 recherche:HookScript("OnTextChanged", majVue)
+banque.recherche:HookScript("OnTextChanged", majBanque)
 fenetre:SetScript("OnShow", function()
-  appliquerApparence()
+  sac.appliquerApparence()
   majVue()
   if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_BACKPACK_OPEN) end
 end)
 fenetre:SetScript("OnHide", function()
   if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_BACKPACK_CLOSE) end
+end)
+banque.fenetre:SetScript("OnShow", function()
+  banque.appliquerApparence()
+  majBanque()
 end)
 
 -- ---------------------------------------------------------------------------
@@ -652,6 +754,29 @@ for nom, quoi in pairs({
   if _G[nom] then hooksecurefunc(nom, function() noter(quoi) end) end
 end
 
+-- ---------------------------------------------------------------------------
+-- La banque rangée : montrée seulement si la banque est ouverte, l'option cochée
+-- et que le jeu sait nous dire ce qu'elle contient (sinon rien : la banque du jeu
+-- reste la seule).
+-- ---------------------------------------------------------------------------
+
+local banqueOuverte = false
+
+local function banqueMaj()
+  local nbCases = 0
+  if vueActive() and banqueOuverte then
+    for _, numero in ipairs(sacsBanqueJeu()) do nbCases = nbCases + (ns.nbCases and ns.nbCases(numero) or 0) end
+  end
+  local montrer = ns.banqueAMontrer({
+    vue = vueActive(), option = ns.db and ns.db.banqueCategories, ouverte = banqueOuverte, nbCases = nbCases,
+  })
+  if montrer == banque.fenetre:IsShown() then
+    if montrer then majBanque() end
+    return
+  end
+  banque.fenetre:SetShown(montrer)
+end
+
 -- Bouton des réglages : montre le sac par catégories, ou prévient qu'il est coupé.
 function ns.ouvrirVue()
   if not vueActive() then
@@ -666,8 +791,14 @@ end
 
 -- Option cochée ou décochée, apparence changée.
 function ns.vueMaj()
-  if not vueActive() then fenetre:Hide() return end
-  if fenetre:IsShown() then appliquerApparence(); majVue() end
+  if not vueActive() then
+    fenetre:Hide()
+    banque.fenetre:Hide()
+    return
+  end
+  if fenetre:IsShown() then sac.appliquerApparence(); majVue() end
+  if banque.fenetre:IsShown() then banque.appliquerApparence() end
+  banqueMaj()
 end
 
 -- ---------------------------------------------------------------------------
@@ -676,21 +807,44 @@ end
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "PLAYER_MONEY", "PLAYER_REGEN_ENABLED",
-  "QUEST_ACCEPTED", "QUEST_REMOVED", "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGIN" }) do
+  "QUEST_ACCEPTED", "QUEST_REMOVED", "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGIN",
+  "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
+  "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 local enAttente = false
-ecouteur:SetScript("OnEvent", function(_, evenement)
+local function programmer()
+  -- Plusieurs événements d'affilée : une seule mise à jour.
+  if enAttente then return end
+  enAttente = true
+  C_Timer.After(0.05, function()
+    enAttente = false
+    majVue()
+    banqueMaj()
+  end)
+end
+
+-- Le guichet de banque, pour les événements « interaction » de Retail récent.
+local function estBanquier(type)
+  local t = Enum and Enum.PlayerInteractionType
+  return t and type ~= nil and type == t.Banker
+end
+
+ecouteur:SetScript("OnEvent", function(_, evenement, arg1)
   if evenement == "PLAYER_LOGIN" then
     local p = ns.db and ns.db.positionSac
     if p then fenetre:ClearAllPoints(); fenetre:SetPoint(p[1], UIParent, p[2], p[3], p[4]) end
     return
   end
+  if evenement == "BANKFRAME_OPENED" or (evenement == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" and estBanquier(arg1)) then
+    banqueOuverte = true
+    return programmer()
+  elseif evenement == "BANKFRAME_CLOSED" or (evenement == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" and estBanquier(arg1)) then
+    banqueOuverte = false
+    return programmer()
+  end
   if evenement == "PLAYER_REGEN_ENABLED" and not aRefaire then return end
-  if not fenetre:IsShown() then return end
+  if not (fenetre:IsShown() or banque.fenetre:IsShown()) then return end
   aRefaire = false
-  -- Plusieurs événements d'affilée : une seule mise à jour.
-  if enAttente then return end
-  enAttente = true
-  C_Timer.After(0.05, function() enAttente = false; majVue() end)
+  programmer()
 end)

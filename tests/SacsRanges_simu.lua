@@ -184,4 +184,35 @@ verifie("à vendre : le gris et les autres sections sortent", 1, #av)
 verifie("à vendre : le casque lié", "[Casque]", av[1] and av[1].lien)
 verifie("à vendre : sac, case, id, raison", "0:2:2:lié", av[1] and (av[1].sac .. ":" .. av[1].case .. ":" .. av[1].id .. ":" .. av[1].raison))
 verifie("à vendre : liste vide", 0, #ns.filtrerAVendre(nil))
+-- La banque rangée.
+local ba = ns.sacsBanque({ banque = -1, premierSac = 5, nbSacs = 3 })
+verifie("banque : -1 puis les 3 sacs de banque", "-1,5,6,7", table.concat(ba, ","))
+verifie("banque : les onglets l'emportent", "6,7,8", table.concat(ns.sacsBanque({ onglets = { 6, 7, 8 }, banque = -1, premierSac = 5, nbSacs = 7 }), ","))
+verifie("banque : onglets vides, repli sur la banque", "-1", table.concat(ns.sacsBanque({ onglets = {}, banque = -1, nbSacs = 0 }), ","))
+verifie("banque : rien de connu", 0, #ns.sacsBanque(nil))
+verifie("banque : sacs de banque sans numéro de départ", "5,6", table.concat(ns.sacsBanque({ nbSacs = 2 }), ","))
+verifie("banque montrée : tout est là", true, ns.banqueAMontrer({ vue = true, option = true, ouverte = true, nbCases = 28 }))
+verifie("banque cachée : option décochée", false, ns.banqueAMontrer({ vue = true, option = false, ouverte = true, nbCases = 28 }))
+verifie("banque cachée : vue par catégories coupée", false, ns.banqueAMontrer({ vue = false, option = true, ouverte = true, nbCases = 28 }))
+verifie("banque cachée : banque fermée", false, ns.banqueAMontrer({ vue = true, option = true, ouverte = false, nbCases = 28 }))
+verifie("banque cachée : le jeu ne dit rien (0 case)", false, ns.banqueAMontrer({ vue = true, option = true, ouverte = true, nbCases = 0 }))
+verifie("banque cachée : faits absents", false, ns.banqueAMontrer(nil))
+verifie("colonnes : petit sac", 10, ns.colonnesPour(60))
+verifie("colonnes : 80 cases", 12, ns.colonnesPour(80))
+verifie("colonnes : banque de 150 cases", 14, ns.colonnesPour(150))
+local lusBanque = {
+  { sac = -1, case = 2, categorie = "equip", nom = "Heaume", qualite = 3, conseil = { raison = "mieux" } },
+  { sac = 5, case = 1, categorie = "equip", nom = "Bottes", qualite = 2 },
+  { sac = -1, case = 1, categorie = "equip", nom = "Anneau", qualite = 2, conseil = { raison = "mieux" } },
+}
+local eq, aut = ns.separerConseils(lusBanque, true)
+verifie("conseils (sac) : 2 à équiper", 2, #eq)
+verifie("conseils (sac) : triés par nom", "Anneau", eq[1] and eq[1].nom)
+verifie("conseils (sac) : 1 autre", 1, #aut)
+local eqB, autB = ns.separerConseils(lusBanque, false)
+verifie("conseils (banque) : aucun à équiper", 0, #eqB)
+verifie("conseils (banque) : tout reste rangé par section", 3, #autB)
+local partsB = ns.repartir(autB)
+verifie("banque : sections par qualité puis nom", "Heaume,Anneau,Bottes",
+  partsB.equip[1].nom .. "," .. partsB.equip[2].nom .. "," .. partsB.equip[3].nom)
 os.exit(ok and 0 or 1)

@@ -44,6 +44,10 @@ Avant de commencer :
 - [ ] Bulle d'un objet de ces sections : « Rangé ici : … » avec la raison.
 - [ ] Équipement moins bon que ce que tu portes : flèche rouge vers le bas, et « Moins bon que … » dans la bulle.
 - [ ] Apparence « cadre du jeu » et nouveau visuel.
+- [ ] Option « Banque rangée par catégories » (grisée si le sac par catégories est décoché) : à l'ouverture de la banque, une seconde fenêtre apparaît à gauche du sac, avec les mêmes sections, le même style, et se ferme avec la banque ; la fenêtre de banque du jeu reste visible.
+- [ ] Banque rangée : le clic droit sur un objet de la banque le met dans les sacs ; déposer un objet sur la case « Cases libres » le range en banque ; glisser un objet d'une case à l'autre marche ; pas de message « fonction protégée ».
+- [ ] Banque rangée : tous les sacs de banque achetés y sont (Forever), ou tous les onglets du personnage (Retail) ; la recherche en haut grise ce qui ne correspond pas ; l'option décochée, la seconde fenêtre disparaît tout de suite.
+- [ ] Banque rangée sur Retail : noter si les cases répondent bien (incertain : les onglets de banque récents n'ont pas été vérifiés) ; sinon décocher l'option, la banque du jeu fonctionne toujours seule.
 - [ ] Retail : le sac rangé et ses cases (tout n'a été vu que sur Forever).
 - [ ] Barre Ranger, Analyse et Banque collée au sac du jeu, quand le sac rangé est décoché.
 - [ ] Panneau d'analyse (`/sr`) : fond sombre, bordure dorée, titre doré avec sa croix ; la croix et Échap le ferment ; il se déplace toujours à la souris.
