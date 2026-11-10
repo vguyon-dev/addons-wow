@@ -60,6 +60,71 @@ verifie("clé stable pendant qu'on vide le courrier", ns.cleCourrier(colis),
 verifie("texte d'or", "4 po 80 pa", ns.texteArgent(48000))
 verifie("texte d'or : rien", "0 pc", ns.texteArgent(0))
 
+-- Les destinataires rapides
+local r = ns.retenirDestinataire({ "Anna", "Bob", "Cléo" }, "  bob ", 8)
+verifie("derniers : le plus récent en tête, sans doublon", "bob/Anna/Cléo", table.concat(r, "/"))
+local plein = {}
+for i = 1, 8 do plein[i] = "P" .. i end
+r = ns.retenirDestinataire(plein, "Nouveau", 8)
+verifie("derniers : 8 au plus", 8, #r)
+verifie("derniers : le plus ancien sort", "P7", r[8])
+verifie("derniers : nom vide ignoré", "Anna", table.concat(ns.retenirDestinataire({ "Anna" }, "   "), "/"))
+verifie("derniers : liste vide au départ", "Zed", table.concat(ns.retenirDestinataire(nil, "Zed"), "/"))
+
+local persos = {}
+verifie("perso retenu", true, ns.retenirPerso(persos, "Hyjal", "Moi"))
+verifie("perso déjà connu", false, ns.retenirPerso(persos, "Hyjal", "Moi"))
+verifie("perso sans nom refusé", false, ns.retenirPerso(persos, "Hyjal", " "))
+verifie("perso sans royaume refusé", false, ns.retenirPerso(persos, nil, "Moi"))
+ns.retenirPerso(persos, "Hyjal", "Zoe")
+ns.retenirPerso(persos, "Hyjal", "alba")
+ns.retenirPerso(persos, "Archimonde", "Ailleurs")
+local liste = ns.listeDestinataires(persos, "Hyjal", "Moi", { "Bob", "zoe", "Moi", "Cléo" })
+local texte = {}
+for _, e in ipairs(liste) do texte[#texte + 1] = e.section and ("[" .. e.section .. "]") or e.nom end
+verifie("liste : autres persos du royaume puis derniers, sans doublon ni soi-même",
+  "[Mes personnages]/alba/Zoe/[Derniers destinataires]/Bob/Cléo", table.concat(texte, "/"))
+liste = ns.listeDestinataires({}, "Hyjal", "Moi", {})
+verifie("liste : vide", 0, #liste)
+liste = ns.listeDestinataires(nil, "Hyjal", "Moi", { "Bob" })
+verifie("liste : seulement des derniers", "Derniers destinataires", liste[1] and liste[1].section)
+local gros = {}
+for i = 1, 12 do gros[i] = "D" .. i end
+local n = 0
+for _, e in ipairs(ns.listeDestinataires({}, "H", "M", gros)) do if e.nom then n = n + 1 end end
+verifie("liste : 8 derniers au plus", 8, n)
+
+liste = ns.listeDestinataires(persos, "Hyjal", "Moi", { "Zorro" })
+verifie("compléter : début de nom", "alba", ns.completerNom("AL", liste))
+verifie("compléter : un dernier destinataire", "Zorro", ns.completerNom("zor", liste))
+verifie("compléter : le premier de la liste", "Zoe", ns.completerNom("Z", liste))
+verifie("compléter : rien trouvé", nil, ns.completerNom("Xyz", liste))
+verifie("compléter : rien tapé", nil, ns.completerNom("  ", liste))
+
+-- Le bilan
+local cr2 = { index = 3, expediteur = "Inconnu", sujet = "Dague", argent = 0, contreRemboursement = 1200, nbObjets = 1, premierePiece = 1, jours = 2 }
+local l = ns.courriersLaisses({ vente, colis, cr2, lettre, mj }, "tout", {}, {}, false)
+verifie("laissés : contre-remboursement", 1, l.contreRemboursement)
+verifie("laissés : MJ", 1, l.mj)
+verifie("laissés : pas de sacs pleins", 0, l.sacsPleins)
+l = ns.courriersLaisses({ colis, cr2 }, "tout", {}, {}, true)
+verifie("laissés : sacs pleins (le colis reste)", 1, l.sacsPleins)
+l = ns.courriersLaisses({ colis }, "tout", {}, { [ns.cleCourrier(colis)] = true }, true)
+verifie("laissés : bloqué, pas compté en sacs pleins", "1/0", l.bloques .. "/" .. l.sacsPleins)
+l = ns.courriersLaisses({ vente, cr2 }, "coches", { [ns.cleCourrier(vente)] = true }, {}, false)
+verifie("laissés : mode cochés, hors sélection ignoré", 0, l.contreRemboursement)
+l = ns.courriersLaisses({ colis, vente }, "or", {}, {}, false)
+verifie("laissés : mode or, les objets restants ne comptent pas", 0, l.sacsPleins + l.bloques)
+verifie("laissés : boîte vide", 0, ns.courriersLaisses(nil, "tout").mj)
+verifie("bilan : or et objets", "4 po 80 pa, 12 objet(s)", ns.texteBilan(48000, 12))
+verifie("bilan : pas d'or", "pas d'or, 0 objet(s)", ns.texteBilan(0, 0))
+verifie("bilan : rien de laissé", nil, ns.texteLaisses({ contreRemboursement = 0, mj = 0, sacsPleins = 0, bloques = 0 }))
+verifie("bilan : laissés avec la raison",
+  "courriers laissés de côté : 2 en contre-remboursement (jamais payé), 1 de MJ (jamais ouvert), 3 faute de place dans les sacs",
+  ns.texteLaisses({ contreRemboursement = 2, mj = 1, sacsPleins = 3, bloques = 0 }))
+verifie("bilan : bloqués", "courriers laissés de côté : 1 impossible(s) à vider", ns.texteLaisses({ bloques = 1 }))
+verifie("bilan : table absente", nil, ns.texteLaisses(nil))
+
 -- La recherche de la fenêtre de réglages commune (Reglages.lua)
 local entrees = {
   { titre = "Sacs rangés", recherche = { { libelle = "Section « À équiper » et flèche verte", aide = "Les objets meilleurs", section = "Conseils", onglet = 2 } } },

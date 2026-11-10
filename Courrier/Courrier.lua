@@ -7,6 +7,12 @@
 --   - « Or seulement »   : l'or (ventes de l'hôtel des ventes…), objets laissés ;
 --   - « Récupérer les cochés » : seulement les courriers cochés (une case à
 --     gauche de chaque courrier de la liste).
+-- Et sur l'onglet Envoyer : une petite liste de destinataires rapides (tes autres
+-- personnages du royaume, les 8 derniers destinataires, et « Compléter » le nom
+-- tapé), un rappel du clic droit sur un objet du sac (pièce jointe, c'est le
+-- jeu qui le fait, aussi sur les cases du sac rangé de Sacs rangés), et, à la
+-- fin d'une récupération, un bilan dans le chat (or, objets, courriers laissés
+-- de côté et pourquoi).
 -- Une seule action toutes les 0,3 s, comme le ferait un joueur : le jeu
 -- l'autorise sans appui, et c'est ce que fait Postal. Rien ne part tant que tu
 -- n'as pas cliqué sur un bouton. Jamais de contre-remboursement payé, jamais de
@@ -18,6 +24,11 @@ local NOM_ADDON, ns = ...
 local DEFAUTS = {
   actif = true,
   cases = true,      -- une case à cocher devant chaque courrier
+  destinataires = true, -- la liste de destinataires rapides sur l'onglet Envoyer
+  pieceJointe = true,   -- le rappel du clic droit sur un objet du sac
+  bilan = true,         -- le bilan dans le chat à la fin d'une récupération
+  persos = {},          -- [royaume] = { [nom du personnage] = vrai }, retenus à chaque connexion
+  recents = {},         -- les derniers destinataires, le plus récent d'abord
   minimap = false,   -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 300,
 }
@@ -97,6 +108,130 @@ function ns.texteArgent(cuivre)
   return table.concat(t, " ")
 end
 
+-- ---------------------------------------------------------------------------
+-- Les destinataires rapides
+-- ---------------------------------------------------------------------------
+
+local MAX_RECENTS = 8
+
+local function net(nom)
+  if type(nom) ~= "string" then return "" end
+  return (nom:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- Met un destinataire en tête des derniers destinataires (sans doublon, 8 au plus).
+-- Rend la nouvelle liste.
+function ns.retenirDestinataire(recents, nom, max)
+  max = max or MAX_RECENTS
+  nom = net(nom)
+  local liste = {}
+  if nom == "" then
+    for _, n in ipairs(recents or {}) do liste[#liste + 1] = n end
+    return liste
+  end
+  liste[1] = nom
+  for _, n in ipairs(recents or {}) do
+    if type(n) == "string" and n:lower() ~= nom:lower() and #liste < max then liste[#liste + 1] = n end
+  end
+  return liste
+end
+
+-- Retient un personnage du royaume. Rend vrai si la table a changé.
+function ns.retenirPerso(persos, royaume, nom)
+  nom = net(nom)
+  if type(persos) ~= "table" or type(royaume) ~= "string" or royaume == "" or nom == "" then return false end
+  persos[royaume] = persos[royaume] or {}
+  if persos[royaume][nom] then return false end
+  persos[royaume][nom] = true
+  return true
+end
+
+-- La liste affichée : une ligne de titre par section (« section »), puis les noms (« nom »).
+--   persos : [royaume] = { [nom] = vrai } ; moi : le personnage connecté (pas listé)
+-- Les autres personnages du royaume d'abord (alphabétique), puis les derniers
+-- destinataires qui ne sont pas déjà dans la première section.
+function ns.listeDestinataires(persos, royaume, moi, recents)
+  local liste, vus = {}, { [net(moi):lower()] = true }
+  local autres = {}
+  for nom in pairs((persos or {})[royaume] or {}) do
+    if not vus[nom:lower()] then vus[nom:lower()] = true; autres[#autres + 1] = nom end
+  end
+  table.sort(autres, function(a, b) return a:lower() < b:lower() end)
+  if #autres > 0 then
+    liste[#liste + 1] = { section = "Mes personnages" }
+    for _, nom in ipairs(autres) do liste[#liste + 1] = { nom = nom } end
+  end
+  local debut = #liste + 1
+  local n = 0
+  for _, nom in ipairs(recents or {}) do
+    if type(nom) == "string" and net(nom) ~= "" and not vus[nom:lower()] and n < MAX_RECENTS then
+      vus[nom:lower()] = true
+      n = n + 1
+      liste[#liste + 1] = { nom = nom }
+    end
+  end
+  if n > 0 then table.insert(liste, debut, { section = "Derniers destinataires" }) end
+  return liste
+end
+
+-- Le premier nom de la liste qui commence par ce qui est tapé (sans tenir compte
+-- des majuscules). Rien tapé ou rien trouvé : nil.
+function ns.completerNom(saisie, liste)
+  saisie = net(saisie):lower()
+  if saisie == "" then return nil end
+  for _, e in ipairs(liste or {}) do
+    if e.nom and e.nom:lower():sub(1, #saisie) == saisie then return e.nom end
+  end
+  return nil
+end
+
+-- ---------------------------------------------------------------------------
+-- Le bilan d'une récupération
+-- ---------------------------------------------------------------------------
+
+-- Combien de courriers ont été laissés de côté, et pourquoi.
+--   courriers : la boîte telle qu'elle est à la fin ; mode, coches, bloques : comme pour
+--   ns.prochaineAction ; sacsPleins : la récupération s'est arrêtée faute de place.
+-- Rend { contreRemboursement, mj, sacsPleins, bloques } (des nombres).
+function ns.courriersLaisses(courriers, mode, coches, bloques, sacsPleins)
+  coches, bloques = coches or {}, bloques or {}
+  local l = { contreRemboursement = 0, mj = 0, sacsPleins = 0, bloques = 0 }
+  for _, c in ipairs(courriers or {}) do
+    local cle = ns.cleCourrier(c)
+    if mode ~= "coches" or coches[cle] then
+      if c.mj then
+        if (c.argent or 0) > 0 or (c.nbObjets or 0) > 0 then l.mj = l.mj + 1 end
+      elseif (c.contreRemboursement or 0) > 0 then
+        l.contreRemboursement = l.contreRemboursement + 1
+      elseif aPrendre(c, mode == "coches" and "tout" or mode) then
+        if bloques[cle] then
+          l.bloques = l.bloques + 1
+        elseif sacsPleins then
+          l.sacsPleins = l.sacsPleins + 1
+        end
+      end
+    end
+  end
+  return l
+end
+
+-- « 4 po 80 pa, 12 objet(s) » : ce qui a été récupéré.
+function ns.texteBilan(gagne, objets)
+  return ((gagne or 0) > 0 and ns.texteArgent(gagne) or "pas d'or") .. ", " .. (objets or 0) .. " objet(s)"
+end
+
+-- Les courriers laissés de côté, en une phrase ; nil s'il n'y en a pas.
+function ns.texteLaisses(l)
+  if type(l) ~= "table" then return nil end
+  local t = {}
+  if (l.contreRemboursement or 0) > 0 then t[#t + 1] = l.contreRemboursement .. " en contre-remboursement (jamais payé)" end
+  if (l.mj or 0) > 0 then t[#t + 1] = l.mj .. " de MJ (jamais ouvert)" end
+  if (l.sacsPleins or 0) > 0 then t[#t + 1] = l.sacsPleins .. " faute de place dans les sacs" end
+  if (l.bloques or 0) > 0 then t[#t + 1] = l.bloques .. " impossible(s) à vider" end
+  if #t == 0 then return nil end
+  return "courriers laissés de côté : " .. table.concat(t, ", ")
+end
+
 if not CreateFrame or not GetInboxNumItems then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
@@ -143,13 +278,23 @@ local coches = {}          -- [cle] = vrai : courriers cochés (pour cette ouver
 local enCours              -- { mode, total, argentDepart, objets, minuteur, dernier, essais, bloques }
 local barre, majBarre      -- l'interface, créée à la première ouverture de la boîte
 
-local function arreter(message)
+local function arreter(message, sacsPleins)
   if not enCours then return end
   if enCours.minuteur then enCours.minuteur:Cancel() end
-  local gagne = GetMoney() - enCours.argentDepart
-  local resume = (gagne > 0 and ns.texteArgent(gagne) or "pas d'or") .. ", " .. enCours.objets .. " objet(s)"
+  local en = enCours
+  local gagne = GetMoney() - en.argentDepart
   enCours = nil
-  if message then ns.reglages.dire(message .. " (" .. resume .. ").") end
+  -- Boîte fermée en route : avec le bilan, on dit quand même ce qui a été pris.
+  if not message and db.bilan and (gagne > 0 or en.objets > 0) then message = "boîte fermée" end
+  if message then
+    ns.reglages.dire(message .. " (" .. ns.texteBilan(gagne, en.objets) .. ").")
+    if db.bilan then
+      local ok, laisses = pcall(function()
+        return ns.texteLaisses(ns.courriersLaisses(lireBoite(), en.mode, coches, en.bloques, sacsPleins))
+      end)
+      if ok and laisses then ns.reglages.dire(laisses .. ".") end
+    end
+  end
   if majBarre then majBarre() end
 end
 
@@ -159,7 +304,7 @@ local function etape()
   local courriers = lireBoite()
   local a, raison = ns.prochaineAction(courriers, enCours.mode, coches, placesLibres(), enCours.bloques)
   if not a then
-    arreter(raison == "sacs pleins" and "|cffff4040sacs pleins|r : fais de la place puis relance" or "terminé")
+    arreter(raison == "sacs pleins" and "|cffff4040sacs pleins|r : fais de la place puis relance" or "terminé", raison == "sacs pleins")
     return
   end
   -- La même action trois fois de suite sans effet : on saute ce courrier.
@@ -275,6 +420,121 @@ local function creerInterface()
   end
 end
 
+-- Les destinataires rapides : un bouton à droite du champ « À » ouvre une petite
+-- liste dessous ; un clic sur un nom remplit le champ (rien n'est envoyé).
+local panneauDest, boutonDest, remplirDest
+local lignesDest = {}
+
+local function creerDestinataires()
+  if panneauDest or not (SendMailFrame and SendMailNameEditBox) then return end
+  local champ = SendMailNameEditBox
+  boutonDest = CreateFrame("Button", nil, SendMailFrame)
+  boutonDest:SetSize(24, 24)
+  boutonDest:SetPoint("LEFT", champ, "RIGHT", 2, 0)
+  boutonDest:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  boutonDest:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+  boutonDest:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+
+  panneauDest = CreateFrame("Frame", nil, SendMailFrame, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  panneauDest:SetFrameStrata("DIALOG")
+  panneauDest:SetPoint("TOPLEFT", champ, "BOTTOMLEFT", -4, -2)
+  panneauDest:SetWidth(210)
+  panneauDest:Hide()
+  ns.habiller(panneauDest)
+  local astuce = panneauDest:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  astuce:SetWidth(190)
+  astuce:SetJustifyH("LEFT")
+  astuce:SetText("Astuce : clic droit sur un objet du sac pour l'ajouter en pièce jointe.")
+
+  local function ligneNumero(i)
+    local l = lignesDest[i]
+    if l then return l end
+    l = CreateFrame("Button", nil, panneauDest)
+    l:SetSize(194, 18)
+    l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    l.texte = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    l.texte:SetPoint("LEFT", 4, 0)
+    l.texte:SetPoint("RIGHT", -4, 0)
+    l.texte:SetJustifyH("LEFT")
+    l:SetScript("OnClick", function(self)
+      if not self.nomChoisi then return end
+      champ:SetText(self.nomChoisi)
+      if champ.SetCursorPosition then champ:SetCursorPosition(#self.nomChoisi) end
+      panneauDest:Hide()
+    end)
+    lignesDest[i] = l
+    return l
+  end
+
+  remplirDest = function()
+    local moi = UnitName and UnitName("player") or ""
+    local royaume = GetRealmName and GetRealmName() or "?"
+    local liste = ns.listeDestinataires(db.persos, royaume, moi, db.recents)
+    local tape = champ:GetText() or ""
+    local completion = ns.completerNom(tape, liste)
+    -- Première ligne : compléter le nom tapé.
+    local rangees = { { complet = true } }
+    for _, e in ipairs(liste) do rangees[#rangees + 1] = e end
+    local y = -8
+    for i, e in ipairs(rangees) do
+      local l = ligneNumero(i)
+      l:ClearAllPoints()
+      l:SetPoint("TOPLEFT", 8, y)
+      l.nomChoisi = nil
+      if e.complet then
+        if completion and completion:lower() ~= net(tape):lower() then
+          l.texte:SetText("|cff66ff66Compléter :|r " .. completion)
+          l.nomChoisi = completion
+        elseif completion then
+          l.texte:SetText("|cff888888Nom déjà complet|r")
+        else
+          l.texte:SetText("|cff888888Compléter (tape le début d'un nom)|r")
+        end
+      elseif e.section then
+        l.texte:SetText("|cffffd24d" .. e.section .. "|r")
+      else
+        l.texte:SetText(e.nom)
+        l.nomChoisi = e.nom
+      end
+      l:SetEnabled(l.nomChoisi ~= nil)
+      l:Show()
+      y = y - 18
+    end
+    for i = #rangees + 1, #lignesDest do lignesDest[i]:Hide() end
+    astuce:ClearAllPoints()
+    astuce:SetShown(db.pieceJointe and true or false)
+    if db.pieceJointe then
+      astuce:SetPoint("TOPLEFT", 12, y - 4)
+      y = y - 4 - 26
+    end
+    panneauDest:SetHeight(-y + 8)
+  end
+
+  boutonDest:SetScript("OnClick", function()
+    if panneauDest:IsShown() then panneauDest:Hide() else remplirDest(); panneauDest:Show() end
+  end)
+  boutonDest:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Destinataires rapides")
+    GameTooltip:AddLine("Tes autres personnages du royaume, les derniers destinataires, et le nom tapé complété.", 1, 1, 1, true)
+    if db.pieceJointe then GameTooltip:AddLine("Clic droit sur un objet du sac : pièce jointe.", 0.6, 0.9, 0.6, true) end
+    GameTooltip:Show()
+  end)
+  boutonDest:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  SendMailFrame:HookScript("OnHide", function() panneauDest:Hide() end)
+  -- La liste se met à jour quand on tape.
+  if champ.HookScript then
+    champ:HookScript("OnTextChanged", function() if panneauDest:IsShown() then remplirDest() end end)
+  end
+end
+
+local function majDestinataires()
+  if not boutonDest then return end
+  local voulu = db.actif and db.destinataires and true or false
+  boutonDest:SetShown(voulu)
+  if not voulu then panneauDest:Hide() end
+end
+
 local function majCases()
   if not barre then return end
   local page = (InboxFrame and InboxFrame.pageNum) or 1
@@ -310,6 +570,14 @@ ns.reglages = ns.creerReglages({
       aide = "Une barre sous la boîte aux lettres : « Tout récupérer », « Or seulement » et « Les cochés ». Rien ne se fait sans un clic de ta part." },
     { cle = "cases", libelle = "Cases à cocher devant les courriers",
       aide = "Pour choisir quels courriers récupérer avec « Les cochés ». Les cases se vident quand tu fermes la boîte." },
+    { titre = "Envoyer" },
+    { cle = "destinataires", libelle = "Destinataires rapides sur l'onglet Envoyer",
+      aide = "Un petit bouton à droite du champ « À » ouvre la liste : tes autres personnages du royaume (retenus à chaque connexion), les 8 derniers destinataires, et « Compléter » le nom tapé. Un clic remplit le champ, rien n'est envoyé." },
+    { cle = "pieceJointe", libelle = "Rappel : clic droit sur un objet du sac = pièce jointe", dependDe = "destinataires",
+      aide = "Boîte ouverte sur l'onglet Envoyer, un clic droit sur un objet de ton sac l'ajoute en pièce jointe : c'est le jeu qui le fait, y compris sur les cases du sac rangé de Sacs rangés. Cette option affiche seulement le rappel dans la liste." },
+    { titre = "Bilan" },
+    { cle = "bilan", libelle = "Bilan dans le chat à la fin d'une récupération",
+      aide = "À la fin : l'or et le nombre d'objets pris, puis les courriers laissés de côté et pourquoi (contre-remboursement, MJ, sacs pleins)." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
@@ -319,17 +587,32 @@ ns.reglages = ns.creerReglages({
   surChangement = function(d)
     if barre then barre:SetShown(d.actif) end
     if not d.actif then arreter() end
+    majDestinataires()
     majCases()
   end,
 })
 
 local ecouteur = CreateFrame("Frame")
-for _, e in ipairs({ "MAIL_SHOW", "MAIL_CLOSED", "MAIL_INBOX_UPDATE", "UI_ERROR_MESSAGE" }) do
-  ecouteur:RegisterEvent(e)
+for _, e in ipairs({ "MAIL_SHOW", "MAIL_CLOSED", "MAIL_INBOX_UPDATE", "UI_ERROR_MESSAGE", "PLAYER_ENTERING_WORLD", "MAIL_SEND_SUCCESS" }) do
+  pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
+
+-- Le destinataire du dernier envoi demandé, retenu quand le jeu confirme l'envoi.
+local dernierDest
+local function surEnvoi(destinataire) dernierDest = destinataire end
+if C_Mail and C_Mail.SendMail then pcall(hooksecurefunc, C_Mail, "SendMail", surEnvoi) end
+if SendMail then pcall(hooksecurefunc, "SendMail", surEnvoi) end
+
 ecouteur:SetScript("OnEvent", function(_, evenement, _, message)
-  if evenement == "MAIL_SHOW" then
+  if evenement == "PLAYER_ENTERING_WORLD" then
+    if db and UnitName then ns.retenirPerso(db.persos, GetRealmName and GetRealmName() or "?", UnitName("player")) end
+  elseif evenement == "MAIL_SEND_SUCCESS" then
+    if db and dernierDest then db.recents = ns.retenirDestinataire(db.recents, dernierDest, MAX_RECENTS) end
+    dernierDest = nil
+  elseif evenement == "MAIL_SHOW" then
     creerInterface()
+    pcall(creerDestinataires)
+    majDestinataires()
     if barre then barre:SetShown(db.actif) end
     majCases()
   elseif evenement == "MAIL_CLOSED" then
@@ -339,7 +622,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement, _, message)
     majCases()
   elseif evenement == "UI_ERROR_MESSAGE" and enCours then
     if message == ERR_INV_FULL or message == ERR_ITEM_MAX_COUNT then
-      arreter("|cffff4040" .. tostring(message) .. "|r : récupération arrêtée")
+      arreter("|cffff4040" .. tostring(message) .. "|r : récupération arrêtée", true)
     end
   end
 end)

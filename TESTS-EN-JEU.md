@@ -79,6 +79,14 @@ Avant de commencer :
 - [ ] Sacs pleins : l'addon s'arrête avec un message.
 - [ ] « Arrêter » pendant la récupération.
 - [ ] La barre sous la boîte aux lettres garde son fond sombre et sa bordure dorée (même visuel qu'avant).
+- [ ] Onglet Envoyer : un petit bouton à droite du champ « À » ouvre la liste. Premier lancement : elle ne montre que « Compléter ». Après une connexion avec un autre personnage du royaume, il apparaît dans « Mes personnages » (et pas le personnage connecté).
+- [ ] Taper « Al » dans le champ puis ouvrir la liste : la ligne verte « Compléter : … » remplit le champ avec le nom complet. Un clic sur un personnage ou un ancien destinataire remplit le champ, sans rien envoyer.
+- [ ] Envoyer un courrier à quelqu'un : il apparaît ensuite dans « Derniers destinataires » (8 au plus, le plus récent en haut, sans doublon).
+- [ ] La liste se referme en changeant d'onglet ou en fermant la boîte. Option « Destinataires rapides » décochée : le bouton disparaît.
+- [ ] Pièce jointe en un clic : onglet Envoyer ouvert, clic droit sur un objet du sac du jeu l'ajoute en pièce jointe. Pareil sur une case du sac rangé de Sacs rangés (ce sont de vraies cases du jeu). Si ça ne marche pas sur le sac rangé, le dire : il faudra un crochet à nous.
+- [ ] Le rappel « Astuce : clic droit… » apparaît en bas de la liste, et disparaît avec l'option « Rappel : clic droit… » décochée.
+- [ ] Fin d'une récupération : une ligne « terminé (X po, N objet(s)) » puis, s'il en reste, « courriers laissés de côté : 1 en contre-remboursement (jamais payé), … ». Avec les sacs pleins : « N faute de place dans les sacs ».
+- [ ] Fermer la boîte en pleine récupération : « boîte fermée (…) » avec ce qui a été pris. Option « Bilan » décochée : retour à l'ancien message court, sans ligne « laissés de côté ».
 
 ## GPS (nouveau)
 
