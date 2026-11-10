@@ -677,6 +677,9 @@ end
 -- ----- les actions sur une quête
 
 local function ouvrirJournal(id)
+  -- Jamais en combat : ouvrir la carte depuis un addon y est refusé par le jeu
+  -- (« action bloquée … SetPassThroughButtons », vu en jeu le 10/11).
+  if enCombat() then dire("le journal s'ouvrira après le combat (le jeu le refuse aux addons en combat).") return end
   if QuestMapFrame_OpenToQuestDetails then
     sur(QuestMapFrame_OpenToQuestDetails, id)
   elseif QuestUtil and QuestUtil.OpenQuestDetails then

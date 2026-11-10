@@ -3,7 +3,7 @@
 ## Notes: Barres de vie du jeu, avec un grand « ! » sur les monstres de tes quêtes et ta progression (2/6 et l'icône de l'objet). Couleur de menace, pourcentage et marques en option.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.4.1
+## Version: 0.5.0
 ## IconTexture: Interface\Icons\Ability_Warrior_DefensiveStance
 ## SavedVariables: BarresDeVieDB
 ## AddonCompartmentFunc: BarresDeVie_OuvrirReglages

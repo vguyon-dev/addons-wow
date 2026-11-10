@@ -61,5 +61,20 @@ verifie("monstre à tuer : genre tuer", "tuer", objs[2] and objs[2].genre)
 verifie("objectif fini par les chiffres : ignoré", 0, #ns.objectifs({ { type = 8, leftText = "Croc : 6/6" } }, T))
 verifie("monstre sans quête : rien", 0, #ns.objectifs({ { type = 16, leftText = "Kobold" } }, T))
 
+-- Butins appris : le jeu ne dit pas toujours qu'un monstre donne un objet de quête
+verifie("numéro d'un monstre", 114, ns.npcDuGuid("Creature-0-4444-0-12-114-00001A2B3C"))
+verifie("un joueur n'est pas un monstre", nil, ns.npcDuGuid("Player-93-0ABCDEF1"))
+verifie("identifiant absent", nil, ns.npcDuGuid(nil))
+verifie("clé d'objet, compte à la fin", "flasque d'huile", (ns.cleObjet("Flasque d'huile : 2/5")))
+verifie("clé d'objet, compte au début", "flasque d'huile", (ns.cleObjet("2/5 Flasque d'huile")))
+verifie("clé d'objet, nom seul (butin)", "flasque d'huile", (ns.cleObjet("Flasque d'huile")))
+verifie("clé d'objet, vide", nil, (ns.cleObjet("")))
+local journal = { ["flasque d'huile"] = { nom = "Flasque d'huile", fait = 2, total = 5 }, ["croc"] = { nom = "Croc", fait = 6, total = 6 } }
+local manque = ns.butinManquant({ ["flasque d'huile"] = true }, journal)
+verifie("monstre connu : il manque 2/5", "2/5", manque and (manque.fait .. "/" .. manque.total))
+verifie("objet déjà complet : rien", nil, ns.butinManquant({ ["croc"] = true }, journal))
+verifie("quête rendue (plus au journal) : rien", nil, ns.butinManquant({ ["plume"] = true }, journal))
+verifie("monstre inconnu : rien", nil, ns.butinManquant(nil, journal))
+
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)

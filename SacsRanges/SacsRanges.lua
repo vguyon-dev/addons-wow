@@ -320,7 +320,9 @@ local function ranger()
   tri()
   if banqueOuverte and db.rangerBanque then
     local triBanque = C_Container and C_Container.SortBankBags or SortBankBags
-    if triBanque then C_Timer.After(1, triBanque) end
+    -- Une fonction Lua autour : C_Timer.After refuse une fonction du jeu donnée telle quelle
+    -- (« bad argument #2 », vu en jeu le 10/11 en rangeant avec la banque ouverte).
+    if type(triBanque) == "function" then C_Timer.After(1, function() pcall(triBanque) end) end
   end
   ns.reglages.dire("sacs rangés" .. ((banqueOuverte and db.rangerBanque) and ", banque aussi." or "."))
 end

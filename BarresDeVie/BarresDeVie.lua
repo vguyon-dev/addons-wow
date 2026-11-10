@@ -92,6 +92,40 @@ function ns.objectifs(lignes, types)
   return liste
 end
 
+-- Le jeu ne dit pas toujours qu'un monstre donne un objet de quête (sa bulle n'en parle pas).
+-- On l'apprend alors nous-mêmes : quand un objet demandé par une quête sort du butin d'un
+-- monstre, on retient « ce genre de monstre donne cet objet ».
+
+-- Le numéro du genre de monstre, tiré de son identifiant (« Creature-0-…-numéro-… »).
+function ns.npcDuGuid(guid)
+  if type(guid) ~= "string" then return nil end
+  local genre, numero = guid:match("^(%a+)%-[^%-]*%-[^%-]*%-[^%-]*%-[^%-]*%-(%d+)")
+  if genre ~= "Creature" and genre ~= "Vehicle" then return nil end
+  return tonumber(numero)
+end
+
+-- « Flasque d'huile : 2/5 » ou « 2/5 Flasque d'huile » -> « flasque d'huile ».
+function ns.cleObjet(texte)
+  if type(texte) ~= "string" then return nil end
+  local nom = texte:gsub("%s*:?%s*%d+%s*/%s*%d+%s*", " "):gsub("^[%s%-]+", ""):gsub("%s+$", "")
+  if nom == "" then return nil end
+  return nom:lower(), nom
+end
+
+-- connus : { [cle d'objet] = true } pour ce genre de monstre ; journal : { [cle] = { nom, fait, total } }
+-- pour les objets encore à ramasser. Renvoie le premier objet qu'il te manque, ou nil.
+function ns.butinManquant(connus, journal)
+  if not connus or not journal then return nil end
+  local cles = {}
+  for cle in pairs(connus) do cles[#cles + 1] = cle end
+  table.sort(cles)
+  for _, cle in ipairs(cles) do
+    local o = journal[cle]
+    if o and o.fait and o.total and o.fait < o.total then return o end
+  end
+  return nil
+end
+
 if not CreateFrame or not C_NamePlate then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
@@ -180,6 +214,51 @@ local function iconeObjet(nom)
   return ok and icone or ICONE_OBJET
 end
 
+-- Les objets que tes quêtes demandent encore, relus seulement quand le journal change.
+local journalObjets
+local function objetsDuJournal()
+  if journalObjets then return journalObjets end
+  journalObjets = {}
+  if not (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo and C_QuestLog.GetQuestObjectives) then
+    return journalObjets
+  end
+  local ok, n = pcall(C_QuestLog.GetNumQuestLogEntries)
+  for i = 1, (ok and tonumber(n)) or 0 do
+    local ok2, info = pcall(C_QuestLog.GetInfo, i)
+    if ok2 and info and not info.isHeader and info.questID then
+      local ok3, objs = pcall(C_QuestLog.GetQuestObjectives, info.questID)
+      for _, o in ipairs(ok3 and objs or {}) do
+        if o.type == "item" and not o.finished then
+          local cle, nom = ns.cleObjet(o.text)
+          if cle then journalObjets[cle] = { nom = nom, fait = o.numFulfilled, total = o.numRequired } end
+        end
+      end
+    end
+  end
+  return journalObjets
+end
+
+-- À l'ouverture d'un butin : si un objet demandé par une quête en sort, on retient le monstre.
+local function apprendreButin()
+  if not db or not (GetNumLootItems and GetLootSlotInfo and GetLootSourceInfo) then return end
+  local journal = objetsDuJournal()
+  if not next(journal) then return end
+  for case = 1, GetNumLootItems() or 0 do
+    local ok, _, nom = pcall(GetLootSlotInfo, case)
+    local cle = ok and ns.cleObjet(nom)
+    if cle and journal[cle] then
+      local sources = { pcall(GetLootSourceInfo, case) }
+      for i = 2, #sources, 2 do
+        local numero = sur(sources[i]) and ns.npcDuGuid(sources[i])
+        if numero then
+          db.butins[numero] = db.butins[numero] or {}
+          db.butins[numero][cle] = true
+        end
+      end
+    end
+  end
+end
+
 local function majQuete(unite, a)
   a.quete:Hide(); a.progres:Hide(); a.icone:Hide()
   if not db.quetes or not TYPES or not (C_TooltipInfo and C_TooltipInfo.GetUnit) then return end
@@ -190,7 +269,19 @@ local function majQuete(unite, a)
     if sur(l.leftText) then lignes[#lignes + 1] = { type = l.type, leftText = l.leftText, completed = l.completed } end
   end
   local objs = ns.objectifs(lignes, TYPES)
-  if #objs == 0 then return end
+  if #objs == 0 then
+    -- La bulle du jeu ne dit rien : ce genre de monstre a-t-il déjà donné un objet qu'il te manque ?
+    local guid = UnitGUID and UnitGUID(unite)
+    local numero = sur(guid) and ns.npcDuGuid(guid)
+    local o = numero and db.butins and ns.butinManquant(db.butins[numero], objetsDuJournal())
+    if not o then return end
+    a.quete:Show()
+    a.progres:SetText(o.fait .. "/" .. o.total)
+    a.progres:Show()
+    a.icone:SetTexture(iconeObjet(o.nom))
+    a.icone:Show()
+    return
+  end
   a.quete:Show()
   -- La première progression chiffrée : « 2/6 » et son icône.
   for _, o in ipairs(objs) do
@@ -281,7 +372,7 @@ ns.reglages = ns.creerReglages({
     { cle = "actif", libelle = "Activer Barres de vie",
       aide = "Améliore les barres de vie du jeu au-dessus des monstres (affiche-les avec V ou Maj+V)." },
     { cle = "quetes", libelle = "« ! » et progression des quêtes au-dessus des monstres",
-      aide = "Un grand « ! » jaune sur les monstres de tes quêtes, et dessous « 2/6 » avec l'icône de l'objet à ramasser (une épée quand il faut le tuer)." },
+      aide = "Un grand « ! » jaune sur les monstres de tes quêtes, et dessous « 2/6 » avec l'icône de l'objet à ramasser (une épée quand il faut le tuer). Quand le jeu ne dit pas qu'un monstre donne un objet de quête, l'addon l'apprend au premier objet ramassé sur ce genre de monstre." },
     { titre = "En plus (sinon les barres restent comme le jeu)" },
     { cle = "menace", libelle = "Couleur selon la menace",
       aide = "Vert : tranquille. Orange : il commence à te viser. Rouge : il te tape. En tank, c'est l'inverse (rouge = il t'échappe). En donjon, le jeu cache parfois la menace : la couleur du jeu reste alors." },
@@ -296,6 +387,7 @@ ns.reglages = ns.creerReglages({
   },
   auChargement = function(d)
     db = d
+    d.butins = type(d.butins) == "table" and d.butins or {} -- [genre de monstre] = { [objet] = true }
     -- Une fois : la 0.1.0 cochait tout ; Valentin veut les barres « comme le jeu ».
     if not d.commeLeJeu then
       d.menace, d.etoiles, d.pourcent, d.cibleGrande, d.commeLeJeu = false, false, false, false, true
@@ -310,11 +402,16 @@ ns.reglages = ns.creerReglages({
 local majPrevue = false
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "NAME_PLATE_UNIT_ADDED", "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED", "UNIT_THREAT_SITUATION_UPDATE", "UNIT_THREAT_LIST_UPDATE",
-  "UNIT_HEALTH", "UNIT_CLASSIFICATION_CHANGED", "PLAYER_REGEN_ENABLED", "PLAYER_SPECIALIZATION_CHANGED" }) do
+  "UNIT_HEALTH", "UNIT_CLASSIFICATION_CHANGED", "PLAYER_REGEN_ENABLED", "PLAYER_SPECIALIZATION_CHANGED", "LOOT_READY", "LOOT_OPENED" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 ecouteur:SetScript("OnEvent", function(_, evenement, unite)
   if not db then return end
+  if evenement == "LOOT_READY" or evenement == "LOOT_OPENED" then
+    pcall(apprendreButin)
+    return
+  end
+  if evenement == "QUEST_LOG_UPDATE" or evenement == "UNIT_QUEST_LOG_CHANGED" then journalObjets = nil end
   if evenement == "PLAYER_REGEN_ENABLED" or evenement == "PLAYER_SPECIALIZATION_CHANGED" then
     appliquerCible()
     toutMettreAJour()
