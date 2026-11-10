@@ -109,6 +109,11 @@ Avant de commencer :
 - [ ] Une épingle posée à la main sur la carte du jeu : la flèche la suit, avant la quête.
 - [ ] Poser une balise `/way` : la flèche la suit, puis revient à la quête quand la balise est atteinte.
 - [ ] Si TomTom est encore installé : vérifier qui répond à `/way` (le désactiver pour ne garder que le nôtre).
+- [ ] Balises partagées, à deux joueurs en groupe avec GPS : poser une balise puis cliquer « Envoyer au groupe » (onglet Balises des réglages) : l'autre voit « balise : Titre (de Nom) » et la flèche la suit.
+- [ ] `/way envoyer` envoie la balise suivie ; `/way envoyer tout` envoie toutes les balises (20 au plus). Seul en jeu : « tu n'es pas dans un groupe ». Sans balise : « aucune balise suivie à envoyer ».
+- [ ] Renvoyer deux fois la même balise (ou une à moins de 0,5 % de distance) : aucun doublon chez l'autre. Une balise envoyée par soi-même ne revient jamais.
+- [ ] Option « Accepter les balises de mon groupe » décochée chez l'autre : rien n'est ajouté. En raid et en groupe d'instance (recherche de groupe) : l'envoi passe aussi.
+- [ ] Titre vide ou avec des accents : la balise arrive en « Balise (de Nom) » ou avec ses accents intacts. Aucune erreur dans BugSack, côté envoi comme côté réception.
 
 ## Enchères (nouveau)
 

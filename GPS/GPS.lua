@@ -6,6 +6,7 @@
 --   /way Elwynn 45 67 Titre     une balise sur une autre carte (nom de la zone)
 --   Ctrl + clic droit sur la carte du monde : une balise à cet endroit
 --   /way effacer                retire toutes les balises
+--   /way envoyer [tout]         envoie la balise suivie (ou toutes) au groupe
 --   /gps                        les réglages, avec la liste des balises
 --
 -- Sans balise, la flèche suit l'épingle posée sur la carte du jeu, sinon la
@@ -15,6 +16,10 @@
 -- moins de 10 m : un son, la balise disparaît et la suivante prend le relais.
 -- La balise suivie est aussi posée comme épingle du jeu (carte et minimap).
 -- Pour les autres addons : GPS_Ajouter(carte, x, y, titre) avec x, y entre 0 et 1.
+-- Partage : « Envoyer au groupe » (onglet Balises) ou /way envoyer envoient la
+-- balise suivie aux membres du groupe (message d'addon, préfixe « GPSValentin »).
+-- Chez eux, avec l'option « Accepter les balises de mon groupe », elle s'ajoute
+-- avec « (de Nom) » dans son titre, sans doublon.
 -- ============================================================================
 
 local NOM_ADDON, ns = ...
@@ -28,6 +33,7 @@ local DEFAUTS = {
   arrivee = true,       -- son et retrait de la balise à l'arrivée
   suivreQuete = true,   -- sans balise : la flèche suit la quête suivie
   suivreEpingle = true, -- sans balise : la flèche suit l'épingle posée sur la carte du jeu
+  accepterGroupe = true, -- ajouter les balises envoyées par les membres de mon groupe
   minimap = false,
   angleMinimap = 30,
 }
@@ -115,6 +121,91 @@ function ns.choisir(balises, ici, plusProche)
     end
   end
   return meilleure, dMin
+end
+
+-- ---------------------------------------------------------------------------
+-- Balises partagées avec le groupe : le message « B<tab>carte<tab>x<tab>y<tab>titre »
+-- ---------------------------------------------------------------------------
+
+local TITRE_MAX = 60       -- octets gardés d'un titre
+local TOLERANCE = 0.005    -- 0,5 % de la carte : même point
+
+-- Un texte coupé à `max` octets sans casser une lettre accentuée (UTF-8).
+local function couper(t, max)
+  if #t <= max then return t end
+  local fin = max
+  while fin > 0 do
+    local suivant = t:byte(fin + 1)
+    if suivant and suivant >= 0x80 and suivant < 0xC0 then fin = fin - 1 else break end
+  end
+  return t:sub(1, fin)
+end
+
+-- Un titre sûr : sans tabulation, retour à la ligne ni autre caractère de contrôle,
+-- sans « | » (les codes de couleur et de lien du jeu), espaces resserrés, coupé.
+function ns.nettoyerTitre(titre, max)
+  local t = tostring(titre or "")
+  t = t:gsub("%c", " ")
+  t = t:gsub("|", "")
+  t = t:gsub("%s+", " ")
+  t = t:gsub("^ ", ""):gsub(" $", "")
+  return (couper(t, max or TITRE_MAX):gsub(" $", ""))
+end
+
+-- Le message à envoyer pour une balise (x et y entre 0 et 1), ou nil si elle est invalide.
+-- Le « (de Nom) » d'une balise reçue n'est pas renvoyé tel quel.
+function ns.coderBalise(carte, x, y, titre)
+  if type(carte) ~= "number" or carte <= 0 or carte % 1 ~= 0 or carte > 9999999 then return nil end
+  if type(x) ~= "number" or type(y) ~= "number" or x ~= x or y ~= y or x < 0 or x > 1 or y < 0 or y > 1 then return nil end
+  local t = ns.nettoyerTitre(titre)
+  t = t:gsub("%s*%(de [^%)]*%)$", "")
+  return string.format("B\t%d\t%.4f\t%.4f\t%s", carte, x, y, t)
+end
+
+-- Lit un message reçu. Rend { carte, x, y, titre } (titre nil s'il est vide),
+-- ou nil et la raison quand le message est mal formé.
+function ns.decoderBalise(texte)
+  if type(texte) ~= "string" then return nil, "pas du texte" end
+  if #texte > 255 then return nil, "trop long" end
+  local carte, x, y, titre = texte:match("^B\t(%d+)\t([%d%.]+)\t([%d%.]+)\t(.*)$")
+  if not carte then carte, x, y = texte:match("^B\t(%d+)\t([%d%.]+)\t([%d%.]+)$"); titre = "" end
+  if not carte then return nil, "mal formé" end
+  if #carte > 7 then return nil, "carte invalide" end
+  carte, x, y = tonumber(carte), tonumber(x), tonumber(y)
+  if not carte or carte <= 0 then return nil, "carte invalide" end
+  if not x or not y or x < 0 or x > 1 or y < 0 or y > 1 then return nil, "coordonnées invalides" end
+  titre = ns.nettoyerTitre(titre)
+  return { carte = carte, x = x, y = y, titre = titre ~= "" and titre or nil }
+end
+
+-- Le titre d'une balise reçue : « Le moulin (de Anna) ».
+function ns.titreRecu(titre, nom)
+  local t = ns.nettoyerTitre(titre)
+  if t == "" then t = "Balise" end
+  local n = ns.nettoyerTitre(nom, 40)
+  if n == "" then n = "?" end
+  return t .. " (de " .. n .. ")"
+end
+
+-- Même carte et même point à 0,5 % près.
+function ns.memeBalise(a, b)
+  if not (a and b) or a.carte ~= b.carte then return false end
+  return math.abs(a.x - b.x) <= TOLERANCE + 1e-9 and math.abs(a.y - b.y) <= TOLERANCE + 1e-9
+end
+
+function ns.dejaConnue(balises, b)
+  for _, x in ipairs(balises or {}) do
+    if ns.memeBalise(x, b) then return true end
+  end
+  return false
+end
+
+-- Le canal du groupe (instance, raid, groupe), nil si on est seul.
+function ns.canalGroupe(instance, raid, groupe)
+  if instance then return "INSTANCE_CHAT" end
+  if raid then return "RAID" end
+  if groupe then return "PARTY" end
+  return nil
 end
 
 if not CreateFrame or not C_Map then return end -- hors jeu : la suite ne sert qu'en jeu
@@ -221,6 +312,71 @@ function GPS_Ajouter(carte, x, y, titre)
   if not db or not db.actif or not carte or not x or not y then return nil end
   return ajouter(carte, x, y, titre)
 end
+
+-- ---------------------------------------------------------------------------
+-- Le partage avec le groupe (même principe que Quêtes du groupe et Rapport d'erreurs :
+-- un message d'addon sur le canal du groupe, préfixe enregistré une fois)
+-- ---------------------------------------------------------------------------
+
+local PREFIXE = "GPSValentin"
+local MAX_ENVOI = 20   -- balises envoyées d'un coup, au plus
+local MAX_BALISES = 100 -- au-delà, on n'ajoute plus de balise reçue
+
+if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+  pcall(C_ChatInfo.RegisterAddonMessagePrefix, PREFIXE)
+end
+
+local function canalGroupe()
+  return ns.canalGroupe(IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE),
+    IsInRaid and IsInRaid(), IsInGroup and IsInGroup())
+end
+
+-- Envoie la balise suivie, ou toutes les balises, aux membres du groupe.
+-- Une balise par message, un toutes les 0,2 s (le jeu limite le débit).
+local function envoyerAuGroupe(toutes)
+  if not db.actif then ns.reglages.dire("GPS est coupé.") return end
+  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then ns.reglages.dire("envoi impossible sur cette version du jeu.") return end
+  local canal = canalGroupe()
+  if not canal then ns.reglages.dire("tu n'es pas dans un groupe.") return end
+  local liste = {}
+  if toutes then
+    for _, b in ipairs(perso.balises) do liste[#liste + 1] = b end
+  elseif suivie then
+    liste[1] = suivie
+  end
+  local messages = {}
+  for _, b in ipairs(liste) do
+    local m = ns.coderBalise(b.carte, b.x, b.y, b.titre)
+    if m and #messages < MAX_ENVOI then messages[#messages + 1] = m end
+  end
+  if #messages == 0 then
+    ns.reglages.dire(toutes and "aucune balise à envoyer." or "aucune balise suivie à envoyer (pose-en une avec /way).")
+    return
+  end
+  for i, m in ipairs(messages) do
+    C_Timer.After((i - 1) * 0.2, function() pcall(C_ChatInfo.SendAddonMessage, PREFIXE, m, canal) end)
+  end
+  ns.reglages.dire(#messages .. " balise(s) envoyée(s) au groupe.")
+end
+
+-- Une balise reçue d'un membre du groupe : ajoutée avec « (de Nom) », sans doublon,
+-- jamais venant de soi-même.
+local function surMessage(prefixe, texte, canalMessage, auteur)
+  if prefixe ~= PREFIXE or not db or not db.actif or not db.accepterGroupe then return end
+  if canalMessage ~= "PARTY" and canalMessage ~= "RAID" and canalMessage ~= "INSTANCE_CHAT" then return end
+  if estSecret(texte) or estSecret(auteur) or type(auteur) ~= "string" then return end
+  local nom = Ambiguate and Ambiguate(auteur, "none") or auteur
+  if nom == UnitName("player") then return end
+  local b = ns.decoderBalise(texte)
+  if not b then return end
+  if not (C_Map.GetMapInfo and C_Map.GetMapInfo(b.carte)) then return end
+  if #perso.balises >= MAX_BALISES or ns.dejaConnue(perso.balises, b) then return end
+  ajouter(b.carte, b.x, b.y, ns.titreRecu(b.titre, nom))
+end
+
+local ecouteGroupe = CreateFrame("Frame")
+ecouteGroupe:RegisterEvent("CHAT_MSG_ADDON")
+ecouteGroupe:SetScript("OnEvent", function(_, _, ...) surMessage(...) end)
 
 -- ---------------------------------------------------------------------------
 -- La flèche
@@ -475,6 +631,8 @@ ns.reglages = ns.creerReglages({
       aide = "Décoché : la dernière balise posée." },
     { cle = "arrivee", libelle = "Son et retrait de la balise à l'arrivée",
       aide = "À moins de 10 m, la balise disparaît et la suivante prend le relais." },
+    { cle = "accepterGroupe", libelle = "Accepter les balises de mon groupe",
+      aide = "Quand un membre de ton groupe t'envoie une balise (onglet Balises, ou /way envoyer), elle est ajoutée avec « (de Nom) » dans son titre, sans doublon. Jamais une balise venant de toi-même." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
@@ -512,6 +670,11 @@ ns.reglages = ns.creerReglages({
       end,
     })
     majListe = maj
+    local bGroupe = ns.creerBouton(f, "Envoyer au groupe", "Envoie la balise suivie (celle marquée d'un « > ») aux membres de ton groupe ou de ton raid. Eux la reçoivent s'ils ont GPS et l'option « Accepter les balises de mon groupe ».", function() envoyerAuGroupe(false) end, 150)
+    bGroupe:SetPoint("TOPLEFT", 16, y - 4)
+    local bToutes = ns.creerBouton(f, "Envoyer toutes", "Envoie toutes tes balises (20 au plus) aux membres de ton groupe ou de ton raid.", function() envoyerAuGroupe(true) end, 130)
+    bToutes:SetPoint("LEFT", bGroupe, "RIGHT", 8, 0)
+    y = y - 34
     return y, maj
   end,
   astuce = "Pour les autres addons : GPS_Ajouter(carte, x, y, titre). Livres de bibliothèque s'en sert pour ses balises.",
@@ -548,6 +711,8 @@ local function commandeWay(message)
   if bas == "" or bas == "liste" then ns.reglages.montrer() return end
   if bas == "etat" or bas == "état" then ns.reglages.dire("en ce moment : " .. diagnostic) return end
   if bas == "effacer" or bas == "reset" then toutEffacer() ns.reglages.dire("balises effacées.") return end
+  if bas == "envoyer" then envoyerAuGroupe(false) return end
+  if bas == "envoyer tout" or bas == "envoyer toutes" then envoyerAuGroupe(true) return end
   local _, carte = ici()
   local r, erreur = ns.lireWay(m, carte, cartes())
   if not r then ns.reglages.dire(erreur) return end
