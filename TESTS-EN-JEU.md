@@ -48,6 +48,16 @@ Avant de commencer :
 - [ ] Barre Ranger, Analyse et Banque collée au sac du jeu, quand le sac rangé est décoché.
 - [ ] Panneau d'analyse (`/sr`) : fond sombre, bordure dorée, titre doré avec sa croix ; la croix et Échap le ferment ; il se déplace toujours à la souris.
 
+## Marchand auto : équipement lié vendu (nouveau)
+
+- [ ] Option « Vendre aussi l'équipement lié que tu ne peux pas porter » : grisée si Sacs rangés est désactivé ou absent, cochable sinon (coupée par défaut).
+- [ ] Chez un marchand, option cochée, avec dans les sacs un gris et une pièce liée que ta classe ne peut pas porter : les deux sont vendus, et le bilan nomme la pièce et dit combien elle a rapporté.
+- [ ] Option cochée mais « Vendre les objets gris » décochée : seule la pièce liée est vendue.
+- [ ] Une pièce épique inutilisable n'est jamais vendue, ni un objet de la liste « Gris à garder ».
+- [ ] Maj enfoncé en ouvrant le marchand : rien n'est vendu.
+- [ ] Option cochée, vue par catégories de Sacs rangés décochée : la vente marche quand même.
+- [ ] Pas de message « fonction protégée » ni de pièce équipée par erreur pendant la vente.
+
 ## Butin rapide
 
 - [ ] Touche d'interaction sur les cadavres : la même touche que la récolte de Métiers auto, sans couper la récolte.

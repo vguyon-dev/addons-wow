@@ -1,6 +1,8 @@
 -- ============================================================================
 -- Marchand auto : quand tu ouvres un marchand,
---  1. il vend tes objets gris (sauf ceux que tu as demandé de garder) ;
+--  1. il vend tes objets gris (sauf ceux que tu as demandé de garder), et, si tu
+--     le veux, l'équipement lié que tu ne peux pas porter (section « À vendre »
+--     de Sacs rangés) ;
 --  2. il répare ton équipement, avec la banque de guilde si tu le veux
 --     et si la guilde te le permet, sinon avec ton or ;
 --  3. il te dit ce que ça t'a rapporté et coûté.
@@ -13,6 +15,7 @@ local NOM_ADDON, ns = ...
 local DEFAUTS = {
   actif = true,          -- interrupteur général
   vendreGris = true,     -- vendre les objets gris
+  vendreEquipement = false, -- vendre aussi l'équipement lié que tu ne peux pas porter (section « À vendre » de Sacs rangés)
   reparer = true,        -- réparer l'équipement
   banqueGuilde = true,   -- payer la réparation avec la banque de guilde si possible
   pauseTouches = true,   -- Maj, Ctrl ou Alt enfoncé en ouvrant le marchand = pause
@@ -42,6 +45,58 @@ function ns.aVendre(info, gardes)
   if not info or info.quality ~= 0 then return false end
   if info.hasNoValue or info.isLocked then return false end
   return not (info.itemID and gardes[info.itemID])
+end
+
+-- Cet équipement lié (une entrée de SacsRanges_AVendre) se vend-il en plus des
+-- gris ? info : ce que renvoie C_Container.GetContainerItemInfo pour la même
+-- case, MAINTENANT (l'objet a pu bouger depuis). Jamais un objet épique ou
+-- mieux, jamais un objet de la liste « à garder », jamais un objet sans prix
+-- (au marchand, le jeu essaierait de l'équiper) ni verrouillé.
+function ns.equipementAVendre(entree, info, gardes)
+  if type(entree) ~= "table" or type(info) ~= "table" then return false end
+  if info.isLocked or info.hasNoValue or info.isBound == false then return false end
+  local q = info.quality
+  if q == nil or q < 1 or q >= 4 then return false end -- gris : voir ns.aVendre ; épique ou plus : jamais
+  local id = info.itemID or entree.id
+  if not id then return false end
+  if entree.id and info.itemID and entree.id ~= info.itemID then return false end
+  if entree.qualite and entree.qualite >= 4 then return false end
+  return not (gardes and gardes[id])
+end
+
+-- Le tri de la liste rendue par SacsRanges_AVendre : ne garde que ce que
+-- ns.equipementAVendre accepte. infoCase(sac, case) rend l'info du jeu.
+function ns.choisirEquipement(liste, infoCase, gardes)
+  local l = {}
+  for _, e in ipairs(liste or {}) do
+    local ok, info = pcall(infoCase, e.sac, e.case)
+    if ok and ns.equipementAVendre(e, info, gardes) then l[#l + 1] = e end
+  end
+  return l
+end
+
+-- Ce qui a été vendu : file = les entrées { genre = "gris" ou "equip", prix, lien }
+-- réellement vendues. Rend { gris = { n, or }, equip = { n, or, liens } }.
+function ns.resumeVente(vendus)
+  local r = { gris = { n = 0, ["or"] = 0 }, equip = { n = 0, ["or"] = 0, liens = {} } }
+  for _, v in ipairs(vendus or {}) do
+    local c = v.genre == "equip" and r.equip or r.gris
+    c.n = c.n + 1
+    c["or"] = c["or"] + (v.prix or 0)
+    if c.liens and v.lien then c.liens[#c.liens + 1] = v.lien end
+  end
+  return r
+end
+
+-- La phrase du bilan pour l'équipement lié vendu (nil s'il n'y en a pas) : au
+-- plus 6 liens, puis « et N autres ». texteOr(cuivre) écrit une somme.
+function ns.texteBilanEquipement(equip, texteOr)
+  if not equip or equip.n == 0 then return nil end
+  local liens, reste = {}, equip.n - math.min(#equip.liens, 6)
+  for i = 1, math.min(#equip.liens, 6) do liens[i] = equip.liens[i] end
+  local suite = reste > 0 and (" et " .. reste .. " autre(s)") or ""
+  return string.format("%d équipement(s) lié(s) vendu(s) (tu ne peux pas les porter) : %s%s, %s",
+    equip.n, table.concat(liens, ", "), suite, texteOr(equip["or"]))
 end
 
 -- Qui paie la réparation ? Renvoie "guilde", "perso" ou nil (rien à faire / pas assez d'or).
@@ -179,31 +234,66 @@ end
 
 local DERNIER_SAC = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
 
-local function vendreGris()
+local function infoItem(lien)
+  return ((C_Item and C_Item.GetItemInfo) or GetItemInfo)(lien)
+end
+
+-- L'équipement lié de la section « À vendre » de Sacs rangés (voir
+-- SacsRanges_AVendre), seulement si l'option est cochée et que Sacs rangés est là.
+local function listerEquipement()
+  if not (db.vendreEquipement and SacsRanges_AVendre) then return {} end
+  local ok, liste = pcall(SacsRanges_AVendre)
+  if not ok or type(liste) ~= "table" then return {} end
+  return ns.choisirEquipement(liste, C_Container.GetContainerItemInfo, db.gardes)
+end
+
+local function vendre()
   -- On liste d'abord, puis on vend un objet tous les dixièmes de seconde :
   -- tout vendre d'un coup fait rater des ventes au serveur.
-  local liste, total = {}, 0
-  for sac = 0, DERNIER_SAC do
-    for case = 1, C_Container.GetContainerNumSlots(sac) do
-      local info = C_Container.GetContainerItemInfo(sac, case)
-      if ns.aVendre(info, db.gardes) then
-        local prix = select(11, ((C_Item and C_Item.GetItemInfo) or GetItemInfo)(info.hyperlink)) or 0
-        total = total + prix * (info.stackCount or 1)
-        liste[#liste + 1] = { sac, case }
+  local liste = {}
+  if db.vendreGris then
+    for sac = 0, DERNIER_SAC do
+      for case = 1, C_Container.GetContainerNumSlots(sac) do
+        local info = C_Container.GetContainerItemInfo(sac, case)
+        if ns.aVendre(info, db.gardes) then
+          local prix = select(11, infoItem(info.hyperlink)) or 0
+          liste[#liste + 1] = { sac = sac, case = case, genre = "gris", lien = info.hyperlink,
+                                prix = prix * (info.stackCount or 1) }
+        end
       end
     end
   end
+  for _, e in ipairs(listerEquipement()) do
+    local info = C_Container.GetContainerItemInfo(e.sac, e.case)
+    local prix = select(11, infoItem(e.lien)) or 0
+    liste[#liste + 1] = { sac = e.sac, case = e.case, genre = "equip", lien = e.lien, id = e.id, qualite = e.qualite,
+                          prix = prix * ((info and info.stackCount) or 1) }
+  end
   if #liste == 0 then return end
-  local i = 0
+  local i, vendus = 0, {}
   local function suivant()
     i = i + 1
     if not ouvert or i > #liste then
       if db.bilan then
-        ns.reglages.dire(string.format("%d objet(s) gris vendu(s) : %s", i - 1, texteOr(total)))
+        local r = ns.resumeVente(vendus)
+        if db.vendreGris then
+          ns.reglages.dire(string.format("%d objet(s) gris vendu(s) : %s", r.gris.n, texteOr(r.gris["or"])))
+        end
+        local t = ns.texteBilanEquipement(r.equip, texteOr)
+        if t then ns.reglages.dire(t) end
       end
       return
     end
-    C_Container.UseContainerItem(liste[i][1], liste[i][2])
+    local v = liste[i]
+    -- L'équipement est revérifié juste avant la vente : l'objet a pu changer de place.
+    local bon = true
+    if v.genre == "equip" then
+      bon = ns.equipementAVendre(v, C_Container.GetContainerItemInfo(v.sac, v.case), db.gardes)
+    end
+    if bon then
+      C_Container.UseContainerItem(v.sac, v.case)
+      vendus[#vendus + 1] = v
+    end
     C_Timer.After(0.1, suivant)
   end
   suivant()
@@ -263,6 +353,9 @@ ns.reglages = ns.creerReglages({
       aide = "Interrupteur général. Le clic droit sur l'icône fait la même chose." },
     { cle = "vendreGris", libelle = "Vendre les objets gris",
       aide = "Tous les gris de tes sacs, sauf ceux de la liste « Gris à garder »." },
+    { cle = "vendreEquipement", libelle = "Vendre aussi l'équipement lié que tu ne peux pas porter",
+      dispo = function() return SacsRanges_AVendre ~= nil end,
+      aide = "La section « À vendre » de Sacs rangés (équipement lié que ta classe ne portera pas), jamais un objet épique ou mieux, jamais un objet de la liste « Gris à garder ». Demande l'addon Sacs rangés, activé." },
     { cle = "reparer", libelle = "Réparer l'équipement",
       aide = "Seulement chez les marchands qui savent réparer (enclume dans leur fenêtre)." },
     { cle = "banqueGuilde", libelle = "Payer avec la banque de guilde", dependDe = "reparer",
@@ -326,7 +419,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
   if not db or not db.actif then return end
   if db.pauseTouches and (IsShiftKeyDown() or IsControlKeyDown() or IsAltKeyDown()) then return end
   if db.reparer then reparer() end
-  if db.vendreGris then vendreGris() end
+  if db.vendreGris or db.vendreEquipement then vendre() end
   -- Un peu après la vente, pour que l'or des gris compte dans le budget.
   if db.acheter and next(db.stock) then C_Timer.After(0.5, function() if ouvert then acheterStock() end end) end
 end)

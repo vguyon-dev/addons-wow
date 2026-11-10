@@ -64,4 +64,42 @@ verifie("stock : « 5 x Biscuit » en premier", "5 x Biscuit", st[1].texte)
 verifie("stock : « 20 x Eau »", "20 x Eau", st[2].texte)
 st[2].retirer()
 verifie("stock : la croix retire l'objet", 5, retires[2])
+-- Équipement lié de « À vendre » vendu en plus des gris.
+local bleu = { sac = 0, case = 3, lien = "[Casque]", id = 50, qualite = 3 }
+verifie("équipement : rare lié, vendu", true, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, isBound = true }, {}))
+verifie("équipement : épique, jamais", false, ns.equipementAVendre(bleu, { quality = 4, itemID = 50 }, {}))
+verifie("équipement : légendaire, jamais", false, ns.equipementAVendre(bleu, { quality = 5, itemID = 50 }, {}))
+verifie("équipement : liste à garder", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 50 }, { [50] = "[Casque]" }))
+verifie("équipement : un autre objet à garder ne gêne pas", true, ns.equipementAVendre(bleu, { quality = 3, itemID = 50 }, { [51] = true }))
+verifie("équipement : l'objet a changé de place", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 99 }, {}))
+verifie("équipement : case vidée", false, ns.equipementAVendre(bleu, nil, {}))
+verifie("équipement : verrouillé", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, isLocked = true }, {}))
+verifie("équipement : sans prix (le jeu l'équiperait)", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, hasNoValue = true }, {}))
+verifie("équipement : pas lié", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, isBound = false }, {}))
+verifie("équipement : gris laissé à ns.aVendre", false, ns.equipementAVendre(bleu, { quality = 0, itemID = 50 }, {}))
+verifie("équipement : qualité inconnue", false, ns.equipementAVendre(bleu, { itemID = 50 }, {}))
+verifie("équipement : entrée annoncée épique", false, ns.equipementAVendre({ id = 50, qualite = 4 }, { quality = 3, itemID = 50 }, {}))
+local cases = { ["0:3"] = { quality = 3, itemID = 50 }, ["0:4"] = { quality = 4, itemID = 51 }, ["1:1"] = { quality = 2, itemID = 52 } }
+local liste = { bleu, { sac = 0, case = 4, lien = "[Épée]", id = 51, qualite = 4 },
+  { sac = 1, case = 1, lien = "[Bottes]", id = 52, qualite = 2 }, { sac = 2, case = 2, lien = "[Vide]", id = 53, qualite = 2 } }
+local ch = ns.choisirEquipement(liste, function(sac, case) return cases[sac .. ":" .. case] end, { [52] = true })
+verifie("choisir : seul le casque reste", 1, #ch)
+verifie("choisir : c'est le casque", "[Casque]", ch[1] and ch[1].lien)
+verifie("choisir : liste vide", 0, #ns.choisirEquipement(nil, function() end, {}))
+verifie("choisir : une erreur du jeu ne casse rien", 0, #ns.choisirEquipement({ bleu }, function() error("x") end, {}))
+
+local rv = ns.resumeVente({ { genre = "gris", prix = 10 }, { genre = "gris", prix = 5 },
+  { genre = "equip", prix = 300, lien = "[Casque]" }, { genre = "equip", prix = 200, lien = "[Bottes]" } })
+verifie("bilan : 2 gris", 2, rv.gris.n)
+verifie("bilan : or des gris", 15, rv.gris["or"])
+verifie("bilan : 2 équipements", 2, rv.equip.n)
+verifie("bilan : or de l'équipement", 500, rv.equip["or"])
+local fo = function(c) return c .. " cuivre" end
+verifie("bilan : phrase", "2 équipement(s) lié(s) vendu(s) (tu ne peux pas les porter) : [Casque], [Bottes], 500 cuivre",
+  ns.texteBilanEquipement(rv.equip, fo))
+verifie("bilan : rien vendu, pas de phrase", nil, ns.texteBilanEquipement(ns.resumeVente({}).equip, fo))
+local beaucoup = {}
+for i = 1, 9 do beaucoup[i] = { genre = "equip", prix = 1, lien = "[" .. i .. "]" } end
+verifie("bilan : au plus 6 liens puis « et 3 autre(s) »", true,
+  ns.texteBilanEquipement(ns.resumeVente(beaucoup).equip, fo):find("%[6%] et 3 autre%(s%), 9 cuivre") ~= nil)
 os.exit(ok and 0 or 1)

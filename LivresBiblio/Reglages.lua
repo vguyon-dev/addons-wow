@@ -23,6 +23,7 @@
 --       { cle = "x", libelle = "…", aide = "…" },              -- interrupteur
 --       { cle = "x", libelle = "…", dependDe = "y" },          -- grisé si y est coupé
 --       { cle = "x", libelle = "…", dependDe = "!y" },         -- grisé si y est activé
+--       { cle = "x", libelle = "…", dispo = fonction },        -- grisé si la fonction rend faux
 --       { cle = "n", type = "nombre", libelle = "…", min = 0, max = 20, pas = 1 }, -- curseur
 --     },
 --     boutons = { { texte = "…", aide = "…", action = fonction }, … }, -- en bas de la page
@@ -925,6 +926,10 @@ function ns.creerReglages(p)
   -- Une option est grisée quand ce dont elle dépend n'est pas réglé comme il faut.
   local function disponible(opt)
     if aActif and opt.cle ~= "minimap" and not opt.toujours and not db.actif then return false end
+    if type(opt.dispo) == "function" then
+      local ok, v = pcall(opt.dispo)
+      if ok and not v then return false end
+    end
     local d = opt.dependDe
     if not d then return true end
     if d:sub(1, 1) == "!" then return not db[d:sub(2)] end

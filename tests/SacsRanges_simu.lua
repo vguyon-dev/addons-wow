@@ -172,4 +172,16 @@ do
   verifie("habillage : options absurdes ignorées", "0.07", tostring(ns.styleHabillage({ fond = { "a" } }).fond[1]))
   verifie("habillage : options pas une table", "0.8", tostring(ns.styleHabillage("x").bordure[1]))
 end
+-- La part de « À vendre » qui n'est pas grise, pour Marchand auto.
+local lus = {
+  { sac = 0, case = 1, lien = "[Gris]", id = 1, qualite = 0, categorie = "vendre" },
+  { sac = 0, case = 2, lien = "[Casque]", id = 2, qualite = 3, categorie = "vendre", raison = "lié" },
+  { sac = 0, case = 3, lien = "[Cuir]", id = 3, qualite = 1, categorie = "compo" },
+  { sac = 1, case = 1, lien = "[Gants]", id = 4, qualite = 2, categorie = "pasPourToi" },
+}
+local av = ns.filtrerAVendre(lus)
+verifie("à vendre : le gris et les autres sections sortent", 1, #av)
+verifie("à vendre : le casque lié", "[Casque]", av[1] and av[1].lien)
+verifie("à vendre : sac, case, id, raison", "0:2:2:lié", av[1] and (av[1].sac .. ":" .. av[1].case .. ":" .. av[1].id .. ":" .. av[1].raison))
+verifie("à vendre : liste vide", 0, #ns.filtrerAVendre(nil))
 os.exit(ok and 0 or 1)

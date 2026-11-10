@@ -91,6 +91,19 @@ function ns.repartir(objets)
   return parSection
 end
 
+-- Dans les objets lus, ceux de la section « À vendre » qui ne sont PAS gris
+-- (l'équipement lié que le personnage ne pourra pas porter) : c'est ce que
+-- Marchand auto peut vendre en plus des gris. Rend { sac, case, lien, id, raison, qualite }.
+function ns.filtrerAVendre(objets)
+  local l = {}
+  for _, o in ipairs(objets or {}) do
+    if o.categorie == "vendre" and o.qualite ~= 0 and o.sac and o.case and o.lien then
+      l[#l + 1] = { sac = o.sac, case = o.case, lien = o.lien, id = o.id, raison = o.raison, qualite = o.qualite }
+    end
+  end
+  return l
+end
+
 -- Recherche sans accents ni majuscules : « etoffe » trouve « Étoffe de lin ».
 local ACCENTS = { ["à"] = "a", ["â"] = "a", ["ä"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e",
   ["î"] = "i", ["ï"] = "i", ["ô"] = "o", ["ö"] = "o", ["ù"] = "u", ["û"] = "u", ["ü"] = "u", ["ç"] = "c",
@@ -378,7 +391,7 @@ end
 
 local aRefaire = false -- une réorganisation attend la fin du combat
 
-local function lire()
+local function lire(sansConseils)
   local objets, libres, total, premiereLibre = {}, 0, 0, nil
   for sac = 0, derniersSac() do
     local n = ns.nbCases and ns.nbCases(sac) or 0
@@ -396,7 +409,7 @@ local function lire()
         local categorie = ns.categorie(classe, qualite, infoQuete(sac, case), utilisable, sousClasse, idObjet,
           { livre = estLivre, lie = liaison == 1, artisanat = artisanat, estLie = estLie, raison = raison })
         local conseil, moins
-        if categorie == "equip" and ns.db and ns.db.conseils ~= false and ns.conseil then
+        if categorie == "equip" and not sansConseils and ns.db and ns.db.conseils ~= false and ns.conseil then
           local ok, c = pcall(ns.conseil, lien)
           if ok then conseil = c end
           if not conseil and ns.moinsBon then
@@ -405,7 +418,7 @@ local function lire()
           end
         end
         objets[#objets + 1] = {
-          sac = sac, case = case, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite, lien = lien,
+          sac = sac, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite, lien = lien,
           nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins,
           raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
@@ -416,6 +429,16 @@ local function lire()
     end
   end
   return objets, libres, total, premiereLibre
+end
+
+-- Pour les autres addons (Marchand auto) : les objets non gris de la section
+-- « À vendre », sans avoir besoin de la fenêtre (marche même si la vue par
+-- catégories est décochée). Rien en combat, ni si Sacs rangés est coupé.
+function SacsRanges_AVendre()
+  if InCombatLockdown() or not (ns.db and ns.db.actif) then return {} end
+  local ok, objets = pcall(lire, true)
+  if not ok then return {} end
+  return ns.filtrerAVendre(objets)
 end
 
 local function majVue()
