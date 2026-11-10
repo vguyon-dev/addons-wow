@@ -11,7 +11,8 @@
 -- Ce qu'il lit : classe, spécialisation, race, niveau, et ta situation (seul, en groupe, donjon,
 -- raid) avec les rôles de ton groupe. Rien n'est lancé à ta place : la rotation entoure en
 -- bleu, sur TA barre d'action, le bouton du prochain sort (un cadre à nous, posé par-dessus : aucun
--- bouton du jeu n'est modifié, donc aucun « taint »). Si le jeu cache les temps de recharge en
+-- bouton du jeu n'est modifié, donc aucun « taint »). La rotation ne porte que des sorts d'attaque ; en option,
+-- un contour rouge à part signale le sort de soin ou de défense quand ta vie est basse. Si le jeu cache les temps de recharge en
 -- combat, Conseiller passe tout seul à la liste de priorité.
 -- Les données (sorts, rotations, builds de talents, conseils : les 9 classes) sont dans Donnees.lua, tirées des
 -- fiches de outils/donnees-conseiller/ ; la logique est dans Logique.lua. Un build de talents désigne chaque
@@ -25,6 +26,7 @@ local DEFAUTS = {
   actif = true,
   rotation = true,       -- le prochain sort conseillé
   modeRotation = 1,      -- 1 = automatique, 2 = contour sur la barre (A), 3 = liste seule (C)
+  alerteUrgence = false, -- contour rouge sur le sort de soin ou de défense quand ta vie est basse
   tailleContour = 3,     -- épaisseur du contour, en pixels
   contourTalent = true,  -- entourer le prochain talent conseillé dans la fenêtre des talents du jeu
   conseilsGroupe = true, -- prévenir quand il manque un rôle au groupe
@@ -440,13 +442,18 @@ function ns.construireEtat()
   e.speRotation = e.speCle or (e.conseil and e.conseil.cle)
   local liste = D.ROTATIONS[classe] and e.speRotation and D.ROTATIONS[classe][e.speRotation]
   if liste then
-    local statiques = {}
+    local statiques, urgences, vus = {}, {}, {}
     for _, entree in ipairs(liste) do
       local s = ns.sorts[entree.sort]
-      if s then statiques[#statiques + 1] = { sort = entree.sort, texte = entree.texte or s.nom, nom = s.nom } end
+      if s and entree.urgence then
+        -- Les sorts d'urgence ne sont pas dans la rotation : ils sont nommés à part.
+        if not vus[entree.sort] then vus[entree.sort] = true; urgences[#urgences + 1] = s.nom end
+      elseif s then
+        statiques[#statiques + 1] = { sort = entree.sort, texte = entree.texte or s.nom, nom = s.nom }
+      end
     end
     e.rotation = {
-      liste = liste, lignesStatiques = statiques,
+      liste = liste, lignesStatiques = statiques, urgences = urgences,
       resultat = etatRotation.speCle == e.speRotation and etatRotation.resultat or nil,
       mode = etatRotation.mode or ns.modeEffectif(db and db.modeRotation or 1, false),
       auto = etatRotation.auto, boutons = etatRotation.nbBoutons,
@@ -549,6 +556,26 @@ local function cacherContours()
   for _, c in ipairs(contours) do c:Hide() end
 end
 
+-- Le contour rouge du sort d'urgence : un seul, à part du bleu de la rotation.
+local contourUrgence
+local function cacherUrgence()
+  if contourUrgence then contourUrgence:Hide() end
+end
+
+local function montrerUrgence(boutons)
+  for _, b in ipairs(boutons) do
+    if b.cadre:IsVisible() then
+      if not contourUrgence then contourUrgence = nouveauContour(0.95, 0.25, 0.20) end
+      local epaisseur = db.tailleContour or 3
+      if contourUrgence.cible ~= b.cadre or contourUrgence.epaisseur ~= epaisseur or not contourUrgence:IsShown() then
+        contourUrgence:placer(b.cadre, epaisseur)
+      end
+      return
+    end
+  end
+  cacherUrgence()
+end
+
 local function montrerContours(boutons)
   local n = 0
   for _, b in ipairs(boutons) do
@@ -627,9 +654,17 @@ local function rafraichir()
   etatRotation.speCle = spe
   if not (db.actif and db.rotation and liste and cibleAttaquable()) then
     cacherContours()
+    cacherUrgence()
     cadreListe:Hide()
     etatRotation.resultat = nil
     return
+  end
+  -- Le sort d'urgence : contour rouge à part, seulement si l'option est cochée.
+  if db.alerteUrgence then
+    local u = ns.evaluerUrgence(liste, ns.sorts, ns.apiJeu)
+    if u then montrerUrgence(boutonsDuSort(u.cle)) else cacherUrgence() end
+  else
+    cacherUrgence()
   end
   local res = ns.evaluerRotation(liste, ns.sorts, ns.apiJeu)
   etatRotation.resultat = res
@@ -723,6 +758,9 @@ ns.reglages = ns.creerReglages({
       aide = "Auto : contour sur la barre, et la liste de priorité si le jeu cache les temps de recharge. A : toujours le contour. C : toujours la liste." },
     { cle = "tailleContour", type = "nombre", libelle = "Épaisseur du contour", min = 2, max = 8, pas = 1,
       format = function(v) return v .. " px" end, dependDe = "rotation" },
+    { cle = "alerteUrgence", libelle = "Signaler le sort d'urgence quand ta vie est basse",
+      dependDe = "rotation",
+      aide = "Un contour rouge, à part de la rotation, sur ton sort de soin ou de défense." },
     { titre = "Talents" },
     { cle = "contourTalent", libelle = "Entourer le prochain talent dans la fenêtre des talents",
       aide = "Un contour vert sur le talent conseillé, quand un build est écrit pour ta spécialisation." },
@@ -750,7 +788,8 @@ ns.reglages = ns.creerReglages({
     pcall(majGroupe)
   end,
   surChangement = function()
-    if db and not (db.actif and db.rotation) then cacherContours(); cadreListe:Hide() end
+    if db and not (db.actif and db.rotation) then cacherContours(); cacherUrgence(); cadreListe:Hide() end
+    if db and not db.alerteUrgence then cacherUrgence() end
     ns.talentsSale = true
   end,
 })

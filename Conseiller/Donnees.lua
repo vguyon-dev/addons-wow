@@ -15,7 +15,8 @@
 --      puis le nom anglais ;
 --   2. écrire la liste de priorité dans ns.DONNEES.ROTATIONS[CLASSE][spécialisation] : des
 --      entrées E(clé, "la phrase du mode liste", conditions…) dans l'ordre : la première dont les
---      conditions sont vraies est le sort à lancer. Les urgences (soins, défensifs) vont EN TÊTE.
+--      conditions sont vraies est le sort à lancer. Les urgences (soins, défensifs, fuites) s'écrivent
+--      U(...) au lieu de E(...) : elles sont lues à part (ns.evaluerUrgence), jamais dans la rotation.
 --   Conditions : "pret" (utilisable et recharge finie), { "debuffAbsent" } (ton affaiblissement n'est
 --   pas sur la cible ; { "debuffAbsent", AUTRE_CLE } pour un autre sort), { "buffAbsent" } (l'effet n'est
 --   pas sur toi), "ennemisProches>=3" (nombre d'ennemis en combat), "vie<20" (vie de la cible en %),
@@ -649,7 +650,10 @@ D.SORTS = {
 
 -- ============================================================ rotations
 -- Une liste de priorité par classe et par spécialisation (voir l'en-tête pour la forme).
--- Les urgences vont EN TÊTE d'une liste : le moteur prend la première entrée vraie. Un sort que le
+-- Une entrée marquée urgence (constructeur U : soin, défensif, fuite) n'entre jamais dans la rotation :
+-- le contour bleu et la liste ne portent que des sorts d'attaque. Le moteur la lit à part
+-- (ns.evaluerUrgence : la première dont les conditions sont vraies, contour rouge si l'option est cochée).
+-- Les spécialisations de soins n'ont pas de rotation de soins : seulement leurs sorts d'attaque. Un sort que le
 -- personnage ne connaît pas (talent pas pris, niveau trop bas) est sauté. « pret » veut aussi dire
 -- « assez de mana, de rage ou d'énergie, bonne posture ou bonne forme » : un sort de chat est sauté en ours.
 -- Ce que le moteur ne sait pas lire (un coup d'esquive qui ouvre Fulgurance, un effet qui se déclenche,
@@ -662,13 +666,19 @@ local function E(sort, texte, ...)
   local si = { ... }
   return { sort = sort, si = (#si > 0) and si or nil, texte = texte }
 end
+-- Comme E, pour un soin, un défensif ou une fuite : marqué urgence, hors de la rotation.
+local function U(sort, texte, ...)
+  local e = E(sort, texte, ...)
+  e.urgence = true
+  return e
+end
 -- Noms localisés (frFR) des types de créature que renvoie UnitCreatureType.
 local MORT_OU_DEMON = { "typeCible", { "Mort-vivant", "Démon" } }
 
 -- Urgences réutilisées.
-local URGENCE_IMPOSITION = E("IMPOSITION", "Imposition des mains si tu es à moins de 15 % de vie", PRET, VIE_MOI(15))
-local URGENCE_BOUCLIER = E("BOUCLIER_DIVIN", "Bouclier divin si tu es à moins de 15 % de vie", PRET, VIE_MOI(15))
-local URGENCE_FEINDRE = E("FEINDRE", "Feindre la mort si tu es à moins de 20 % de vie", PRET, VIE_MOI(20))
+local URGENCE_IMPOSITION = U("IMPOSITION", "Imposition des mains si tu es à moins de 15 % de vie", PRET, VIE_MOI(15))
+local URGENCE_BOUCLIER = U("BOUCLIER_DIVIN", "Bouclier divin si tu es à moins de 15 % de vie", PRET, VIE_MOI(15))
+local URGENCE_FEINDRE = U("FEINDRE", "Feindre la mort si tu es à moins de 20 % de vie", PRET, VIE_MOI(20))
 
 D.ROTATIONS = {
   HUNTER = {
@@ -704,7 +714,7 @@ D.ROTATIONS = {
     },
     survie = {
       URGENCE_FEINDRE,
-      E("DISSUASION", "Dissuasion si tu es à moins de 35 % de vie", PRET, VIE_MOI(35)),
+      U("DISSUASION", "Dissuasion si tu es à moins de 35 % de vie", PRET, VIE_MOI(35)),
       E("FAUCON", "Aspect du faucon, s'il n'est pas actif", BUFF_MOI),
       E("MARQUE", "Marque du chasseur sur la cible, si elle n'y est pas", DEBUFF, PRET),
       E("SERPENT", "Morsure de serpent, si elle n'y est pas", DEBUFF, PRET),
@@ -730,7 +740,7 @@ D.ROTATIONS = {
     protection = {
       URGENCE_IMPOSITION,
       URGENCE_BOUCLIER,
-      E("REMPART", "Rempart du templier si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("REMPART", "Rempart du templier si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("FUREUR", "Fureur vertueuse active (sinon tu ne tiens pas les monstres)", BUFF_MOI),
       E("SCEAU_FUREUR", "Sceau de fureur, s'il n'est pas actif", BUFF_MOI),
       E("SCEAU_PIETE", "Sceau de piété, s'il n'est pas actif (tant que tu n'as pas le Sceau de fureur)", BUFF_MOI, { "buffAbsent", "SCEAU_FUREUR" }),
@@ -741,20 +751,18 @@ D.ROTATIONS = {
       E("CONSECRATION", "Consécration quand 2 monstres ou plus sont collés à toi (entretiens-la)", PRET, "ennemisProches>=2"),
       E("EXORCISME", "Exorcisme sur un mort-vivant ou un démon", PRET, MORT_OU_DEMON),
     },
+    -- Sacré : pas de rotation de soins, seulement ce qui frappe quand tu es seul.
     sacre = {
       URGENCE_IMPOSITION,
       URGENCE_BOUCLIER,
-      E("SCEAU_SAGESSE", "Sceau de sagesse, s'il n'est pas actif (il rend du mana)", BUFF_MOI),
-      E("HORION_SACRE", "Horion sacré, dès qu'il est prêt (sur l'allié blessé, ou sur un monstre pour le tuer)", PRET),
-      E("ECLAIR_LUMINEUX", "Éclair lumineux sur l'allié blessé pour un soin rapide", PRET),
-      E("LUMIERE_SACREE", "Lumière sacrée sur l'allié blessé pour un gros soin", PRET),
+      E("HORION_SACRE", "Horion sacré sur un monstre, dès qu'il est prêt", PRET),
       E("JUGEMENT", "Jugement, dès qu'il est prêt (il garde ton mana)", PRET),
     },
   },
 
   WARRIOR = {
     armes = {
-      E("CRI_INTIMIDATION", "Cri d'intimidation si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
+      U("CRI_INTIMIDATION", "Cri d'intimidation si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
       E("CRI_GUERRE", "Cri de guerre, s'il n'est pas actif", BUFF_MOI),
       E("TEMERITE", "Témérité, dès qu'elle est prête et que la cible a moins de 20 % de vie", PRET, "vie<20"),
       E("FRACASSER", "Fracasser armure sur la cible, si elle n'y est pas", DEBUFF, PRET),
@@ -769,7 +777,7 @@ D.ROTATIONS = {
       E("FRAPPE_HEROIQUE", "Frappe héroïque si tu as de la rage de reste", PRET),
     },
     fureur = {
-      E("CRI_INTIMIDATION", "Cri d'intimidation si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
+      U("CRI_INTIMIDATION", "Cri d'intimidation si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
       E("CRI_GUERRE", "Cri de guerre, s'il n'est pas actif", BUFF_MOI),
       E("SOUHAIT_MORTEL", "Souhait mortel, dès qu'il est prêt", PRET),
       E("TEMERITE", "Témérité, dès qu'elle est prête et que la cible a moins de 20 % de vie", PRET, "vie<20"),
@@ -782,8 +790,8 @@ D.ROTATIONS = {
       E("FRAPPE_HEROIQUE", "Frappe héroïque si tu as de la rage de reste", PRET),
     },
     protection = {
-      E("MUR", "Mur protecteur si tu es à moins de 30 % de vie", PRET, VIE_MOI(30)),
-      E("DERNIER_REMPART", "Dernier rempart si tu es à moins de 30 % de vie", PRET, VIE_MOI(30)),
+      U("MUR", "Mur protecteur si tu es à moins de 30 % de vie", PRET, VIE_MOI(30)),
+      U("DERNIER_REMPART", "Dernier rempart si tu es à moins de 30 % de vie", PRET, VIE_MOI(30)),
       E("CRI_GUERRE", "Cri de guerre, s'il n'est pas actif", BUFF_MOI),
       E("HEURT_BOUCLIER", "Heurt de bouclier, dès qu'il est prêt", PRET),
       E("VENGEANCE", "Vengeance, dès qu'elle est disponible (après une esquive, une parade ou un blocage)", PRET),
@@ -798,8 +806,8 @@ D.ROTATIONS = {
 
   ROGUE = {
     assassinat = {
-      E("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
-      E("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
+      U("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("DEBONDAGE", "Débondage à 2 points de combo ou plus, s'il n'est pas actif", BUFF_MOI, PRET, "pointsCombo>=2"),
       E("EVISCERATION", "Éviscération à 5 points de combo", PRET, "pointsCombo>=5"),
       E("MUTILATION", "Mutilation, dès qu'elle est prête (deux points de combo)", PRET),
@@ -807,8 +815,8 @@ D.ROTATIONS = {
       E("SINISTRE", "Attaque pernicieuse le reste du temps", PRET),
     },
     combat = {
-      E("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
-      E("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
+      U("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("DEBONDAGE", "Débondage à 2 points de combo ou plus, s'il n'est pas actif", BUFF_MOI, PRET, "pointsCombo>=2"),
       E("DELUGE", "Déluge de lames, dès qu'il est prêt", PRET),
       E("POUSSEE", "Poussée d'adrénaline, dès qu'elle est prête (sur une cible qui vit longtemps)", PRET),
@@ -816,8 +824,8 @@ D.ROTATIONS = {
       E("SINISTRE", "Attaque pernicieuse pour faire des points de combo", PRET),
     },
     finesse = {
-      E("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
-      E("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DISPARITION", "Disparition si tu es à moins de 25 % de vie (pour fuir)", PRET, VIE_MOI(25)),
+      U("ESQUIVE", "Esquive si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("DEBONDAGE", "Débondage à 2 points de combo ou plus, s'il n'est pas actif", BUFF_MOI, PRET, "pointsCombo>=2"),
       E("FRAPPE_FANTOME", "Frappe fantomatique, dès qu'elle est prête", PRET),
       E("RUPTURE", "Rupture à 5 points de combo, si elle n'y est pas (cible qui vit longtemps)", DEBUFF, PRET, "pointsCombo>=5"),
@@ -829,7 +837,7 @@ D.ROTATIONS = {
 
   PRIEST = {
     ombre = {
-      E("BOUCLIER", "Mot de pouvoir : Bouclier si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
+      U("BOUCLIER", "Mot de pouvoir : Bouclier si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
       E("FORTITUDE", "Mot de pouvoir : Endurance, s'il n'est pas actif", BUFF_MOI),
       E("FEU_INTERIEUR", "Feu intérieur, s'il n'est pas actif", BUFF_MOI),
       E("FORME_OMBRE", "Forme d'Ombre, si elle n'est pas active", BUFF_MOI),
@@ -841,32 +849,21 @@ D.ROTATIONS = {
       E("FOUET", "Fouet mental le reste du temps (ne l'interromps pas)", PRET),
       E("CHATIMENT", "Châtiment avant d'avoir le Fouet mental", PRET),
     },
+    -- Sacré et Discipline : pas de rotation de soins, seulement ce qui frappe quand tu es seul.
     sacre = {
-      E("FORTITUDE", "Mot de pouvoir : Endurance, s'il n'est pas actif", BUFF_MOI),
-      E("FEU_INTERIEUR", "Feu intérieur, s'il n'est pas actif", BUFF_MOI),
-      E("BOUCLIER", "Mot de pouvoir : Bouclier sur celui qui prend les coups, avant un gros pull", PRET),
-      E("PRIERE_GUERISON", "Prière de guérison sur le tank, dès qu'elle est prête", PRET),
-      E("RENOVATION", "Rénovation sur le plus de blessés possible", PRET),
-      E("NOVA_SACREE", "Nova sacrée quand 3 alliés ou plus sont blessés", PRET),
-      E("SOINS_RAPIDES", "Soins rapides pour un besoin immédiat", PRET),
-      E("SOINS_SUPERIEURS", "Soins supérieurs pour un gros dégât", PRET),
-      E("SOINS_INFERIEURS", "Soins inférieurs avant d'avoir les Soins rapides", PRET),
+      E("DOULEUR", "Mot de l'ombre : Douleur sur la cible, s'il n'y est pas", DEBUFF, PRET),
+      E("CHATIMENT", "Châtiment le reste du temps", PRET),
     },
     discipline = {
-      E("FORTITUDE", "Mot de pouvoir : Endurance, s'il n'est pas actif", BUFF_MOI),
-      E("FEU_INTERIEUR", "Feu intérieur, s'il n'est pas actif", BUFF_MOI),
-      E("BOUCLIER", "Mot de pouvoir : Bouclier sur celui qui prend les coups", PRET),
-      E("RENOVATION", "Rénovation sur le blessé", PRET),
-      E("SOINS_RAPIDES", "Soins rapides pour un besoin immédiat", PRET),
-      E("SOINS_SUPERIEURS", "Soins supérieurs pour un gros dégât", PRET),
+      E("DOULEUR", "Mot de l'ombre : Douleur sur la cible, s'il n'y est pas", DEBUFF, PRET),
       E("CHATIMENT", "Châtiment pour les dégâts (la Discipline en tire un bon parti)", PRET),
     },
   },
 
   SHAMAN = {
     amelioration = {
-      E("VAGUE_MINEURE", "Vague de soins mineure si tu es à moins de 35 % de vie", PRET, VIE_MOI(35)),
-      E("VAGUE", "Vague de soins si tu es à moins de 50 % de vie (entre les combats)", PRET, VIE_MOI(50)),
+      U("VAGUE_MINEURE", "Vague de soins mineure si tu es à moins de 35 % de vie", PRET, VIE_MOI(35)),
+      U("VAGUE", "Vague de soins si tu es à moins de 50 % de vie (entre les combats)", PRET, VIE_MOI(50)),
       E("BOUCLIER_FOUDRE", "Bouclier de foudre, s'il n'est pas actif", BUFF_MOI),
       E("CHOC_FLAMMES", "Horion de flammes sur la cible, s'il n'y est pas (puis le Totem incendiaire)", DEBUFF, PRET),
       E("FRAPPE_TEMPETE", "Frappe-tempête, dès qu'elle est prête", PRET),
@@ -874,26 +871,23 @@ D.ROTATIONS = {
       E("CHOC_TERRE", "Horion de terre en remplissage (interrompt aussi un sort)", PRET),
     },
     elementaire = {
-      E("VAGUE", "Vague de soins si tu es à moins de 40 % de vie (entre les combats)", PRET, VIE_MOI(40)),
+      U("VAGUE", "Vague de soins si tu es à moins de 40 % de vie (entre les combats)", PRET, VIE_MOI(40)),
       E("BOUCLIER_FOUDRE", "Bouclier de foudre, s'il n'est pas actif", BUFF_MOI),
       E("CHOC_FLAMMES", "Horion de flammes sur la cible, s'il n'y est pas", DEBUFF, PRET),
       E("EXPLOSION_LAVE", "Explosion de lave, dès qu'elle est prête", PRET),
       E("CHAINE", "Chaîne d'éclairs quand 2 monstres ou plus sont sur toi", PRET, "ennemisProches>=2"),
       E("ECLAIR", "Éclair le reste du temps (le Totem incendiaire ou de lave d'abord)", PRET),
     },
+    -- Restauration : pas de rotation de soins, seulement ce qui frappe quand tu es seul.
     restauration = {
-      E("BOUCLIER_EAU", "Bouclier d'eau, s'il n'est pas actif", BUFF_MOI),
-      E("BOUCLIER_FOUDRE", "Bouclier de foudre, s'il n'est pas actif (seulement tant que tu n'as pas le Bouclier d'eau)", BUFF_MOI, { "buffAbsent", "BOUCLIER_EAU" }),
-      E("REMOUS", "Remous sur le tank, dès qu'il est prêt", PRET),
-      E("SALVE", "Salve de guérison quand plusieurs alliés groupés sont blessés", PRET),
-      E("VAGUE_MINEURE", "Vague de soins mineure pour une urgence", PRET),
-      E("VAGUE", "Vague de soins pour un soin efficace", PRET),
+      E("CHOC_FLAMMES", "Horion de flammes sur la cible, s'il n'y est pas", DEBUFF, PRET),
+      E("ECLAIR", "Éclair le reste du temps", PRET),
     },
   },
 
   MAGE = {
     givre = {
-      E("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie (et qu'un monstre est sur toi)", PRET, VIE_MOI(60)),
+      U("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie (et qu'un monstre est sur toi)", PRET, VIE_MOI(60)),
       E("ARMURE", "Armure de glace (ou du mage, de givre), si aucune n'est active", BUFF_MOI),
       E("ARCANE_INT", "Intelligence des arcanes, si elle n'est pas active", BUFF_MOI),
       E("NOVA_GIVRE", "Nova de givre quand 2 monstres ou plus sont sur toi, puis recule", PRET, "ennemisProches>=2"),
@@ -902,7 +896,7 @@ D.ROTATIONS = {
       E("BOULE_FEU", "Boule de feu si Éclair de givre n'est pas disponible", PRET),
     },
     feu = {
-      E("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie, si tu l'as apprise", PRET, VIE_MOI(60)),
+      U("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie, si tu l'as apprise", PRET, VIE_MOI(60)),
       E("ARMURE", "Armure du mage (ou de glace), si aucune n'est active", BUFF_MOI),
       E("ARCANE_INT", "Intelligence des arcanes, si elle n'est pas active", BUFF_MOI),
       E("EXPLOSION_FEU", "Explosion de feu, dès qu'elle est prête", PRET),
@@ -911,7 +905,7 @@ D.ROTATIONS = {
       E("BOULE_FEU", "Boule de feu le reste du temps (Explosion pyrotechnique en ouverture, Brûlure au corps à corps)", PRET),
     },
     arcanes = {
-      E("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie, si tu l'as apprise", PRET, VIE_MOI(60)),
+      U("BARRIERE_GLACE", "Barrière de glace si tu es à moins de 60 % de vie, si tu l'as apprise", PRET, VIE_MOI(60)),
       E("ARMURE", "Armure du mage (ou de glace), si aucune n'est active", BUFF_MOI),
       E("ARCANE_INT", "Intelligence des arcanes, si elle n'est pas active", BUFF_MOI),
       E("EXPLOSION_ARCANES", "Explosion des arcanes quand 3 monstres ou plus sont collés à toi", PRET, "ennemisProches>=3"),
@@ -923,7 +917,7 @@ D.ROTATIONS = {
 
   WARLOCK = {
     affliction = {
-      E("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("ARMURE", "Armure démoniaque (ou Peau de démon), si elle n'est pas active", BUFF_MOI),
       E("CORRUPTION", "Corruption sur la cible, si elle n'y est pas", DEBUFF, PRET),
       E("AGONIE", "Malédiction d'agonie, si elle n'y est pas", DEBUFF, PRET),
@@ -935,7 +929,7 @@ D.ROTATIONS = {
       E("TRAIT_OMBRE", "Trait de l'ombre avant d'avoir le Drain de vie", PRET),
     },
     demonologie = {
-      E("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("ARMURE", "Armure démoniaque (ou Peau de démon), si elle n'est pas active", BUFF_MOI),
       E("AGONIE", "Malédiction d'agonie, si elle n'y est pas", DEBUFF, PRET),
       E("CORRUPTION", "Corruption sur la cible, si elle n'y est pas", DEBUFF, PRET),
@@ -944,7 +938,7 @@ D.ROTATIONS = {
       E("DRAIN_VIE", "Drain de vie le reste du temps", PRET),
     },
     destruction = {
-      E("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("DRAIN_VIE", "Drain de vie si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("ARMURE", "Armure démoniaque (ou Peau de démon), si elle n'est pas active", BUFF_MOI),
       E("IMMOLATION", "Immolation sur la cible, si elle n'y est pas", DEBUFF, PRET),
       E("MAL_ELEMENTS", "Malédiction des éléments, si elle n'y est pas (cible qui vit longtemps)", DEBUFF, PRET),
@@ -972,7 +966,7 @@ D.ROTATIONS = {
       E("MUTILER", "En ours : Mutiler, dès qu'il est prêt (cible seule)", PRET),
     },
     gardien = {
-      E("ECORCE", "Écorce si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
+      U("ECORCE", "Écorce si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
       E("RUGISSEMENT_DEM", "Rugissement démoralisant, s'il n'y est pas", DEBUFF, PRET),
       E("LUCIOLES", "Lucioles sur la cible, si elles n'y sont pas", DEBUFF, PRET),
       E("LACERATION", "Lacération, dès qu'elle est prête", PRET),
@@ -980,7 +974,7 @@ D.ROTATIONS = {
       E("MUTILER", "Mutiler, dès qu'il est prêt", PRET),
     },
     equilibre = {
-      E("ECORCE", "Écorce si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
+      U("ECORCE", "Écorce si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),
       E("MARQUE_FAUVE", "Marque du fauve, si elle n'est pas active", BUFF_MOI),
       E("EPINES", "Épines, si elles ne sont pas actives", BUFF_MOI),
       E("ECLAT_LUNAIRE", "Éclat lunaire sur la cible, s'il n'y est pas", DEBUFF, PRET),
@@ -988,13 +982,10 @@ D.ROTATIONS = {
       E("ECLAT_STELLAIRE", "Éclat stellaire, ton sort principal quand tu l'as (Colère après un Éclat stellaire qui critique)", PRET),
       E("COLERE", "Colère avant d'avoir l'Éclat stellaire", PRET),
     },
+    -- Restauration : pas de rotation de soins, seulement ce qui frappe quand tu es seul.
     restauration = {
-      E("MARQUE_FAUVE", "Marque du fauve, si elle n'est pas active", BUFF_MOI),
-      E("EPINES", "Épines, si elles ne sont pas actives", BUFF_MOI),
-      E("PROMPT_RETABLISSEMENT", "Prompt rétablissement sur un allié qui a un de tes soins sur la durée", PRET),
-      E("RAJEUNISSEMENT", "Récupération sur le plus de blessés possible (elle se cumule avec Rétablissement)", PRET),
-      E("RETABLISSEMENT", "Rétablissement pour un besoin rapide", PRET),
-      E("TOUCHER_GUERISON", "Toucher de guérison pour un gros soin", PRET),
+      E("ECLAT_LUNAIRE", "Éclat lunaire sur la cible, s'il n'y est pas", DEBUFF, PRET),
+      E("COLERE", "Colère le reste du temps", PRET),
     },
   },
 }

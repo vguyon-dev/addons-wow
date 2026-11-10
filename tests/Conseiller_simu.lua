@@ -348,25 +348,21 @@ do
   local vieR = 30
   local apiPR = { pret = function(sp) return sp.cle == "REMPART" end, buffAbsent = function() return true end,
     debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return vieR end }
-  verifie("paladin protection : sous 40 % de vie, Rempart du templier", "REMPART", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR).cle)
+  verifie("paladin protection : sous 40 % de vie, le Rempart est une urgence, pas la rotation", "FUREUR", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR).cle)
+  verifie("paladin protection : sous 40 % de vie, Rempart du templier en urgence", "REMPART", (ns.evaluerUrgence(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR) or {}).cle)
   vieR = 80
+  verifie("paladin protection : à 80 % de vie, pas d'urgence", nil, ns.evaluerUrgence(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR))
   verifie("paladin protection : à 80 % de vie, pas de Rempart", "FUREUR", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPR).cle)
   -- Paladin de protection : le Jugement passe avant le Bouclier sacré (ordre de la fiche)
   local apiPJ = { pret = function(sp) return sp.cle == "JUGEMENT" or sp.cle == "BOUCLIER_SACRE" end, buffAbsent = function() return false end,
     debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return 100 end }
   verifie("paladin protection : Jugement avant Bouclier sacré", "JUGEMENT", ns.evaluerRotation(D.ROTATIONS.PALADIN.protection, sortsPP, apiPJ).cle)
-  -- Chaman restaurateur : jamais le Bouclier de foudre par-dessus un Bouclier d'eau actif
+  -- Chaman restaurateur : pas de rotation de soins, seulement des sorts d'attaque
   local sortsSR = {}
   for cle, def in pairs(D.SORTS.SHAMAN) do sortsSR[cle] = { id = def.ids[1] or 1, nom = def.nom, ids = {}, cle = cle } end
-  local eauActive = true
-  local apiSR = { pret = function() return false end,
-    buffAbsent = function(sp) if sp.cle == "BOUCLIER_EAU" then return not eauActive end return true end,
+  local apiSR = { pret = function() return true end, buffAbsent = function() return true end,
     debuffAbsent = function() return false end, ennemis = function() return 1 end, vie = function() return 100 end }
-  verifie("chaman restauration : Bouclier d'eau actif, pas de Bouclier de foudre", nil, ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
-  eauActive = false
-  verifie("chaman restauration : Bouclier d'eau absent, on le pose", "BOUCLIER_EAU", ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
-  sortsSR.BOUCLIER_EAU = nil
-  verifie("chaman restauration : sans Bouclier d'eau appris, le Bouclier de foudre", "BOUCLIER_FOUDRE", ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
+  verifie("chaman restauration : le sort d'attaque, jamais un soin", "ECLAIR", ns.evaluerRotation(D.ROTATIONS.SHAMAN.restauration, sortsSR, apiSR).cle)
 end
 
 -- ================================================================ résolution des sorts
@@ -500,9 +496,18 @@ local apiP = {
 }
 etatP.pret = { JUGEMENT = true, IMPOSITION = true, BOUCLIER_DIVIN = true, EXORCISME = true }
 etatP.buffAbsent.SCEAU_AUTORITE = false
-verifie("paladin à 10 % : l'Imposition passe avant le Jugement", "IMPOSITION", ns.evaluerRotation(lp, sortsP, apiP).cle)
+verifie("paladin à 10 % : la rotation ne montre pas l'Imposition", "JUGEMENT", ns.evaluerRotation(lp, sortsP, apiP).cle)
+local resU = ns.evaluerRotation(lp, sortsP, apiP)
+local urgenceDansLignes = false
+for _, l in ipairs(resU.lignes) do if l.sort == "IMPOSITION" or l.sort == "BOUCLIER_DIVIN" then urgenceDansLignes = true end end
+verifie("paladin à 10 % : aucune urgence dans les lignes de la rotation", false, urgenceDansLignes)
+verifie("paladin à 10 % : l'urgence est l'Imposition des mains", "IMPOSITION", (ns.evaluerUrgence(lp, sortsP, apiP) or {}).cle)
 etatP.pret.IMPOSITION = false
-verifie("paladin à 10 %, Imposition en recharge : Bouclier divin", "BOUCLIER_DIVIN", ns.evaluerRotation(lp, sortsP, apiP).cle)
+verifie("paladin à 10 %, Imposition en recharge : urgence Bouclier divin", "BOUCLIER_DIVIN", (ns.evaluerUrgence(lp, sortsP, apiP) or {}).cle)
+verifie("paladin à 10 %, Imposition en recharge : la rotation reste le Jugement", "JUGEMENT", ns.evaluerRotation(lp, sortsP, apiP).cle)
+etatP.vieMoi = SECRET
+verifie("urgence : vie secrète, rien n'est signalé", nil, ns.evaluerUrgence(lp, sortsP, apiP))
+etatP.vieMoi = 10
 etatP.vieMoi = 90
 verifie("paladin en forme : le Jugement", "JUGEMENT", ns.evaluerRotation(lp, sortsP, apiP).cle)
 etatP.pret.JUGEMENT = false
@@ -688,6 +693,30 @@ for _, cl in ipairs(TOUTES) do
 end
 for _, p in ipairs(PROBLEMES) do io.write("   " .. p .. "\n") end
 verifie("données : chaque classe a une spécialisation, une priorité, des sorts déclarés et un build complets", 0, #PROBLEMES)
+-- Aucune rotation ne contient de soin ou de défensif non marqué urgence (Paladin et Chasseur : toutes les spécialisations)
+local MOTS_SOIN = { IMPOSITION = true, BOUCLIER_DIVIN = true, FEINDRE = true, DISSUASION = true, REMPART = true,
+  LUMIERE_SACREE = true, ECLAIR_LUMINEUX = true }
+local soinNonMarque = {}
+for _, cl in ipairs({ "PALADIN", "HUNTER" }) do
+  for spe, l in pairs(D.ROTATIONS[cl]) do
+    for _, entree in ipairs(l) do
+      if MOTS_SOIN[entree.sort] and not entree.urgence then soinNonMarque[#soinNonMarque + 1] = cl .. "/" .. spe .. "/" .. entree.sort end
+    end
+  end
+end
+verifie("rotations Paladin et Chasseur : aucun soin ni défensif non marqué urgence", 0, #soinNonMarque)
+local soinPartout = {}
+for cl, specs in pairs(D.ROTATIONS) do
+  for spe, l in pairs(specs) do
+    for _, entree in ipairs(l) do
+      if (entree.sort:find("SOINS") or entree.sort == "VAGUE" or entree.sort == "VAGUE_MINEURE" or entree.sort == "RAJEUNISSEMENT"
+        or entree.sort == "RETABLISSEMENT" or entree.sort == "TOUCHER_GUERISON") and not entree.urgence then
+        soinPartout[#soinPartout + 1] = cl .. "/" .. spe .. "/" .. entree.sort
+      end
+    end
+  end
+end
+verifie("rotations des 9 classes : aucun sort de soin non marqué urgence", 0, #soinPartout)
 verifie("données : plus de 150 entrées de priorité écrites (" .. totalEntrees .. ")", true, totalEntrees > 150)
 verifie("données : au moins 27 builds lus (" .. totalBuilds .. ")", true, totalBuilds >= 27)
 local perso = false
@@ -942,6 +971,14 @@ local tg = ns.vueTalents(eg)
 verifie("onglet Talents : bloc « Ton groupe »", true, contient(tg, "Ton groupe") and contient(tg, "Il manque un tank"))
 verifie("onglet Talents : ta classe ne peut pas le jouer", true, contient(tg, "ta classe ne peut pas le jouer"))
 verifie("onglet Rotation : à savoir en groupe", true, contient(ns.vueRotation(eg), "En groupe : à savoir"))
+verifie("onglet Rotation : pas de message de soins pour un chasseur", false, contient(ns.vueRotation(eg), "Spécialisation de soins"))
+do
+  local eU = ns.construireEtat()
+  eU.rotation.urgences = { "Feindre la mort", "Dissuasion" }
+  verifie("onglet Rotation : « En cas de danger » nomme les sorts d'urgence", true, contient(ns.vueRotation(eU), "En cas de danger : Feindre la mort, Dissuasion."))
+  eU.rotation.urgences = {}
+  verifie("onglet Rotation : sans urgence connue, pas de ligne", false, contient(ns.vueRotation(eU), "En cas de danger"))
+end
 -- valeurs secrètes dans le groupe : rôle NONE, classe inconnue, sans erreur
 jeu.membres = { { role = SECRET, classe = SECRET }, { role = "HEALER", classe = "PRIEST" }, { role = "DAMAGER", classe = "MAGE" }, { role = "DAMAGER", classe = "MAGE" } }
 evt("GROUP_ROSTER_UPDATE")
@@ -972,6 +1009,17 @@ verifie("vue forcée : raid, sans groupe inventé", nil, ns.construireEtat().gro
 verifie("vue forcée : la spécialisation conseillée suit", "vindicte", ns.construireEtat().conseil.cle)
 ns.situationForcee = nil
 
+-- Spécialisations de soins : pas de rotation de soins, une phrase claire, les conseils restent
+for _, cas in ipairs({ { "PALADIN", 1, "Sacré" }, { "PRIEST", 1, "Discipline" }, { "PRIEST", 2, "Sacré" }, { "SHAMAN", 3, "Restauration" }, { "DRUID", 3, "Restauration" } }) do
+  jeu.classe, jeu.spe, jeu.nomSpe, jeu.nbSpes = cas[1], cas[2], cas[3], (cas[1] == "DRUID") and 3 or nil
+  evt("PLAYER_SPECIALIZATION_CHANGED")
+  local tS = ns.vueRotation(ns.construireEtat())
+  verifie("spé de soins " .. cas[1] .. " " .. cas[3] .. " : message clair", true, contient(tS, "Spécialisation de soins : il n'y a pas d'ordre fixe"))
+  verifie("spé de soins " .. cas[1] .. " " .. cas[3] .. " : sorts d'attaque et conseils", true, contient(tS, "Sorts d'attaque") and contient(tS, "à savoir"))
+end
+jeu.classe, jeu.spe, jeu.nomSpe, jeu.nbSpes = "HUNTER", 1, "Maîtrise des bêtes", nil
+evt("PLAYER_SPECIALIZATION_CHANGED")
+
 -- La fenêtre : tous les onglets s'affichent sans erreur
 for _, f in ipairs(cadres) do if f._nom == "ConseillerFenetre" then rawset(f, "IsShown", function() return true end) end end
 local fenetreOk = true
@@ -988,6 +1036,7 @@ verifie("commande /cs mode c", nil, (function() SlashCmdList.CONSEILLER("mode c"
 verifie("commande /cs mode c : réglage posé", 3, ConseillerDB.modeRotation)
 SlashCmdList.CONSEILLER("mode auto")
 verifie("commande /cs mode auto", 1, ConseillerDB.modeRotation)
+verifie("réglage alerteUrgence : coupé par défaut", false, ConseillerDB.alerteUrgence)
 verifie("commandes déclarées", "/cs", SLASH_CONSEILLER2)
 
 if ok then io.write("Tout est bon.\n") end

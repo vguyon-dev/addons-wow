@@ -374,22 +374,28 @@ end
 -- Renvoie { choix = entrée à lancer (ou nil), cle, illisible = vrai quand la plupart des entrées
 -- à conditions (plus de la moitié) sont illisibles : alors on ne recommande rien et on passe au mode liste, lignes = { { sort, texte, verdict } } }.
 -- Verdict : true (à lancer), false (pas maintenant), nil (illisible).
--- Une entrée dont le sort est inconnu du personnage est sautée.
+-- Une entrée dont le sort est inconnu du personnage est sautée, et une entrée « urgence » aussi
+-- (soin, défensif : elle se lit à part, avec ns.evaluerUrgence).
+local function verdictEntree(e, sorts, api)
+  local verdict, inconnu = true, false
+  for _, c in ipairs(e.si or {}) do
+    local ok, v = pcall(ns.evaluerCondition, c, e.sort, sorts, api)
+    if not ok then v = nil end
+    if v == false then verdict = false; break end
+    if v == nil then inconnu = true end
+  end
+  if verdict and inconnu then verdict = nil end
+  return verdict
+end
+
 function ns.evaluerRotation(liste, sorts, api)
   local res = { lignes = {}, illisible = false }
   local conditionnelles, illisibles = 0, 0
   for _, e in ipairs(liste or {}) do
     local s = sorts[e.sort]
-    if s then
+    if s and not e.urgence then
       local conds = e.si or {}
-      local verdict, inconnu = true, false
-      for _, c in ipairs(conds) do
-        local ok, v = pcall(ns.evaluerCondition, c, e.sort, sorts, api)
-        if not ok then v = nil end
-        if v == false then verdict = false; break end
-        if v == nil then inconnu = true end
-      end
-      if verdict and inconnu then verdict = nil end
+      local verdict = verdictEntree(e, sorts, api)
       if #conds > 0 then
         conditionnelles = conditionnelles + 1
         if verdict == nil then illisibles = illisibles + 1 end
@@ -410,6 +416,19 @@ function ns.evaluerRotation(liste, sorts, api)
     end
   end
   return res
+end
+
+-- Le sort d'urgence : la première entrée « urgence » dont le sort est connu et dont les conditions sont
+-- vraies (une valeur illisible ou secrète ne compte pas : rien n'est signalé). Rend
+-- { sort, cle, texte, nom, rang } ou nil.
+function ns.evaluerUrgence(liste, sorts, api)
+  for i, e in ipairs(liste or {}) do
+    local s = e.urgence and sorts[e.sort]
+    if s and verdictEntree(e, sorts, api) == true then
+      return { sort = e.sort, cle = e.sort, texte = e.texte or s.nom, nom = s.nom, rang = i }
+    end
+  end
+  return nil
 end
 
 -- Le mode d'affichage : reglage = 1 (auto), 2 (contour sur la barre) ou 3 (liste seule).
@@ -750,6 +769,11 @@ function ns.vueRotation(e)
   local spe = e.speRotationNom or (c and e.speRotation and c.specs[e.speRotation] and c.specs[e.speRotation].nom) or "?"
   L[#L + 1] = titre("Rotation " .. spe)
   local r = e.rotation
+  local infoSpe = c and e.speRotation and c.specs[e.speRotation]
+  local soins = infoSpe and infoSpe.role == "soins"
+  if soins then
+    L[#L + 1] = "Spécialisation de soins : il n'y a pas d'ordre fixe, tu soignes selon la vie de ton groupe. Voici tes sorts d'attaque pour quand tu es seul."
+  end
   if not r or not r.liste then
     L[#L + 1] = "Rotation pas encore écrite pour " .. (c and c.nom or "cette classe") .. ", " .. spe .. " : rien ne s'allume sur ta barre pour l'instant. Les conseils ci-dessous valent déjà."
   else
@@ -766,7 +790,7 @@ function ns.vueRotation(e)
       end
     end
     L[#L + 1] = ""
-    L[#L + 1] = titre("Ordre de priorité")
+    L[#L + 1] = titre(soins and "Sorts d'attaque" or "Ordre de priorité")
     local n = 0
     for _, ligne in ipairs(r.resultat and r.resultat.lignes or r.lignesStatiques or {}) do
       n = n + 1
@@ -775,6 +799,10 @@ function ns.vueRotation(e)
       L[#L + 1] = string.format("%d. %s%s", n, ligne.texte, marque)
     end
     if n == 0 then L[#L + 1] = "Aucun des sorts de cette rotation n'est dans ton grimoire pour l'instant." end
+    if r.urgences and #r.urgences > 0 then
+      L[#L + 1] = ""
+      L[#L + 1] = GRIS .. "En cas de danger : " .. table.concat(r.urgences, ", ") .. "." .. FIN
+    end
   end
   L[#L + 1] = ""
   local titreConseils, conseils = ns.conseilsASavoir(e.classe, e.situation)
