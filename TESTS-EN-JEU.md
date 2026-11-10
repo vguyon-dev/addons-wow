@@ -226,6 +226,28 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 - [ ] Sur chacune : rien ne chevauche le titre, le texte reste lisible, aucune erreur Lua (BugSack) à l'ouverture, en combat ou non.
 - [ ] Retail et Forever : même rendu (si le cadre n'a pas de fond, un cadre enfant le dessine derrière).
 
+## Suivi des quêtes (nouveau)
+
+À faire en premier : `/reload`, puis regarder BugSack. Le suivi du jeu doit avoir disparu et notre panneau « Quêtes » être à droite.
+
+- [ ] `/sq genre` : pour chaque quête suivie, le chat donne la rubrique, le tag, la classification et le genre retenu. **Me donner ce texte** (ou dire « regarde ») : il sert à régler le tri automatique, surtout « Principal », « Classe » et « Métiers ».
+- [ ] Les sections sont dans l'ordre : À rendre, Principal, Général, Donjons et groupe, Classe, Métiers. Une section vide n'apparaît pas.
+- [ ] Une quête finie passe dans « À rendre » avec un « ? » ; décocher « À rendre en haut » la remet dans son genre.
+- [ ] Cliquer le nom d'une section la replie ; après `/reload`, elle est toujours repliée.
+- [ ] Clic gauche sur une quête : fond doré, et la flèche du GPS la suit. Un second clic ouvre sa fiche dans le journal.
+- [ ] Maj + clic : la quête n'est plus suivie et quitte le panneau.
+- [ ] Clic droit : menu « Ranger dans » ; choisir « Principal » déplace la quête, « Automatique » la remet. Le choix tient après `/reload`.
+- [ ] Une quête sans objectif chiffré (« Livraison pour Foudrepique ») affiche son texte court, y compris juste après la connexion.
+- [ ] Titres colorés comme dans le journal du jeu (rouge, orange, jaune, vert, gris) et distance à droite (« 140 m », « 2,6 km »).
+- [ ] Objet de quête : son bouton apparaît à gauche du panneau ; un clic l'utilise, aussi en combat. Replier la section cache le bouton.
+- [ ] En combat : une quête progresse, le suivi du jeu ne réapparaît pas ; après le combat il reste caché. Aucun message « action bloquée ».
+- [ ] Déplacer le panneau par son en-tête (refusé en combat avec un message) ; « Remettre à sa place » et `/sq centre` le replacent.
+- [ ] Réglages : largeur, taille (le panneau ne doit pas se déplacer), fond sombre, une ligne par quête, cacher les autres zones (les donjons et « À rendre » restent), toutes les quêtes du journal. Tout s'applique sans `/reload`.
+- [ ] Décocher « Cacher le suivi du jeu », ou couper l'addon : le suivi du jeu revient.
+- [ ] En donjon : le suivi du jeu revient et notre panneau s'efface ; en sortant, l'inverse.
+- [ ] Mode d'édition de l'interface (Échap > Mode édition) : le suivi du jeu se voit, puis disparaît à la sortie.
+- [ ] Sur Retail : mêmes vérifications, et les quêtes de campagne vont dans « Principal ».
+
 ## Plus anciens, jamais confirmés
 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).
