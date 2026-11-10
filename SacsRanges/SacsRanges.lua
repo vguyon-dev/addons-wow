@@ -207,15 +207,55 @@ local function ligneRouge(sac, case)
   return rouge, textes
 end
 
+-- Le motif d'une ligne de restriction du jeu (« Classes : %s »), construit à partir de sa
+-- constante ; sans constante, le repli reconnaît le début de la ligne.
+local function motifRestriction(constante, repli)
+  if type(constante) ~= "string" or not constante:find("%%s") then return repli end
+  local m = constante:gsub("%%s", "\1"):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0"):gsub("\1", ".+")
+  return "^" .. m
+end
+
+-- Cette ligne rouge de la bulle est-elle une restriction de classe ou de race ?
+-- Elle ne changera jamais pour ce personnage.
+function ns.estRestrictionDefinitive(texte)
+  if type(texte) ~= "string" then return false end
+  return texte:find(motifRestriction(ITEM_CLASSES_ALLOWED, "^Classes? ?:")) ~= nil
+    or texte:find(motifRestriction(ITEM_RACES_ALLOWED, "^Races? ?:")) ~= nil
+end
+
+-- Le type d'armure le plus lourd que chaque classe portera un jour :
+-- 1 tissu, 2 cuir, 3 mailles, 4 plaques.
+local ARMURE_MAX = {
+  MAGE = 1, PRIEST = 1, WARLOCK = 1,
+  ROGUE = 2, DRUID = 2, MONK = 2, DEMONHUNTER = 2,
+  HUNTER = 3, SHAMAN = 3, EVOKER = 3,
+  WARRIOR = 4, PALADIN = 4, DEATHKNIGHT = 4,
+}
+
+-- Une armure (classe d'objet 4) d'un type que cette classe ne portera jamais ?
+function ns.armureJamaisPortee(classeObjet, sousClasse, classeJoueur)
+  local plafond = ARMURE_MAX[classeJoueur or ""]
+  return classeObjet == 4 and plafond ~= nil and type(sousClasse) == "number"
+    and sousClasse >= 1 and sousClasse <= 4 and sousClasse > plafond
+end
+
 -- Pourquoi on ne peut pas le porter, d'après les lignes rouges de la bulle :
--- « niveau » quand c'est seulement le niveau (tu pourras le porter plus tard),
--- « autre » sinon (classe, arme ou armure pas apprise, race…). Rend aussi le texte.
-function ns.raisonPasPortable(textes)
+-- « definitif » quand ça ne changera jamais (restriction de classe ou de race, armure d'un type
+-- que la classe ne portera jamais) : l'objet lié ne sert à rien, on peut le vendre ;
+-- « niveau » quand c'est seulement le niveau (tu pourras le porter plus tard) ;
+-- « autre » sinon (arme ou armure pas apprise : ça peut s'apprendre). Rend aussi le texte.
+function ns.raisonPasPortable(textes, classeObjet, sousClasse, classeJoueur)
   local niveau = ITEM_MIN_LEVEL and ITEM_MIN_LEVEL:gsub("%%d", "%%d+") or nil
   local autre
   for _, t in ipairs(textes or {}) do
     local estNiveau = (niveau and t:find(niveau)) or t:find("^Niveau %d+ requis") or t:find("^Requires Level %d+")
-    if not estNiveau then autre = autre or t end
+    if not estNiveau then
+      if ns.estRestrictionDefinitive(t) then return "definitif", t end
+      autre = autre or t
+    end
+  end
+  if ns.armureJamaisPortee(classeObjet, sousClasse, classeJoueur) then
+    return "definitif", autre or "armure que ta classe ne portera jamais"
   end
   if autre then return "autre", autre end
   if textes and textes[1] then return "niveau", textes[1] end
@@ -224,15 +264,16 @@ end
 
 -- Peut-on porter l'objet de cette case ? (vrai pour tout ce qui n'est pas de
 -- l'équipement). Sert à la vue par catégories pour la section « À vendre ».
--- Rend aussi la raison (« niveau » ou « autre ») et son texte quand on ne peut pas.
+-- Rend aussi la raison (« niveau », « definitif » ou « autre ») et son texte quand on ne peut pas.
 function ns.utilisableCase(sac, case, lien)
   local typ, _, _, classeObjet, sousClasse = select(9, infoObjet(lien))
   if not (typ and EMPLACEMENTS[typ]) then return true end
   local lu, rouge, textes = pcall(ligneRouge, sac, case)
   local ok = ns.utilisable(classeObjet, sousClasse, competences(), lu and rouge or nil)
   if ok then return true end
-  if lu and rouge then return false, ns.raisonPasPortable(textes) end
-  return false, "autre", "arme ou armure pas apprise"
+  local classeJoueur = UnitClass and select(2, UnitClass("player"))
+  local raison, texte = ns.raisonPasPortable(lu and rouge and textes or nil, classeObjet, sousClasse, classeJoueur)
+  return false, raison, texte or "arme ou armure pas apprise"
 end
 ns.nbCases = nbCases
 

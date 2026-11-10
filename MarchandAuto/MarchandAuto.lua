@@ -51,10 +51,12 @@ end
 -- gris ? info : ce que renvoie C_Container.GetContainerItemInfo pour la même
 -- case, MAINTENANT (l'objet a pu bouger depuis). Jamais un objet épique ou
 -- mieux, jamais un objet de la liste « à garder », jamais un objet sans prix
--- (au marchand, le jeu essaierait de l'équiper) ni verrouillé.
+-- (au marchand, le jeu essaierait de l'équiper) ni verrouillé, ni remboursable
+-- (un objet acheté tout juste : le vendre perdrait le remboursement).
 function ns.equipementAVendre(entree, info, gardes)
   if type(entree) ~= "table" or type(info) ~= "table" then return false end
   if info.isLocked or info.hasNoValue or info.isBound == false then return false end
+  if info.isRefundable or entree.remboursable then return false end
   local q = info.quality
   if q == nil or q < 1 or q >= 4 then return false end -- gris : voir ns.aVendre ; épique ou plus : jamais
   local id = info.itemID or entree.id
@@ -88,6 +90,24 @@ function ns.resumeVente(vendus)
   return r
 end
 
+-- Après un essai de vente, la pièce est-elle partie ? info : ce que rend
+-- C_Container.GetContainerItemInfo pour la même case, un peu après. Partie = case vide
+-- ou autre objet dans la case ; sinon la vente a été refusée (marchand fermé, objet verrouillé…).
+function ns.pieceVendue(entree, info)
+  if type(entree) ~= "table" then return false end
+  if type(info) ~= "table" then return true end
+  if entree.id and info.itemID then return entree.id ~= info.itemID end
+  if entree.lien and info.hyperlink then return entree.lien ~= info.hyperlink end
+  return false
+end
+
+-- La phrase du bilan pour les gris vendus (nil s'il n'y en a aucun : rien à dire quand
+-- seul de l'équipement est parti). texteOr(cuivre) écrit une somme.
+function ns.texteBilanGris(gris, texteOr)
+  if not gris or gris.n == 0 then return nil end
+  return string.format("%d objet(s) gris vendu(s) : %s", gris.n, texteOr(gris["or"]))
+end
+
 -- La phrase du bilan pour l'équipement lié vendu (nil s'il n'y en a pas) : au
 -- plus 6 liens, puis « et N autres ». texteOr(cuivre) écrit une somme.
 function ns.texteBilanEquipement(equip, texteOr)
@@ -95,7 +115,7 @@ function ns.texteBilanEquipement(equip, texteOr)
   local liens, reste = {}, equip.n - math.min(#equip.liens, 6)
   for i = 1, math.min(#equip.liens, 6) do liens[i] = equip.liens[i] end
   local suite = reste > 0 and (" et " .. reste .. " autre(s)") or ""
-  return string.format("%d équipement(s) lié(s) vendu(s) (tu ne peux pas les porter) : %s%s, %s",
+  return string.format("%d équipement(s) lié(s) vendu(s) (tu ne pourras jamais les porter) : %s%s, %s",
     equip.n, table.concat(liens, ", "), suite, texteOr(equip["or"]))
 end
 
@@ -257,7 +277,7 @@ local function vendre()
         local info = C_Container.GetContainerItemInfo(sac, case)
         if ns.aVendre(info, db.gardes) then
           local prix = select(11, infoItem(info.hyperlink)) or 0
-          liste[#liste + 1] = { sac = sac, case = case, genre = "gris", lien = info.hyperlink,
+          liste[#liste + 1] = { sac = sac, case = case, genre = "gris", lien = info.hyperlink, id = info.itemID,
                                 prix = prix * (info.stackCount or 1) }
         end
       end
@@ -267,18 +287,23 @@ local function vendre()
     local info = C_Container.GetContainerItemInfo(e.sac, e.case)
     local prix = select(11, infoItem(e.lien)) or 0
     liste[#liste + 1] = { sac = e.sac, case = e.case, genre = "equip", lien = e.lien, id = e.id, qualite = e.qualite,
-                          prix = prix * ((info and info.stackCount) or 1) }
+                          remboursable = e.remboursable, prix = prix * ((info and info.stackCount) or 1) }
   end
   if #liste == 0 then return end
-  local i, vendus = 0, {}
+  local i, vendus, attente = 0, {}, nil
   local function suivant()
+    -- La pièce tentée au tour d'avant ne compte comme vendue que si sa case s'est vidée ou a changé.
+    if attente then
+      local apres = C_Container.GetContainerItemInfo(attente.sac, attente.case)
+      if ns.pieceVendue(attente, apres) then vendus[#vendus + 1] = attente end
+      attente = nil
+    end
     i = i + 1
     if not ouvert or i > #liste then
       if db.bilan then
         local r = ns.resumeVente(vendus)
-        if db.vendreGris then
-          ns.reglages.dire(string.format("%d objet(s) gris vendu(s) : %s", r.gris.n, texteOr(r.gris["or"])))
-        end
+        local g = db.vendreGris and ns.texteBilanGris(r.gris, texteOr)
+        if g then ns.reglages.dire(g) end
         local t = ns.texteBilanEquipement(r.equip, texteOr)
         if t then ns.reglages.dire(t) end
       end
@@ -292,7 +317,7 @@ local function vendre()
     end
     if bon then
       C_Container.UseContainerItem(v.sac, v.case)
-      vendus[#vendus + 1] = v
+      attente = v
     end
     C_Timer.After(0.1, suivant)
   end

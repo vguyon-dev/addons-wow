@@ -30,9 +30,9 @@ Avant de commencer :
 - [ ] Échap > Options > AddOns : le bouton « Ouvrir les réglages » marche aussi.
 - [ ] Tout en haut de la liste de gauche : « Quoi de neuf », sans point vert ni rouge, avec l'icône d'une note ; les addons sont en dessous, un peu plus bas.
 - [ ] À la première connexion après la mise à jour : un seul message dans le chat « Addons de Valentin : il y a du nouveau… » (pas 17), quelques secondes après l'arrivée dans le jeu, et une pastille dorée sur « Quoi de neuf » (et la ligne « Il y a du nouveau » dans la bulle de l'engrenage de la minimap).
-- [ ] Clic sur « Quoi de neuf » : les nouveautés s'affichent dans un cadre qui défile à la molette, les plus récentes en premier, marquées « [nouveau] » ; la pastille disparaît.
+- [ ] Clic sur « Quoi de neuf » : les nouveautés s'affichent dans un cadre qui défile à la molette, les plus récentes en premier, marquées « [nouveau] » (toutes, à la toute première mise à jour, quand aucune date vue n'existe) ; la pastille disparaît.
 - [ ] `/reload` : plus de message, plus de pastille. Les nouveautés s'ouvrent toujours quand on clique sur l'entrée.
-- [ ] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas.
+- [ ] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas. Le cadre grandit avec le texte et se fait défiler à la molette, sans couper la fin.
 - [ ] Changer un réglage (par exemple la taille de la flèche du GPS), coller l'ancien texte dans le second cadre, « Appliquer » : message vert « N réglage(s) appliqué(s) dans M addon(s) », et le réglage revient à l'ancienne valeur tout de suite, sans `/reload`.
 - [ ] Texte abîmé : retirer le début « VA1; » ou couper le texte au milieu d'un réglage, « Appliquer » : message rouge clair, rien n'est changé. Cadre vide : « Colle d'abord le texte reçu. »
 - [ ] Les listes (objets ignorés de Butin rapide, balises du GPS, courses de Métiers auto) ne bougent pas après « Appliquer ».
@@ -52,12 +52,13 @@ Avant de commencer :
 - [ ] Le livre de bibliothèque est rangé dans « Quête » (déjà vu, à reconfirmer).
 - [ ] Bulles d'objets : la ligne verte « Mieux pour <spécialisation> » sur une récompense de quête, un objet de marchand et un butin. Rien sur un objet moins bon ou que tu ne peux pas porter.
 - [ ] Section « Tu ne peux pas le porter » : équipement pas lié que tu ne peux pas porter, ou seulement trop haut en niveau.
-- [ ] Section « À vendre » : les gris, et l'équipement lié que ta classe ne peut pas porter.
+- [ ] Section « À vendre » : les gris, et l'équipement lié que ta classe ne pourra JAMAIS porter (ligne rouge « Classes : … » ou « Races : … » d'une autre classe ou race, ou armure d'un type que ta classe ne portera jamais : plaque pour un mage, par exemple). Une arme ou une armure « pas apprise » (mailles ou plaques avant le niveau 40, arme d'un maître d'armes) ou trop haute en niveau reste dans « Tu ne peux pas le porter », même liée.
 - [ ] Bulle d'un objet de ces sections : « Rangé ici : … » avec la raison.
 - [ ] Équipement moins bon que ce que tu portes : flèche rouge vers le bas, et « Moins bon que … » dans la bulle.
 - [ ] Apparence « cadre du jeu » et nouveau visuel.
 - [ ] Option « Banque rangée par catégories » (grisée si le sac par catégories est décoché) : à l'ouverture de la banque, une seconde fenêtre apparaît à gauche du sac, avec les mêmes sections, le même style, et se ferme avec la banque ; la fenêtre de banque du jeu reste visible.
 - [ ] Banque rangée : le clic droit sur un objet de la banque le met dans les sacs ; déposer un objet sur la case « Cases libres » le range en banque ; glisser un objet d'une case à l'autre marche ; pas de message « fonction protégée ».
+- [ ] Banque rangée : la croix de la fenêtre la ferme pour de bon (elle ne revient pas quand tu bouges un objet) jusqu'à la prochaine ouverture de la banque. Banque très pleine : la fenêtre ne dépasse pas 80 % de la hauteur de l'écran, elle prend plus de colonnes (jusqu'à 24).
 - [ ] Banque rangée : tous les sacs de banque achetés y sont (Forever), ou tous les onglets du personnage (Retail) ; la recherche en haut grise ce qui ne correspond pas ; l'option décochée, la seconde fenêtre disparaît tout de suite.
 - [ ] Banque rangée sur Retail : noter si les cases répondent bien (incertain : les onglets de banque récents n'ont pas été vérifiés) ; sinon décocher l'option, la banque du jeu fonctionne toujours seule.
 - [ ] Retail : le sac rangé et ses cases (tout n'a été vu que sur Forever).
@@ -69,7 +70,8 @@ Avant de commencer :
 - [ ] Option « Vendre aussi l'équipement lié que tu ne peux pas porter » : grisée si Sacs rangés est désactivé ou absent, cochable sinon (coupée par défaut).
 - [ ] Chez un marchand, option cochée, avec dans les sacs un gris et une pièce liée que ta classe ne peut pas porter : les deux sont vendus, et le bilan nomme la pièce et dit combien elle a rapporté.
 - [ ] Option cochée mais « Vendre les objets gris » décochée : seule la pièce liée est vendue.
-- [ ] Une pièce épique inutilisable n'est jamais vendue, ni un objet de la liste « Gris à garder ».
+- [ ] Une pièce épique inutilisable n'est jamais vendue, ni un objet de la liste « Gris à garder », ni une pièce encore remboursable (achetée tout juste avec des points d'honneur ou autre).
+- [ ] Le bilan ne compte une pièce que si elle a vraiment quitté le sac ; avec seulement de l'équipement vendu, pas de ligne « 0 objet(s) gris vendu(s) ».
 - [ ] Maj enfoncé en ouvrant le marchand : rien n'est vendu.
 - [ ] Option cochée, vue par catégories de Sacs rangés décochée : la vente marche quand même.
 - [ ] Pas de message « fonction protégée » ni de pièce équipée par erreur pendant la vente.
@@ -98,6 +100,7 @@ Avant de commencer :
 - [ ] Pièce jointe en un clic : onglet Envoyer ouvert, clic droit sur un objet du sac du jeu l'ajoute en pièce jointe. Pareil sur une case du sac rangé de Sacs rangés (ce sont de vraies cases du jeu). Si ça ne marche pas sur le sac rangé, le dire : il faudra un crochet à nous.
 - [ ] Le rappel « Astuce : clic droit… » apparaît en bas de la liste, et disparaît avec l'option « Rappel : clic droit… » décochée.
 - [ ] Fin d'une récupération : une ligne « terminé (X po, N objet(s)) » puis, s'il en reste, « courriers laissés de côté : 1 en contre-remboursement (jamais payé), … ». Avec les sacs pleins : « N faute de place dans les sacs ».
+- [ ] Couper l'addon (interrupteur des réglages) en pleine récupération : « Courrier coupé (…) » avec ce qui a été pris, pas « boîte fermée ».
 - [ ] Fermer la boîte en pleine récupération : « boîte fermée (…) » avec ce qui a été pris. Option « Bilan » décochée : retour à l'ancien message court, sans ligne « laissés de côté ».
 
 ## GPS (nouveau)
@@ -122,8 +125,9 @@ Avant de commencer :
 - [ ] Poser une balise `/way` : la flèche la suit, puis revient à la quête quand la balise est atteinte.
 - [ ] Si TomTom est encore installé : vérifier qui répond à `/way` (le désactiver pour ne garder que le nôtre).
 - [ ] Balises partagées, à deux joueurs en groupe avec GPS : poser une balise puis cliquer « Envoyer au groupe » (onglet Balises des réglages) : l'autre voit « balise : Titre (de Nom) » et la flèche la suit.
-- [ ] `/way envoyer` envoie la balise suivie ; `/way envoyer tout` envoie toutes les balises (20 au plus). Seul en jeu : « tu n'es pas dans un groupe ». Sans balise : « aucune balise suivie à envoyer ».
+- [ ] `/way envoyer` envoie la balise suivie ; `/way envoyer tout` envoie toutes les balises (20 au plus), une toutes les 0,5 s, puis une ligne dit combien sont réellement parties. Seul en jeu : « tu n'es pas dans un groupe ». Sans balise : « aucune balise suivie à envoyer ».
 - [ ] Renvoyer deux fois la même balise (ou une à moins de 0,5 % de distance) : aucun doublon chez l'autre. Une balise envoyée par soi-même ne revient jamais.
+- [ ] Une balise reçue du groupe ne fait pas lâcher la balise que tu suis déjà (la flèche reste sur la tienne).
 - [ ] Option « Accepter les balises de mon groupe » décochée chez l'autre : rien n'est ajouté. En raid et en groupe d'instance (recherche de groupe) : l'envoi passe aussi.
 - [ ] Titre vide ou avec des accents : la balise arrive en « Balise (de Nom) » ou avec ses accents intacts. Aucune erreur dans BugSack, côté envoi comme côté réception.
 
@@ -139,7 +143,8 @@ Avant de commencer :
 - [ ] Butin rapide : la ligne « Hôtel des ventes » du bilan de farm utilise nos prix.
 - [ ] Forever : vérifier que l'hôtel des ventes y a bien le relevé complet (sinon, le dire).
 - [ ] Le panneau à droite de l'hôtel des ventes garde son fond sombre, sa bordure dorée et son titre « Enchères » doré (même visuel qu'avant).
-- [ ] Onglet Vendre, objet unique (arme, armure) déposé : le bloc « Mise en vente » donne le plus bas connu avec son âge et un prix conseillé arrondi à l'argent. « Mettre ce prix » remplit le champ de prix du jeu ; la mise en vente reste un clic de ta part.
+- [ ] Onglet Vendre, objet unique (arme, armure) déposé : le bloc « Mise en vente » donne le plus bas connu avec son âge et un prix conseillé arrondi à l'argent. « Mettre ce prix » remplit le champ d'achat immédiat du jeu quand il est affiché (sinon le champ de prix) ; la mise en vente reste un clic de ta part.
+- [ ] Onglet Vendre, équipement ou cage de mascotte déposé : « Prix variable d'un exemplaire à l'autre : regarde les ventes en cours. », pas de prix conseillé ni de bouton.
 - [ ] Onglet Vendre, produit en lot (étoffe, herbe) déposé : prix « l'unité », 1 cuivre sous le plus bas ; « Mettre ce prix » remplit le prix unitaire du jeu.
 - [ ] Objet jamais relevé : « Pas de prix connu » et pas de bouton. Objet dont le plus bas est sous le prix du marchand : conseil au prix du marchand, avec la mention.
 - [ ] Retirer l'objet, ou changer d'onglet : le bloc « Mise en vente » disparaît. Réglage « Le prix conseillé… » décoché : plus de bloc.

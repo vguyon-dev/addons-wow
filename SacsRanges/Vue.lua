@@ -48,10 +48,11 @@ function ns.categorie(classe, qualite, quete, utilisable, sousClasse, id, extra)
   if qualite == 0 then return "vendre" end
   local c = CLASSES[classe]
   -- Équipement que tu ne peux pas porter : lié (ni donnable ni vendable à
-  -- l'hôtel des ventes) et pas une simple question de niveau -> à vendre ;
-  -- sinon il se donne, se vend aux enchères ou se portera plus tard.
+  -- l'hôtel des ventes) et impossible pour toujours (classe, race, type d'armure
+  -- que ta classe ne portera jamais) -> à vendre ; sinon (niveau, arme ou armure
+  -- qui peut s'apprendre) il se garde, se donne, se vend aux enchères ou se portera plus tard.
   if c == "equip" and utilisable == false then
-    if extra.estLie and extra.raison ~= "niveau" then return "vendre" end
+    if extra.estLie and extra.raison == "definitif" then return "vendre" end
     return "pasPourToi"
   end
   -- Lié et inutile à l'artisanat (un journal, un souvenir) : pas un composant.
@@ -65,10 +66,11 @@ end
 function ns.texteRangement(categorie, qualite, estLie, texte)
   if categorie == "vendre" then
     if qualite == 0 then return "objet gris" end
-    return "lié, et tu ne pourras pas le porter" .. (texte and (" (" .. texte .. ")") or "")
+    return "lié, et tu ne pourras jamais le porter" .. (texte and (" (" .. texte .. ")") or "")
   end
   if categorie == "pasPourToi" then
-    return (texte or "tu ne peux pas le porter") .. (estLie and "" or " ; pas lié : tu peux le donner ou le vendre aux enchères")
+    return (texte or "tu ne peux pas le porter")
+      .. (estLie and " ; lié : tu pourras peut-être le porter plus tard" or " ; pas lié : tu peux le donner ou le vendre aux enchères")
   end
   return nil
 end
@@ -93,21 +95,47 @@ end
 
 -- Dans les objets lus, ceux de la section « À vendre » qui ne sont PAS gris
 -- (l'équipement lié que le personnage ne pourra pas porter) : c'est ce que
--- Marchand auto peut vendre en plus des gris. Rend { sac, case, lien, id, raison, qualite }.
+-- Marchand auto peut vendre en plus des gris. Rend { sac, case, lien, id, raison, qualite, remboursable }.
 function ns.filtrerAVendre(objets)
   local l = {}
   for _, o in ipairs(objets or {}) do
     if o.categorie == "vendre" and o.qualite ~= 0 and o.sac and o.case and o.lien then
-      l[#l + 1] = { sac = o.sac, case = o.case, lien = o.lien, id = o.id, raison = o.raison, qualite = o.qualite }
+      l[#l + 1] = { sac = o.sac, case = o.case, lien = o.lien, id = o.id, raison = o.raison, qualite = o.qualite,
+        remboursable = o.remboursable }
     end
   end
   return l
 end
 
+local TAILLE, ECART, MARGE = 37, 4, 12
+
+-- La hauteur de la fenêtre pour ce plan : { aEquiper = nombre de lignes « À équiper »,
+-- sections = { nombre d'objets de chaque section }, libre = vrai s'il y a une case libre à montrer }.
+-- Même calcul que la fenêtre dessinée (titre de 16, une rangée = TAILLE + ECART, 6 d'espace).
+function ns.hauteurVue(plan, colonnes)
+  plan = type(plan) == "table" and plan or {}
+  colonnes = math.max(1, colonnes or 10)
+  local y = 0
+  local equiper = plan.aEquiper or 0
+  if equiper > 0 then y = y + 16 + equiper * (TAILLE + ECART + 4) + 6 end
+  for _, n in ipairs(plan.sections or {}) do
+    if n > 0 then y = y + 16 + math.ceil(n / colonnes) * (TAILLE + ECART) + 6 end
+  end
+  if plan.libre then y = y + 16 + TAILLE + ECART end
+  return 58 + y + 30
+end
+
 -- Combien de colonnes de cases selon le nombre de cases du sac ou de la banque.
-function ns.colonnesPour(total)
+-- Avec plan (voir ns.hauteurVue) et hauteurMax (en pixels), on ajoute des colonnes, jusqu'à 24,
+-- tant que la fenêtre dépasse cette hauteur.
+function ns.colonnesPour(total, plan, hauteurMax)
   total = total or 0
-  return total > 110 and 14 or (total > 70 and 12 or 10)
+  local base = total > 110 and 14 or (total > 70 and 12 or 10)
+  if type(plan) ~= "table" or type(hauteurMax) ~= "number" or hauteurMax <= 0 then return base end
+  for colonnes = base, 24 do
+    if ns.hauteurVue(plan, colonnes) <= hauteurMax then return colonnes end
+  end
+  return 24
 end
 
 -- Sépare les objets lus : ceux « À équiper » (qui portent un conseil, triés par
@@ -140,9 +168,10 @@ end
 -- La banque rangée se montre-t-elle ? Il faut la vue par catégories, l'option,
 -- la banque ouverte, et au moins une case lisible : si le jeu ne dit rien de la
 -- banque (nbCases = 0), on laisse la banque du jeu toute seule.
+-- Fermée à la main (la croix) : elle reste fermée jusqu'à la prochaine ouverture de la banque.
 function ns.banqueAMontrer(faits)
   faits = faits or {}
-  return (faits.vue and faits.option and faits.ouverte and (faits.nbCases or 0) > 0) and true or false
+  return (faits.vue and faits.option and faits.ouverte and not faits.fermeeMain and (faits.nbCases or 0) > 0) and true or false
 end
 
 -- Recherche sans accents ni majuscules : « etoffe » trouve « Étoffe de lin ».
@@ -165,7 +194,7 @@ local function infoCase(sac, case)
   if C_Container and C_Container.GetContainerItemInfo then
     local i = C_Container.GetContainerItemInfo(sac, case)
     if not i then return nil end
-    return i.iconFileID, i.stackCount, i.isLocked, i.quality, i.hyperlink, i.itemID, i.isBound
+    return i.iconFileID, i.stackCount, i.isLocked, i.quality, i.hyperlink, i.itemID, i.isBound, i.isRefundable
   end
   local icone, nombre, verrou, qualite, _, _, lien, _, _, id = GetContainerItemInfo(sac, case)
   return icone, nombre, verrou, qualite, lien, id, nil
@@ -201,8 +230,6 @@ end
 -- (creerVue), avec leurs propres cases et titres.
 -- ---------------------------------------------------------------------------
 
-local TAILLE, ECART, MARGE = 37, 4, 12
-
 -- nom : nom global de la fenêtre ; prefixe : début du nom de ses cases ;
 -- options.deplacable : la fenêtre se déplace à la souris et retient sa place.
 local function creerVue(nom, prefixe, nomRecherche, options)
@@ -233,12 +260,12 @@ local function creerVue(nom, prefixe, nomRecherche, options)
   local cadreWow = CreateFrame("Frame", nil, fenetre, "BasicFrameTemplateWithInset")
   cadreWow:SetAllPoints()
   cadreWow:SetFrameLevel(fenetre:GetFrameLevel())
-  if cadreWow.CloseButton then cadreWow.CloseButton:SetScript("OnClick", function() fenetre:Hide() end) end
+  if cadreWow.CloseButton then cadreWow.CloseButton:SetScript("OnClick", function() v.fermeeMain = true; fenetre:Hide() end) end
 
   -- Nouveau visuel : fond sombre, bordure dorée, titre or.
   local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
   fermer:SetPoint("TOPRIGHT", 2, 2)
-  fermer:SetScript("OnClick", function() fenetre:Hide() end)
+  fermer:SetScript("OnClick", function() v.fermeeMain = true; fenetre:Hide() end)
 
   local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   v.titre = titre
@@ -479,7 +506,7 @@ local function lire(sacs, sansConseils)
     local n = ns.nbCases and ns.nbCases(numero) or 0
     for case = 1, n do
       total = total + 1
-      local icone, nombre, verrou, qualite, lien, idObjet, estLie = infoCase(numero, case)
+      local icone, nombre, verrou, qualite, lien, idObjet, estLie, remboursable = infoCase(numero, case)
       if icone and lien then
         local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, _, _, artisanat = infoObjet(lien)
         qualite = qualite or q or 1
@@ -501,7 +528,7 @@ local function lire(sacs, sansConseils)
         end
         objets[#objets + 1] = {
           sac = numero, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite,
-          lien = lien, nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins,
+          lien = lien, nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins, remboursable = remboursable,
           raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
       else
@@ -537,7 +564,17 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
   if InCombatLockdown() then aRefaire = true end
   local db = ns.db or {}
   local objets, libres, total, premiereLibre = lire(sacs, not avecConseils)
-  v.colonnes = ns.colonnesPour(total)
+  -- Les objets à équiper sortent de leur section et passent en tête, une ligne chacun.
+  local aEquiper, autres = ns.separerConseils(objets, avecConseils)
+  local parSection = ns.repartir(autres)
+  -- La banque ne dépasse pas 80 % de la hauteur de l'écran : au besoin, plus de colonnes.
+  local plan, hauteurMax
+  if not avecConseils and UIParent and UIParent.GetHeight then
+    plan = { aEquiper = #aEquiper, sections = {}, libre = premiereLibre and true or false }
+    for _, s in ipairs(ns.SECTIONS) do plan.sections[#plan.sections + 1] = #parSection[s.id] end
+    hauteurMax = (UIParent:GetHeight() or 0) * 0.8
+  end
+  v.colonnes = ns.colonnesPour(total, plan, hauteurMax)
   local colonnes = v.colonnes
   local largeur = colonnes * (TAILLE + ECART) - ECART
   if not InCombatLockdown() then v.fenetre:SetWidth(MARGE * 2 + largeur) end
@@ -547,9 +584,6 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
   local filtre = ns.simplifier(v.recherche:GetText() or "")
   local function visible(o) return filtre == "" or ns.simplifier(o.nom):find(filtre, 1, true) end
 
-  -- Les objets à équiper sortent de leur section et passent en tête, une ligne chacun.
-  local aEquiper, autres = ns.separerConseils(objets, avecConseils)
-  local parSection = ns.repartir(autres)
   local y, it = 0, 0
 
   if #aEquiper > 0 then
@@ -769,6 +803,7 @@ local function banqueMaj()
   end
   local montrer = ns.banqueAMontrer({
     vue = vueActive(), option = ns.db and ns.db.banqueCategories, ouverte = banqueOuverte, nbCases = nbCases,
+    fermeeMain = banque.fermeeMain,
   })
   if montrer == banque.fenetre:IsShown() then
     if montrer then majBanque() end
@@ -838,6 +873,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement, arg1)
   end
   if evenement == "BANKFRAME_OPENED" or (evenement == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" and estBanquier(arg1)) then
     banqueOuverte = true
+    banque.fermeeMain = false -- une nouvelle ouverture de la banque la remontre
     return programmer()
   elseif evenement == "BANKFRAME_CLOSED" or (evenement == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" and estBanquier(arg1)) then
     banqueOuverte = false

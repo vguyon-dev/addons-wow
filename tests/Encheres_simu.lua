@@ -56,6 +56,9 @@ verifie("conseil : plancher marchand (raison)", "plancher", select(2, ns.prixCon
 verifie("conseil : plancher marchand (unique)", 800, (ns.prixConseille(850, 800, false)))
 verifie("conseil : marchand égal au calcul, pas de plancher", "sous", select(2, ns.prixConseille(501, 500, true)))
 verifie("conseil : plus bas minuscule, au moins 1 cuivre", 1, (ns.prixConseille(1, nil, true)))
+verifie("conseil : sous 1 cuivre sans marchand, raison « sous »", "sous", select(2, ns.prixConseille(1, nil, true)))
+verifie("conseil : sous 1 cuivre, marchand invalide, raison « sous »", "sous", select(2, ns.prixConseille(50, "x", false)))
+verifie("conseil : sous 1 cuivre avec marchand connu, plancher", "plancher", select(2, ns.prixConseille(1, 5, true)))
 verifie("conseil : unique bon marché, au moins 1 cuivre", 1, (ns.prixConseille(50, nil, false)))
 verifie("conseil : pas de prix connu (nil)", nil, (ns.prixConseille(nil, 100, true)))
 verifie("conseil : pas de prix connu (raison)", "inconnu", select(2, ns.prixConseille(nil, 100, true)))
@@ -69,6 +72,21 @@ verifie("texte : plancher marchand", "Prix conseillé : 800c (pas sous le prix d
 connu, avis = ns.texteConseil(nil, nil, nil, "inconnu", true)
 verifie("texte : pas de prix connu", "Pas de prix connu pour cet objet.", connu)
 verifie("texte : pas de conseil", "Pas de prix conseillé : relève les prix de l'hôtel des ventes.", avis)
+
+-- Prix variable d'un exemplaire à l'autre : pas de prix conseillé.
+verifie("variable : cage de mascotte", true, ns.prixVariable(82800, 15))
+verifie("variable : arme", true, ns.prixVariable(1234, 2))
+verifie("variable : armure", true, ns.prixVariable(1234, 4))
+verifie("variable : consommable, non", false, ns.prixVariable(1234, 0))
+verifie("variable : classe inconnue, non", false, ns.prixVariable(1234, nil))
+-- Le champ où mettre un prix d'achat immédiat.
+local prix, achat = { IsShown = function() return true end }, { IsShown = function() return true end }
+verifie("champ : l'achat immédiat affiché l'emporte", achat, ns.champDuPrix({ PriceInput = prix, SecondaryPriceInput = achat }))
+verifie("champ : achat immédiat caché, le prix", prix,
+  ns.champDuPrix({ PriceInput = prix, SecondaryPriceInput = { IsShown = function() return false end } }))
+verifie("champ : pas d'achat immédiat, le prix", prix, ns.champDuPrix({ PriceInput = prix }))
+verifie("champ : rien", "nil", tostring(ns.champDuPrix({})))
+verifie("champ : pas un cadre", "nil", tostring(ns.champDuPrix(nil)))
 
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)

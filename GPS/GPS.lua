@@ -208,6 +208,31 @@ function ns.canalGroupe(instance, raid, groupe)
   return nil
 end
 
+-- La catégorie « groupe d'instance » du jeu : sa constante, ou 2 quand le jeu ne la donne pas.
+function ns.categorieInstance(constante)
+  return type(constante) == "number" and constante or 2
+end
+
+-- Une balise reçue ne fait pas lâcher la balise déjà suivie ; une balise posée à la main, si.
+function ns.suivieApresAjout(suivie, recue)
+  if recue then return suivie end
+  return nil
+end
+
+-- L'envoi d'un message d'addon est-il parti ? Le jeu rend un code (0 = réussi), parfois vrai
+-- ou rien selon la version ; pcall a pu échouer.
+function ns.envoiParti(ok, resultat)
+  if not ok then return false end
+  return resultat == nil or resultat == true or resultat == 0
+end
+
+-- La phrase du chat après l'envoi au groupe.
+function ns.texteEnvoi(partis, prevus)
+  if partis <= 0 then return "aucune balise n'a pu être envoyée au groupe." end
+  if partis < prevus then return partis .. " balise(s) sur " .. prevus .. " envoyée(s) au groupe." end
+  return partis .. " balise(s) envoyée(s) au groupe."
+end
+
 if not CreateFrame or not C_Map then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
@@ -282,12 +307,12 @@ local function poserEpingle(b)
   if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true) end
 end
 
-local function ajouter(carte, x, y, titre)
+local function ajouter(carte, x, y, titre, recue)
   local b = { carte = carte, x = x, y = y, titre = titre }
   b.monde = versMonde(carte, x, y)
   table.insert(perso.balises, b)
   ns.reglages.dire("balise : " .. texteBalise(b))
-  suivie = nil
+  suivie = ns.suivieApresAjout(suivie, recue)
   if majListe then ns.reglages.majFenetre() end
   return b
 end
@@ -327,12 +352,12 @@ if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
 end
 
 local function canalGroupe()
-  return ns.canalGroupe(IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE),
+  return ns.canalGroupe(IsInGroup and IsInGroup(ns.categorieInstance(LE_PARTY_CATEGORY_INSTANCE)),
     IsInRaid and IsInRaid(), IsInGroup and IsInGroup())
 end
 
 -- Envoie la balise suivie, ou toutes les balises, aux membres du groupe.
--- Une balise par message, un toutes les 0,2 s (le jeu limite le débit).
+-- Une balise par message, un toutes les 0,5 s (le jeu limite le débit).
 local function envoyerAuGroupe(toutes)
   if not db.actif then ns.reglages.dire("GPS est coupé.") return end
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then ns.reglages.dire("envoi impossible sur cette version du jeu.") return end
@@ -353,25 +378,30 @@ local function envoyerAuGroupe(toutes)
     ns.reglages.dire(toutes and "aucune balise à envoyer." or "aucune balise suivie à envoyer (pose-en une avec /way).")
     return
   end
+  local partis = 0
   for i, m in ipairs(messages) do
-    C_Timer.After((i - 1) * 0.2, function() pcall(C_ChatInfo.SendAddonMessage, PREFIXE, m, canal) end)
+    C_Timer.After((i - 1) * 0.5, function()
+      if ns.envoiParti(pcall(C_ChatInfo.SendAddonMessage, PREFIXE, m, canal)) then partis = partis + 1 end
+      if i == #messages then ns.reglages.dire(ns.texteEnvoi(partis, #messages)) end
+    end)
   end
-  ns.reglages.dire(#messages .. " balise(s) envoyée(s) au groupe.")
 end
 
 -- Une balise reçue d'un membre du groupe : ajoutée avec « (de Nom) », sans doublon,
 -- jamais venant de soi-même.
 local function surMessage(prefixe, texte, canalMessage, auteur)
+  -- Les valeurs secrètes d'abord : on ne les compare à rien.
+  if estSecret(prefixe) or estSecret(texte) or estSecret(canalMessage) or estSecret(auteur) then return end
   if prefixe ~= PREFIXE or not db or not db.actif or not db.accepterGroupe then return end
   if canalMessage ~= "PARTY" and canalMessage ~= "RAID" and canalMessage ~= "INSTANCE_CHAT" then return end
-  if estSecret(texte) or estSecret(auteur) or type(auteur) ~= "string" then return end
+  if type(auteur) ~= "string" then return end
   local nom = Ambiguate and Ambiguate(auteur, "none") or auteur
   if nom == UnitName("player") then return end
   local b = ns.decoderBalise(texte)
   if not b then return end
   if not (C_Map.GetMapInfo and C_Map.GetMapInfo(b.carte)) then return end
   if #perso.balises >= MAX_BALISES or ns.dejaConnue(perso.balises, b) then return end
-  ajouter(b.carte, b.x, b.y, ns.titreRecu(b.titre, nom))
+  ajouter(b.carte, b.x, b.y, ns.titreRecu(b.titre, nom), true)
 end
 
 local ecouteGroupe = CreateFrame("Frame")

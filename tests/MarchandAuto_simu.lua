@@ -95,11 +95,27 @@ verifie("bilan : or des gris", 15, rv.gris["or"])
 verifie("bilan : 2 équipements", 2, rv.equip.n)
 verifie("bilan : or de l'équipement", 500, rv.equip["or"])
 local fo = function(c) return c .. " cuivre" end
-verifie("bilan : phrase", "2 équipement(s) lié(s) vendu(s) (tu ne peux pas les porter) : [Casque], [Bottes], 500 cuivre",
+verifie("bilan : phrase", "2 équipement(s) lié(s) vendu(s) (tu ne pourras jamais les porter) : [Casque], [Bottes], 500 cuivre",
   ns.texteBilanEquipement(rv.equip, fo))
 verifie("bilan : rien vendu, pas de phrase", nil, ns.texteBilanEquipement(ns.resumeVente({}).equip, fo))
 local beaucoup = {}
 for i = 1, 9 do beaucoup[i] = { genre = "equip", prix = 1, lien = "[" .. i .. "]" } end
 verifie("bilan : au plus 6 liens puis « et 3 autre(s) »", true,
   ns.texteBilanEquipement(ns.resumeVente(beaucoup).equip, fo):find("%[6%] et 3 autre%(s%), 9 cuivre") ~= nil)
+-- Un objet remboursable ne se vend jamais.
+verifie("équipement : remboursable (info du jeu), jamais", false, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, isBound = true, isRefundable = true }, {}))
+verifie("équipement : remboursable (entrée de Sacs rangés), jamais", false,
+  ns.equipementAVendre({ id = 50, remboursable = true }, { quality = 3, itemID = 50, isBound = true }, {}))
+verifie("équipement : pas remboursable, vendu", true, ns.equipementAVendre(bleu, { quality = 3, itemID = 50, isBound = true, isRefundable = false }, {}))
+-- La pièce n'est comptée vendue que si sa case est vide ou a changé.
+verifie("vendue : case vide", true, ns.pieceVendue({ id = 50, lien = "[Casque]" }, nil))
+verifie("vendue : un autre objet dans la case", true, ns.pieceVendue({ id = 50, lien = "[Casque]" }, { itemID = 77 }))
+verifie("vendue : toujours là, pas vendue", false, ns.pieceVendue({ id = 50, lien = "[Casque]" }, { itemID = 50 }))
+verifie("vendue : sans numéro, le lien tranche", false, ns.pieceVendue({ lien = "[Gris]" }, { hyperlink = "[Gris]" }))
+verifie("vendue : sans numéro, lien différent", true, ns.pieceVendue({ lien = "[Gris]" }, { hyperlink = "[Autre]" }))
+verifie("vendue : pas d'entrée", false, ns.pieceVendue(nil, nil))
+-- Bilan des gris : rien à dire quand seul de l'équipement est parti.
+verifie("bilan gris : aucun, pas de phrase", nil, ns.texteBilanGris(ns.resumeVente({ { genre = "equip", prix = 1, lien = "[A]" } }).gris, fo))
+verifie("bilan gris : deux gris", "2 objet(s) gris vendu(s) : 15 cuivre", ns.texteBilanGris(rv.gris, fo))
+verifie("bilan gris : pas de table", nil, ns.texteBilanGris(nil, fo))
 os.exit(ok and 0 or 1)

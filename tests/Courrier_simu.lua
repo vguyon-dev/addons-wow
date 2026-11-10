@@ -124,6 +124,11 @@ verifie("bilan : laissés avec la raison",
   ns.texteLaisses({ contreRemboursement = 2, mj = 1, sacsPleins = 3, bloques = 0 }))
 verifie("bilan : bloqués", "courriers laissés de côté : 1 impossible(s) à vider", ns.texteLaisses({ bloques = 1 }))
 verifie("bilan : table absente", nil, ns.texteLaisses(nil))
+verifie("arrêt : message donné, gardé", "terminé", ns.messageArret("terminé", "Courrier coupé", true, 0, 0))
+verifie("arrêt : boîte fermée par défaut", "boîte fermée", ns.messageArret(nil, nil, true, 100, 0))
+verifie("arrêt : addon coupé", "Courrier coupé", ns.messageArret(nil, "Courrier coupé", true, 0, 2))
+verifie("arrêt : rien pris, rien à dire", nil, ns.messageArret(nil, "Courrier coupé", true, 0, 0))
+verifie("arrêt : bilan coupé, rien à dire", nil, ns.messageArret(nil, nil, false, 100, 2))
 
 -- La recherche de la fenêtre de réglages commune (Reglages.lua)
 local entrees = {

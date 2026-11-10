@@ -258,13 +258,25 @@ function ns.dateLisible(d)
   return d:sub(9, 10) .. "/" .. d:sub(6, 7) .. "/" .. d:sub(1, 4)
 end
 
+-- La plus ancienne date vue parmi une liste de dates : les addons sans date valide sont ignorés,
+-- nil si aucune n'est connue (alors tout est marqué « nouveau »).
+function ns.plusAncienneDate(dates)
+  local ancienne
+  for _, v in ipairs(type(dates) == "table" and dates or {}) do
+    if dateNouveaute(v) and (not ancienne or v < ancienne) then ancienne = v end
+  end
+  return ancienne
+end
+
 -- Le texte de la page : un titre doré par nouveauté, ses lignes en dessous.
 -- Avec « vue », ce qui est plus récent que cette date est marqué « nouveau ».
+-- Sans date vue (ou date abîmée), tout est marqué « nouveau ».
 function ns.texteNouveautes(liste, vue)
   local morceaux = {}
+  local vueOk = dateNouveaute(vue)
   for _, n in ipairs(type(liste) == "table" and liste or {}) do
     if type(n) == "table" and dateNouveaute(n.date) then
-      local marque = (dateNouveaute(vue) and n.date > vue) and "  |cff3ddc3d[nouveau]|r" or ""
+      local marque = (not vueOk or n.date > vue) and "  |cff3ddc3d[nouveau]|r" or ""
       local bloc = { "|cffffd200" .. tostring(n.titre or "") .. "|r  |cff888888" .. ns.dateLisible(n.date) .. "|r" .. marque }
       for _, ligne in ipairs(type(n.lignes) == "table" and n.lignes or {}) do bloc[#bloc + 1] = "- " .. tostring(ligne) end
       morceaux[#morceaux + 1] = table.concat(bloc, "\n")
@@ -340,6 +352,7 @@ end
 -- vide) : le compte est rempli avec les valeurs actuelles, rien ne change pour le joueur.
 -- Renvoie « perso » ou « compte ».
 function ns.chargerProfil(db, cles, moi, defauts)
+  if moi == nil then return "compte" end -- nom inconnu : la table reste telle quelle, rien n'est écrit
   preparerProfils(db)
   if next(db.compte) == nil then db.compte = ns.copierReglages(db, cles) end
   local mode = ns.modePerso(db, moi) and "perso" or "compte"
@@ -354,6 +367,7 @@ end
 -- À chaque changement : les valeurs de db sont aussi écrites dans le profil du personnage
 -- (ses réglages propres s'il en a, sinon ceux du compte). Renvoie « perso » ou « compte ».
 function ns.ecrireProfil(db, cles, moi)
+  if moi == nil then return "compte" end -- nom inconnu : rien n'est écrit dans le compte
   preparerProfils(db)
   local perso = ns.modePerso(db, moi)
   local cible = perso and db.parPerso[moi] or db.compte
@@ -639,8 +653,17 @@ local function creerChampDefilant(parent, largeur, hauteur)
   champ:SetMaxLetters(20000)
   champ:SetFontObject(ChatFontNormal or GameFontHighlight)
   champ:SetWidth(largeur - 38)
-  champ:SetHeight(hauteur)
   champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  -- Le champ grandit avec son texte : le curseur reste visible dans le cadre défilant.
+  champ:SetScript("OnCursorChanged", function(self, _, y, _, h)
+    if not (defile.GetVerticalScroll and defile.SetVerticalScroll and defile.GetHeight) then return end
+    local haut = -nombre(y, 0)
+    local bas = haut + nombre(h, 0)
+    local debut = nombre(defile:GetVerticalScroll(), 0)
+    local visible = nombre(defile:GetHeight(), hauteur)
+    if haut < debut then defile:SetVerticalScroll(haut)
+    elseif bas > debut + visible then defile:SetVerticalScroll(bas - visible) end
+  end)
   defile:EnableMouseWheel(true)
   defile:SetScript("OnMouseWheel", function(self, sens)
     local maxi = nombre(self:GetVerticalScrollRange(), 0)
@@ -808,7 +831,7 @@ local function leHub()
   if hub and hub.pret then return hub end
   hub = hub or {}
   hub.entrees = hub.entrees or {}
-  hub.speciales = hub.speciales or {} -- les pages qui ne sont pas des addons (Quoi de neuf…)
+  hub.speciales = {} -- les pages qui ne sont pas des addons (Quoi de neuf…), refaites avec le hub
   _G.ValentinAddons = hub
 
   -- Si une copie précédente a échoué en route, on repart de sa fenêtre.
@@ -1043,16 +1066,12 @@ local function leHub()
   if texteNeuf.SetJustifyV then texteNeuf:SetJustifyV("TOP") end
   defileNeuf:SetScrollChild(contenuNeuf)
 
-  -- La plus ancienne date vue parmi les addons chargés (nil si l'un d'eux n'a rien vu) :
-  -- ce qui est plus récent est marqué « nouveau » dans la page.
+  -- La plus ancienne date vue parmi les addons chargés (ceux sans date sont ignorés, nil si
+  -- aucune n'est connue) : ce qui est plus récent est marqué « nouveau » dans la page.
   local function plusAncienneVue()
-    local ancienne
-    for _, x in ipairs(hub.entrees) do
-      local v = x.db and x.db.nouveautesVues
-      if type(v) ~= "string" then return nil end
-      if not ancienne or v < ancienne then ancienne = v end
-    end
-    return ancienne
+    local dates = {}
+    for _, x in ipairs(hub.entrees) do dates[#dates + 1] = x.db and x.db.nouveautesVues end
+    return ns.plusAncienneDate(dates)
   end
 
   -- Il y a du nouveau pour au moins un addon chargé.

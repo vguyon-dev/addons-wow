@@ -81,12 +81,49 @@ verifie("compétences identiques à QuetesAuto", true, pareil)
 -- Vue par catégories : la section de chaque objet.
 verifie("catégorie : arme portable", "equip", ns.categorie(2, 2, false, true))
 verifie("arme pas apprise, pas liée : Tu ne peux pas le porter", "pasPourToi", ns.categorie(2, 1, false, false))
-verifie("arme pas apprise et liée : À vendre", "vendre", ns.categorie(2, 1, false, false, 0, 1, { estLie = true, raison = "autre" }))
+verifie("arme pas apprise et liée : reste dans Tu ne peux pas le porter (ça s'apprend)", "pasPourToi",
+  ns.categorie(2, 1, false, false, 0, 1, { estLie = true, raison = "autre" }))
+verifie("impossible pour toujours et liée : À vendre", "vendre", ns.categorie(4, 2, false, false, 0, 1, { estLie = true, raison = "definitif" }))
+verifie("impossible pour toujours mais pas liée : Tu ne peux pas le porter", "pasPourToi",
+  ns.categorie(4, 2, false, false, 0, 1, { estLie = false, raison = "definitif" }))
 verifie("liée mais seulement trop haut en niveau : Tu ne peux pas le porter", "pasPourToi",
   ns.categorie(4, 2, false, false, 0, 1, { estLie = true, raison = "niveau" }))
 verifie("raison : niveau seul", "niveau", (ns.raisonPasPortable({ "Niveau 20 requis" })))
 verifie("raison : arme pas apprise", "autre", (ns.raisonPasPortable({ "Arc", "Niveau 20 requis" })))
+-- Impossible pour toujours : restriction de classe ou de race, type d'armure que la classe ne portera jamais.
+verifie("raison : guerrier 30, plaque liée pas apprise", "autre", (ns.raisonPasPortable({ "Plaques" }, 4, 4, "WARRIOR")))
+verifie("raison : guerrier 30, plaque, catégorie pasPourToi", "pasPourToi",
+  ns.categorie(4, 2, false, false, 0, 1, { estLie = true, raison = (ns.raisonPasPortable({ "Plaques" }, 4, 4, "WARRIOR")) }))
+verifie("raison : mage, plaque", "definitif", (ns.raisonPasPortable({ "Plaques" }, 4, 4, "MAGE")))
+verifie("raison : mage, plaque, catégorie vendre", "vendre",
+  ns.categorie(4, 2, false, false, 0, 1, { estLie = true, raison = (ns.raisonPasPortable({ "Plaques" }, 4, 4, "MAGE")) }))
+verifie("raison : mage, plaque sans ligne rouge", "definitif", (ns.raisonPasPortable(nil, 4, 4, "MAGE")))
+verifie("raison : chasseur, ligne rouge « Classes : Paladin »", "definitif", (ns.raisonPasPortable({ "Classes : Paladin" }, 2, 7, "HUNTER")))
+verifie("raison : ligne rouge « Classes : Paladin », catégorie vendre", "vendre",
+  ns.categorie(2, 2, false, false, 7, 1, { estLie = true, raison = (ns.raisonPasPortable({ "Classes : Paladin" }, 2, 7, "HUNTER")) }))
+verifie("raison : ligne rouge « Races: Orc »", "definitif", (ns.raisonPasPortable({ "Races: Orc" }, 2, 7, "HUNTER")))
+verifie("raison : arc pas appris lié", "autre", (ns.raisonPasPortable({ "Arc" }, 2, 2, "HUNTER")))
+verifie("raison : arc pas appris lié, catégorie pasPourToi", "pasPourToi",
+  ns.categorie(2, 2, false, false, 2, 1, { estLie = true, raison = (ns.raisonPasPortable({ "Arc" }, 2, 2, "HUNTER")) }))
+verifie("raison : niveau trop haut, catégorie pasPourToi", "pasPourToi",
+  ns.categorie(4, 2, false, false, 4, 1, { estLie = true, raison = (ns.raisonPasPortable({ "Niveau 60 requis" }, 4, 4, "WARRIOR")) }))
+verifie("raison : chasseur, mailles pas encore apprises", "autre", (ns.raisonPasPortable({ "Mailles" }, 4, 3, "HUNTER")))
+verifie("raison : voleur, mailles", "definitif", (ns.raisonPasPortable(nil, 4, 3, "ROGUE")))
+verifie("raison : classe inconnue, pas de jugement", "autre", (ns.raisonPasPortable(nil, 4, 4, nil)))
+verifie("raison : cape de tissu, jamais définitive", "autre", (ns.raisonPasPortable(nil, 4, 1, "WARRIOR")))
+-- Le motif vient de la constante du jeu quand elle existe.
+ITEM_CLASSES_ALLOWED = "Classes (a-b) : %s"
+verifie("restriction : motif de la constante", true, ns.estRestrictionDefinitive("Classes (a-b) : Paladin"))
+verifie("restriction : la constante remplace le repli", false, ns.estRestrictionDefinitive("Classes : Paladin"))
+ITEM_CLASSES_ALLOWED = nil
+verifie("restriction : repli sans constante", true, ns.estRestrictionDefinitive("Classes: Paladin, Chasseur"))
+verifie("restriction : autre ligne", false, ns.estRestrictionDefinitive("Arc"))
+verifie("restriction : pas un texte", false, ns.estRestrictionDefinitive(nil))
 verifie("texte : gris", "objet gris", ns.texteRangement("vendre", 0, false))
+verifie("texte : à vendre, jamais portable", "lié, et tu ne pourras jamais le porter (Classes : Paladin)",
+  ns.texteRangement("vendre", 3, true, "Classes : Paladin"))
+verifie("texte : lié, il pourra se porter plus tard", true,
+  (ns.texteRangement("pasPourToi", 2, true, "Arc") or ""):find("plus tard", 1, true) ~= nil)
 verifie("texte : pas lié, se donne", true,
   (ns.texteRangement("pasPourToi", 2, false, "Arc") or ""):find("tu peux le donner", 1, true) ~= nil)
 local milice = { stats = { dps = 2.0 }, type = "INVTYPE_WEAPON", nom = "Dague de la milice" }
@@ -195,7 +232,12 @@ do
   local t = ns.texteNouveautes(liste, nil)
   verifie("neuf : texte, titre et date", true, t:find("Récent|r  |cff888888" .. "10/11/2026", 1, true) ~= nil)
   verifie("neuf : texte, une ligne par puce", true, t:find("\n- un\n- deux", 1, true) ~= nil)
-  verifie("neuf : texte, rien de marqué sans date vue", nil, t:find("[nouveau]", 1, true))
+  verifie("neuf : texte, sans date vue tout est marqué nouveau", 2, select(2, t:gsub("%[nouveau%]", "")))
+verifie("neuf : texte, date vue abîmée, tout est marqué", 2, select(2, ns.texteNouveautes(liste, "hier"):gsub("%[nouveau%]", "")))
+verifie("neuf : plus ancienne date, celle qui existe", "2026-11-05", ns.plusAncienneDate({ "2026-11-09", false, "2026-11-05", "bof" }))
+verifie("neuf : plus ancienne date, un addon sans date est ignoré", "2026-11-09", ns.plusAncienneDate({ "2026-11-09", nil }))
+verifie("neuf : plus ancienne date, aucune connue", "nil", tostring(ns.plusAncienneDate({ nil, "bof" })))
+verifie("neuf : plus ancienne date, pas une table", "nil", tostring(ns.plusAncienneDate(nil)))
   local t2 = ns.texteNouveautes(liste, "2026-11-09")
   verifie("neuf : texte, marqué seulement ce qui est récent", 1, select(2, t2:gsub("%[nouveau%]", "")))
   verifie("neuf : texte, liste vide", "Rien de nouveau pour l'instant.", ns.texteNouveautes({}, nil))
@@ -355,7 +397,10 @@ do
   local dbX = { actif = true, taille = 90, son = true }
   verifie("profils : sans nom, mode compte", "compte", ns.chargerProfil(dbX, cles, nil, defauts))
   verifie("profils : sans nom, activer ne fait rien", "compte", ns.changerMode(dbX, cles, nil, true, defauts))
-  verifie("profils : sans nom, aucune entrée créée", 0, combien(dbX.parPerso))
+  verifie("profils : sans nom, rien n'est écrit pour la session", "nil/nil", tostring(dbX.compte) .. "/" .. tostring(dbX.parPerso))
+  verifie("profils : sans nom, la table de travail reste telle quelle", "true/90/true", fmt(dbX))
+  verifie("profils : sans nom, écrire ne fait rien", "compte", ns.ecrireProfil(dbX, cles, nil))
+  verifie("profils : sans nom, rien n'est écrit dans le compte", "nil", tostring(dbX.compte))
   verifie("profils : sans nom, pas de mode perso", false, ns.modePerso(dbX, nil))
 
   -- Sauvegarde abîmée : les tables sont refaites, une entrée qui n'est pas une table est ignorée.
@@ -561,10 +606,12 @@ do
 
   -- Un nom encore inconnu du jeu : tout reste sur le compte, sans erreur.
   UnitName = function() return nil end
+  local compteAvant = db3.compte.taille
   local r4, db4 = connexion(nil, db3)
   UnitName = function() return nil end
   r4.changer("taille", 110)
-  verifie("de bout en bout : sans nom, le compte garde tout", 110, db4.compte.taille)
+  verifie("de bout en bout : sans nom, la valeur de la session est prise", 110, db4.taille)
+  verifie("de bout en bout : sans nom, rien n'est écrit dans le compte", compteAvant, db4.compte.taille)
   oterEntree()
 
   print, UnitName, GetRealmName = vraiPrint, vraiUnitName, vraiRoyaume
@@ -598,6 +645,22 @@ verifie("banque cachée : faits absents", false, ns.banqueAMontrer(nil))
 verifie("colonnes : petit sac", 10, ns.colonnesPour(60))
 verifie("colonnes : 80 cases", 12, ns.colonnesPour(80))
 verifie("colonnes : banque de 150 cases", 14, ns.colonnesPour(150))
+-- Hauteur plafonnée : plus de colonnes, jusqu'à 24.
+local planBanque = { aEquiper = 0, sections = { 100, 50 }, libre = true }
+verifie("hauteur : calcul pour 14 colonnes", 58 + (16 + 8 * 41 + 6) + (16 + 4 * 41 + 6) + (16 + 41) + 30, ns.hauteurVue(planBanque, 14))
+verifie("hauteur : « À équiper » compté", 58 + (16 + 2 * 45 + 6) + 30, ns.hauteurVue({ aEquiper = 2 }, 10))
+verifie("hauteur : section vide ignorée", 58 + 30, ns.hauteurVue({ sections = { 0, 0 } }, 10))
+verifie("colonnes : écran assez haut, inchangé", 14, ns.colonnesPour(150, planBanque, 2000))
+verifie("colonnes : sans hauteur, inchangé", 14, ns.colonnesPour(150, planBanque, nil))
+verifie("colonnes : sans plan, inchangé", 14, ns.colonnesPour(150, nil, 500))
+local hMax = ns.hauteurVue(planBanque, 16) + 1
+local cAjuste = ns.colonnesPour(150, planBanque, hMax)
+verifie("colonnes : trop haut, on élargit", true, cAjuste > 14 and cAjuste <= 16)
+verifie("colonnes : au plus juste (une de moins ne tient pas)", true, ns.hauteurVue(planBanque, cAjuste - 1) > hMax)
+verifie("colonnes : jamais plus de 24", 24, ns.colonnesPour(150, planBanque, 100))
+verifie("colonnes : le plafond tient avec ces colonnes", true, ns.hauteurVue(planBanque, ns.colonnesPour(150, planBanque, hMax)) <= hMax)
+verifie("banque cachée : fermée à la main", false, ns.banqueAMontrer({ vue = true, option = true, ouverte = true, nbCases = 28, fermeeMain = true }))
+verifie("banque montrée : rouverte (drapeau remis à faux)", true, ns.banqueAMontrer({ vue = true, option = true, ouverte = true, nbCases = 28, fermeeMain = false }))
 local lusBanque = {
   { sac = -1, case = 2, categorie = "equip", nom = "Heaume", qualite = 3, conseil = { raison = "mieux" } },
   { sac = 5, case = 1, categorie = "equip", nom = "Bottes", qualite = 2 },

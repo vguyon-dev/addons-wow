@@ -232,6 +232,15 @@ function ns.texteLaisses(l)
   return "courriers laissés de côté : " .. table.concat(t, ", ")
 end
 
+-- Le message d'une récupération qui s'arrête sans message à elle : le motif (« boîte fermée » par
+-- défaut, « Courrier coupé » quand l'addon est coupé), seulement avec le bilan et si quelque
+-- chose a été pris ; sinon nil (rien à dire).
+function ns.messageArret(message, motif, bilanActif, gagne, objets)
+  if message then return message end
+  if not bilanActif or ((gagne or 0) <= 0 and (objets or 0) <= 0) then return nil end
+  return motif or "boîte fermée"
+end
+
 if not CreateFrame or not GetInboxNumItems then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
@@ -278,14 +287,14 @@ local coches = {}          -- [cle] = vrai : courriers cochés (pour cette ouver
 local enCours              -- { mode, total, argentDepart, objets, minuteur, dernier, essais, bloques }
 local barre, majBarre      -- l'interface, créée à la première ouverture de la boîte
 
-local function arreter(message, sacsPleins)
+local function arreter(message, sacsPleins, motif)
   if not enCours then return end
   if enCours.minuteur then enCours.minuteur:Cancel() end
   local en = enCours
   local gagne = GetMoney() - en.argentDepart
   enCours = nil
-  -- Boîte fermée en route : avec le bilan, on dit quand même ce qui a été pris.
-  if not message and db.bilan and (gagne > 0 or en.objets > 0) then message = "boîte fermée" end
+  -- Boîte fermée ou addon coupé en route : avec le bilan, on dit quand même ce qui a été pris.
+  message = ns.messageArret(message, motif, db.bilan, gagne, en.objets)
   if message then
     ns.reglages.dire(message .. " (" .. ns.texteBilan(gagne, en.objets) .. ").")
     if db.bilan then
@@ -586,7 +595,7 @@ ns.reglages = ns.creerReglages({
   auChargement = function(d) db = d end,
   surChangement = function(d)
     if barre then barre:SetShown(d.actif) end
-    if not d.actif then arreter() end
+    if not d.actif then arreter(nil, nil, "Courrier coupé") end
     majDestinataires()
     majCases()
   end,

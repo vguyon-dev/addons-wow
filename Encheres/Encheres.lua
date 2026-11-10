@@ -93,8 +93,25 @@ function ns.prixConseille(plusBas, marchand, lot)
   end
   local plancher = type(marchand) == "number" and marchand > 0 and marchand or nil
   if plancher and p < plancher then return plancher, "plancher" end
-  if p < 1 then return 1, "plancher" end
+  if p < 1 then return 1, "sous" end -- pas de marchand connu : ce n'est pas un plancher du marchand
   return p, "sous"
+end
+
+-- Le prix d'un exemplaire dépend de l'exemplaire (niveau, statistiques, cage de mascotte) :
+-- le plus bas prix relevé ne veut rien dire. classeObjet : classe d'objet du jeu (2 arme, 4 armure).
+local CAGE_MASCOTTE = 82800
+ns.TEXTE_PRIX_VARIABLE = "Prix variable d'un exemplaire à l'autre : regarde les ventes en cours."
+function ns.prixVariable(id, classeObjet)
+  return id == CAGE_MASCOTTE or classeObjet == 2 or classeObjet == 4
+end
+
+-- Le champ de prix à remplir avec un prix d'achat immédiat : le champ d'achat immédiat s'il
+-- existe et est affiché (objet unique), sinon le champ de prix (produit en lot).
+function ns.champDuPrix(cadre)
+  if type(cadre) ~= "table" then return nil end
+  local sec = cadre.SecondaryPriceInput
+  if sec and type(sec.IsShown) == "function" and sec:IsShown() then return sec end
+  return cadre.PriceInput
 end
 
 -- Les deux lignes du conseil, prêtes à afficher.
@@ -277,7 +294,7 @@ local function creerPanneau()
   bPrix = ns.creerBouton(panneau, "Mettre ce prix", "Remplit le champ de prix du jeu. C'est toi qui cliques ensuite sur le bouton de mise en vente.", function()
     local c = courant
     if not (c and bPrix.prix and c.cadre:IsVisible()) then return end
-    local champ = c.cadre.PriceInput
+    local champ = ns.champDuPrix(c.cadre)
     if champ and champ.SetAmount then pcall(champ.SetAmount, champ, bPrix.prix) end
   end, 130)
   bPrix:SetPoint("TOPLEFT", 14, -432)
@@ -295,11 +312,18 @@ local function creerPanneau()
     local marchand
     local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
     if f then marchand = select(11, f(courant.id)) end
+    local classe = f and select(12, f(courant.id))
+    if ns.prixVariable(courant.id, classe) then
+      conseilConnu:SetText(ns.TEXTE_PRIX_VARIABLE)
+      conseilAvis:SetText("")
+      return
+    end
     local conseil, raison = ns.prixConseille(p, marchand, courant.lot)
     local connu, avis = ns.texteConseil(p, age, conseil, raison, courant.lot, texteOr)
     conseilConnu:SetText(connu)
     conseilAvis:SetText(avis)
-    if conseil and courant.cadre.PriceInput and courant.cadre.PriceInput.SetAmount then
+    local champ = ns.champDuPrix(courant.cadre)
+    if conseil and champ and champ.SetAmount then
       bPrix.prix = conseil
       bPrix:Show()
     end
