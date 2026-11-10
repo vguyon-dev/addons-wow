@@ -744,7 +744,7 @@ local function creerLigneQuete()
   b.titre = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   b.titre:SetPoint("TOPLEFT", b, "TOPLEFT", 22, -4)
   b.titre:SetJustifyH("LEFT")
-  b.titre:SetWordWrap(false)
+  b.titre:SetWordWrap(true)   -- un titre long passe sur deux lignes, comme dans le suivi du jeu
   b.dist = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   b.dist:SetPoint("TOPRIGHT", b, "TOPRIGHT", -4, -5)
   b.dist:SetJustifyH("RIGHT")

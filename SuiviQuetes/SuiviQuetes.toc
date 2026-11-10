@@ -3,7 +3,7 @@
 ## Notes: Un panneau à nous qui remplace le suivi des objectifs du jeu : les quêtes suivies rangées en sections repliables (À rendre tout en haut, Principal, Général, Donjons et groupe, Classe, Métiers, JcJ, Journalières), avec la distance et les objectifs.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.1.1
 ## IconTexture: Interface\Icons\INV_Scroll_03
 ## SavedVariables: SuiviQuetesDB
 ## SavedVariablesPerCharacter: SuiviQuetesPerso
