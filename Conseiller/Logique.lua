@@ -113,6 +113,36 @@ function ns.cleSpe(classe, nomJeu, index, nbSpes)
   return nil
 end
 
+-- Forever (comme Classic) : UN seul arbre de talents partagé en groupes affichés côte à côte (Sacré,
+-- Protection, Vindicte) ; GetSpecialization n'y dit rien d'utile. La spécialisation est le groupe où le plus
+-- de points sont dépensés.
+-- groupes : { { groupID, displayName, orderIndex, depense } } (tel que le jeu les donne, dans n'importe quel ordre).
+-- Rend { cle, nom, points = { { groupID, nom, cle, depense, rang } } (dans l'ordre d'affichage), egalite }
+-- ou nil quand il y a moins de 2 groupes (l'arbre n'est pas partagé : on utilise l'ancienne méthode).
+-- cle est nil quand aucun point n'est dépensé ou que deux groupes sont à égalité en tête : pas de spécialisation.
+function ns.speParGroupes(classe, groupes)
+  if type(groupes) ~= "table" or #groupes < 2 then return nil end
+  local liste = {}
+  for i, g in ipairs(groupes) do
+    liste[#liste + 1] = { groupID = g.groupID, nom = g.displayName,
+      ordre = type(g.orderIndex) == "number" and g.orderIndex or i,
+      depense = type(g.depense) == "number" and g.depense or 0, pos = i }
+  end
+  table.sort(liste, function(a, b) if a.ordre ~= b.ordre then return a.ordre < b.ordre end return a.pos < b.pos end)
+  local points, meilleur, egalite = {}, nil, false
+  for rang, g in ipairs(liste) do
+    g.cle = ns.cleSpe(classe, g.nom, rang, #liste)
+    points[#points + 1] = { groupID = g.groupID, nom = g.nom, cle = g.cle, depense = g.depense, rang = rang }
+    if g.depense > 0 then
+      if not meilleur or g.depense > meilleur.depense then meilleur, egalite = g, false
+      elseif g.depense == meilleur.depense then egalite = true end
+    end
+  end
+  local res = { points = points, egalite = egalite }
+  if meilleur and not egalite then res.cle, res.nom = meilleur.cle, meilleur.nom end
+  return res
+end
+
 -- La spécialisation conseillée : d'abord le rôle qui manque au groupe (si la classe peut le jouer),
 -- sinon le choix par défaut de la situation.
 -- Renvoie { cle, nom, role, raison, parManque = rôle manquant comblé ou nil } ou nil.
@@ -711,10 +741,18 @@ function ns.vueTalents(e)
   L[#L + 1] = titre("Spécialisation conseillée : " .. e.conseil.nom)
   if e.speCle and e.speCle == e.conseil.cle then
     L[#L + 1] = VERT .. "C'est celle que tu as déjà." .. FIN
+  elseif e.speCle and c.specs[e.speCle] then
+    -- Ta spécialisation (le groupe où tu as le plus de points) n'est pas celle de la situation : on le dit simplement.
+    local ou = ({ solo = "seul", groupe = "en groupe", donjon = "en donjon", raid = "en raid" })[e.situation] or e.situation
+    if e.conseil.parManque then ou = "en groupe sans " .. (D.NOMS_ROLES[e.conseil.parManque] or e.conseil.parManque) end
+    L[#L + 1] = GRIS .. "Tu es en " .. c.specs[e.speCle].nom .. " ; " .. ou .. ", " .. e.conseil.nom .. " est conseillée." .. FIN
   elseif e.speNom then
     L[#L + 1] = GRIS .. "Tu es en " .. e.speNom .. "." .. FIN
   end
   L[#L + 1] = "Pourquoi : " .. e.conseil.raison
+  if e.speCle and e.speCle ~= e.conseil.cle and c.specs[e.speCle] then
+    L[#L + 1] = GRIS .. "Le build ci-dessous est celui de ta spécialisation (" .. c.specs[e.speCle].nom .. ")." .. FIN
+  end
   if e.situation ~= "solo" then
     local g = texteGroupe(e)
     if g then L[#L + 1] = ""; L[#L + 1] = g end

@@ -5,7 +5,8 @@
 --   /cs export               écrit l'arbre de talents et le grimoire dans la sauvegarde
 --                            (ConseillerDB.export) : fais ensuite /reload pour que le fichier soit écrit
 --   /cs mode auto|a|c        le mode de la rotation (auto, contour sur la barre, liste seule)
---   /cs etat                 ce que Conseiller a compris (classe, spécialisation, sorts, mode, et les
+--   /cs etat                 ce que Conseiller a compris (classe, spécialisation et points par groupe de talents,
+--                            build utilisé, prochain talent, état du contour vert, sorts, mode, et les
 --                            talents du build qu'il n'a pas reconnus dans l'arbre)
 --
 -- Ce qu'il lit : classe, spécialisation, race, niveau, et ta situation (seul, en groupe, donjon,
@@ -46,8 +47,62 @@ local function classeJoueur()
   return classe
 end
 
+-- Les groupes de l'arbre de talents (Forever : Sacré, Protection, Vindicte côte à côte, dans UN seul arbre)
+-- avec les points dépensés dans chacun : { { groupID, displayName, orderIndex, depense } }, ou nil quand le jeu
+-- ne donne pas de groupes (Retail : une spécialisation = un arbre).
+local function lireGroupes()
+  if not (C_Traits and C_Traits.GetGroupDisplayInfoByTreeID and C_Traits.GetConfigInfo and C_ClassTalents
+    and C_ClassTalents.GetActiveConfigID) then return nil end
+  local okId, configID = pcall(C_ClassTalents.GetActiveConfigID)
+  if not okId or type(configID) ~= "number" then return nil end
+  local okC, info = pcall(C_Traits.GetConfigInfo, configID)
+  if not okC or type(info) ~= "table" or ns.estSecret(info) then return nil end
+  local treeID = info.treeIDs and info.treeIDs[1]
+  if not treeID then return nil end
+  local okG, infos = pcall(C_Traits.GetGroupDisplayInfoByTreeID, treeID)
+  if not okG or type(infos) ~= "table" or ns.estSecret(infos) or #infos < 2 then return nil end
+  local ids = {}
+  for _, g in ipairs(infos) do ids[#ids + 1] = g.groupID end
+  local depenses = {}
+  if C_Traits.GetGroupCurrencyInfo then
+    local okD, lignes = pcall(C_Traits.GetGroupCurrencyInfo, configID, ids)
+    if okD and type(lignes) == "table" and not ns.estSecret(lignes) then
+      for _, l in ipairs(lignes) do
+        local total = 0
+        for _, c in ipairs(l.currencyInfos or {}) do
+          if type(c.spent) == "number" and not ns.estSecret(c.spent) then total = total + c.spent end
+        end
+        depenses[l.traitNodeGroupID] = total
+      end
+    end
+  end
+  local res = {}
+  for _, g in ipairs(infos) do
+    res[#res + 1] = { groupID = g.groupID, displayName = type(g.displayName) == "string" and g.displayName or nil,
+      orderIndex = g.orderIndex, depense = depenses[g.groupID] or 0 }
+  end
+  return res, treeID, configID
+end
+
+-- Les points par groupe et la spécialisation qui en découle (cache court : le jeu est interrogé au plus
+-- toutes les 2 secondes, ou quand un événement de talents marque ns.speSale).
+ns.speSale = true
+local cacheSpe = { t = -100 }
+function ns.infoGroupes(classe)
+  local maintenant = GetTime and GetTime() or 0
+  if not ns.speSale and cacheSpe.classe == classe and maintenant - cacheSpe.t < 2 then return cacheSpe.res end
+  local groupes = lireGroupes()
+  local res = groupes and ns.speParGroupes(classe, groupes) or nil
+  cacheSpe = { t = maintenant, classe = classe, res = res }
+  ns.speSale = false
+  return res
+end
+
 -- La clé de la spécialisation actuelle (nil si le jeu n'en donne pas).
 local function speActuelle(classe)
+  -- Un arbre partagé en groupes (Forever) : la spécialisation est le groupe où l'on a le plus de points.
+  local gr = ns.infoGroupes(classe)
+  if gr then return gr.cle, gr.nom end
   local idx
   local spec = C_SpecializationInfo
   local ok, i
@@ -354,6 +409,7 @@ function ns.exporter()
     return
   end
   local classe = classeJoueur()
+  ns.speSale = true
   local spe, nomSpe = speActuelle(classe)
   local sortie = {
     version = 1, date = date and date("%Y-%m-%d %H:%M") or "?", classe = classe, niveau = UnitLevel("player"),
@@ -368,7 +424,7 @@ function ns.exporter()
       local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
       if ok and type(n) == "table" and not ns.estSecret(n) then
         local noeud = { nodeID = nodeID, arbre = treeID, posX = n.posX, posY = n.posY, maxRanks = n.maxRanks,
-          rang = n.currentRank, visible = n.isVisible, entrees = {} }
+          rang = n.currentRank, visible = n.isVisible, groupIDs = n.groupIDs, entrees = {} }
         for _, entryID in ipairs(n.entryIDs or {}) do
           local sort = { entryID = entryID }
           local okE, e = pcall(C_Traits.GetEntryInfo, configID, entryID)
@@ -387,6 +443,15 @@ function ns.exporter()
   end
   local okG, grimoire = pcall(ns.apiJeu.grimoire)
   if okG then sortie.grimoire = grimoire end
+  -- Les groupes de l'arbre (Sacré, Protection, Vindicte) et les points dépensés dans chacun.
+  local groupes = lireGroupes()
+  if groupes then
+    sortie.groupes = {}
+    for _, g in ipairs(groupes) do
+      sortie.groupes[#sortie.groupes + 1] = { groupID = g.groupID, displayName = g.displayName,
+        orderIndex = g.orderIndex, depense = g.depense }
+    end
+  end
   db.export = sortie
   dire(string.format("arbre exporté : %d nœuds, %d sorts dans le grimoire. Fais /reload pour que le fichier soit écrit (ConseillerDB dans WTF\\Account\\…\\SavedVariables).",
     #sortie.noeuds, #sortie.grimoire))
@@ -437,7 +502,10 @@ function ns.construireEtat()
   e.groupe = (e.situation ~= "solo" and situation ~= "solo") and groupe or nil
   e.speCle, e.speNom = speActuelle(classe)
   e.conseil = ns.speConseillee(classe, e.situation, e.groupe)
-  e.talents = ns.infoTalents(classe, e.speCle or (e.conseil and e.conseil.cle), e.situation)
+  e.groupesTalents = ns.infoGroupes(classe) -- points par groupe de l'arbre (Forever), nil sur Retail
+  e.speBuild = e.speCle or (e.conseil and e.conseil.cle)
+  e.talents = ns.infoTalents(classe, e.speBuild, e.situation)
+  e.talents.speBuild, e.talents.situationBuild = e.speBuild, e.situation
   -- Rotation : la spécialisation actuelle, sinon la conseillée.
   e.speRotation = e.speCle or (e.conseil and e.conseil.cle)
   local liste = D.ROTATIONS[classe] and e.speRotation and D.ROTATIONS[classe][e.speRotation]
@@ -698,22 +766,73 @@ local contourTalent = nouveauContour(0.25, 0.90, 0.35)
 ns.talentsSale = true
 local talentCache
 
+-- Ce que le contour a constaté la dernière fois (lu par /cs etat) : "ok", "reglageCoupe", "pasDeFenetre",
+-- "fenetreFermee", "rienAEntourer", "boutonIntrouvable", "boutonCache".
+ns.diagContour = "pasDeFenetre"
+
+-- Les cadres qui peuvent porter l'arbre de talents, selon la version du jeu (Retail et Forever : PlayerSpellsFrame
+-- .TalentsFrame ; anciennes versions : ClassTalentFrame et son onglet). Le premier visible gagne.
+local function cadresDeTalents()
+  local l = {}
+  if PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame then l[#l + 1] = PlayerSpellsFrame.TalentsFrame end
+  if ClassTalentFrame then
+    if ClassTalentFrame.TalentsTab then l[#l + 1] = ClassTalentFrame.TalentsTab end
+    if ClassTalentFrame.TalentsFrame then l[#l + 1] = ClassTalentFrame.TalentsFrame end
+    l[#l + 1] = ClassTalentFrame
+  end
+  return l
+end
+
+local function idDuBouton(b)
+  if type(b) ~= "table" then return nil end
+  if b.GetNodeID then
+    local ok, id = pcall(b.GetNodeID, b)
+    if ok and id then return id end
+  end
+  if type(b.nodeInfo) == "table" and b.nodeInfo.ID then return b.nodeInfo.ID end
+  return b.nodeID
+end
+
+-- Le bouton d'un nœud dans un cadre de talents : la méthode du jeu d'abord, sinon on parcourt les boutons.
+-- Le cadre de Forever hérite de TalentFrameBaseTemplate : GetTalentButtonByNodeID existe.
+local function boutonDuNoeud(cadre, nodeID)
+  if cadre.GetTalentButtonByNodeID then
+    local ok, b = pcall(cadre.GetTalentButtonByNodeID, cadre, nodeID)
+    if ok and b then return b end
+  end
+  if cadre.EnumerateAllTalentButtons then
+    local trouve
+    pcall(function()
+      for a, b in cadre:EnumerateAllTalentButtons() do
+        if idDuBouton(b) == nodeID then trouve = b; return end
+        if idDuBouton(a) == nodeID then trouve = a; return end
+      end
+    end)
+    if trouve then return trouve end
+  end
+  return nil
+end
+ns.boutonDuNoeud = boutonDuNoeud
+
 local function majContourTalent()
-  if not (db and db.actif and db.contourTalent) then contourTalent:Hide() return end
-  local cadre = PlayerSpellsFrame and PlayerSpellsFrame.TalentsFrame
-  if not (cadre and cadre.IsVisible and cadre:IsVisible()) then contourTalent:Hide() return end
+  if not (db and db.actif and db.contourTalent) then ns.diagContour = "reglageCoupe"; contourTalent:Hide() return end
+  local cadre, existe
+  for _, c in ipairs(cadresDeTalents()) do
+    existe = true
+    if c.IsVisible and c:IsVisible() then cadre = c; break end
+  end
+  if not cadre then ns.diagContour = existe and "fenetreFermee" or "pasDeFenetre"; contourTalent:Hide() return end
   if ns.talentsSale or not talentCache then
     ns.talentsSale = false
     local e = ns.construireEtat()
     talentCache = e.talents
   end
-  if talentCache.etat ~= "suivant" or not cadre.GetTalentButtonByNodeID then contourTalent:Hide() return end
-  local ok, bouton = pcall(cadre.GetTalentButtonByNodeID, cadre, talentCache.nodeID)
-  if ok and bouton and bouton:IsVisible() then
-    if contourTalent.cible ~= bouton or not contourTalent:IsShown() then contourTalent:placer(bouton, 3) end
-  else
-    contourTalent:Hide()
-  end
+  if talentCache.etat ~= "suivant" then ns.diagContour = "rienAEntourer"; contourTalent:Hide() return end
+  local bouton = boutonDuNoeud(cadre, talentCache.nodeID)
+  if not bouton then ns.diagContour = "boutonIntrouvable"; contourTalent:Hide() return end
+  if bouton.IsVisible and not bouton:IsVisible() then ns.diagContour = "boutonCache"; contourTalent:Hide() return end
+  ns.diagContour = "ok"
+  if contourTalent.cible ~= bouton or not contourTalent:IsShown() then contourTalent:placer(bouton, 3) end
 end
 
 -- ---------------------------------------------------------------------------
@@ -816,6 +935,7 @@ for _, ev in ipairs(AUTRES) do pcall(ecouteur.RegisterEvent, ecouteur, ev) end
 
 ecouteur:SetScript("OnEvent", function(_, ev)
   if not db then return end
+  if EVENEMENTS_TALENTS[ev] or EVENEMENTS_SPE[ev] or ev == "PLAYER_LEVEL_UP" or ev == "PLAYER_ENTERING_WORLD" then ns.speSale = true end
   if ev == "SPELLS_CHANGED" or EVENEMENTS_SPE[ev] or ev == "PLAYER_ENTERING_WORLD" then pcall(resoudre) end
   if EVENEMENTS_GROUPE[ev] or EVENEMENTS_SPE[ev] then pcall(majGroupe) end
   if EVENEMENTS_BARRES[ev] then ns.cacheBoutonsSale = true end
@@ -853,14 +973,53 @@ end)
 
 local function dire(t) ns.reglages.dire(t) end
 
+local TEXTES_CONTOUR = {
+  ok = "contour vert posé sur le talent.",
+  reglageCoupe = "contour vert coupé dans les réglages.",
+  pasDeFenetre = "contour vert : la fenêtre des talents du jeu n'a pas été trouvée (ouvre-la, puis refais /cs etat).",
+  fenetreFermee = "contour vert : la fenêtre des talents est fermée (ouvre-la, puis refais /cs etat).",
+  rienAEntourer = "contour vert : aucun talent à entourer pour l'instant.",
+  boutonIntrouvable = "bouton du talent introuvable dans la fenêtre.",
+  boutonCache = "le bouton du talent est caché dans la fenêtre (autre onglet ou zone défilée).",
+}
+
 local function etatEnTexte()
+  ns.speSale = true
   local e = ns.construireEtat()
   local n = 0
   for _ in pairs(ns.sorts) do n = n + 1 end
   dire(string.format("%s niveau %s, %s, spécialisation %s, situation %s%s. Sorts connus : %d. Mode : %s%s.",
     e.classeNom, tostring(e.niveau), tostring(e.raceNom), tostring(e.speNom or "inconnue"), e.situation,
     ns.situationForcee and " (forcée)" or "", n, etatRotation.mode or "?", etatRotation.auto and " (auto)" or ""))
+  -- Les points par groupe de l'arbre (Forever), et la spécialisation qui en découle.
+  if e.groupesTalents then
+    local morceaux = {}
+    for _, p in ipairs(e.groupesTalents.points) do
+      morceaux[#morceaux + 1] = string.format("%s %d", tostring(p.nom or ("groupe " .. p.rang)), p.depense)
+    end
+    dire("points par groupe de talents : " .. table.concat(morceaux, ", ") .. " ; spécialisation détectée : "
+      .. (e.speCle and tostring(e.speNom or e.speCle) or (e.groupesTalents.egalite and "aucune (égalité)" or "aucune (pas de points)")) .. ".")
+  else
+    dire("spécialisation détectée par le jeu : " .. tostring(e.speNom or "aucune") .. " (pas de groupes de talents).")
+  end
   local t = e.talents
+  if t then
+    local nbBuild = 0
+    local b = ns.buildPour(e.classe, t.speBuild, t.situationBuild)
+    if b then nbBuild = #b end
+    dire(string.format("build utilisé : %s, %s (%d entrées).", tostring(t.speBuild or "aucun"), tostring(t.situationBuild or "?"), nbBuild))
+    if t.etat == "suivant" then
+      dire(string.format("prochain talent : %s (nœud %s), rang %d sur %d.", tostring(t.nom), tostring(t.nodeID), t.rang or 0, t.rangs or 1))
+    elseif t.etat == "attente" then
+      dire(string.format("prochain talent bloqué : %s (nœud %s), le jeu ne le laisse pas prendre pour l'instant.", tostring(t.nom), tostring(t.nodeID)))
+    elseif t.etat == "fini" then dire("prochain talent : aucun, tout le build est pris.")
+    elseif t.etat == "horsArbre" then dire("prochain talent : aucun, le build ne correspond pas à l'arbre.")
+    elseif t.etat == "sansArbre" then dire("prochain talent : le jeu ne donne pas l'arbre (configuration active introuvable).")
+    else dire("prochain talent : pas de build écrit pour ce personnage.") end
+    if t.etat == "suivant" or t.etat == "attente" then
+      dire(TEXTES_CONTOUR[ns.diagContour] or TEXTES_CONTOUR.pasDeFenetre)
+    end
+  end
   if t and (t.nbNonReconnus or 0) > 0 then
     dire(string.format("talents du build non reconnus (%d) : %s. Fais /cs export puis /reload pour qu'on corrige leurs noms.",
       t.nbNonReconnus, table.concat(t.nonReconnus, ", ")))

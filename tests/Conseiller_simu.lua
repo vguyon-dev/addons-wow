@@ -1039,5 +1039,267 @@ verifie("commande /cs mode auto", 1, ConseillerDB.modeRotation)
 verifie("réglage alerteUrgence : coupé par défaut", false, ConseillerDB.alerteUrgence)
 verifie("commandes déclarées", "/cs", SLASH_CONSEILLER2)
 
+
+-- ================================================================ Forever : l'export réel d'un paladin niveau 16
+-- Un seul arbre (1100) partagé en trois groupes : la spécialisation est le groupe où l'on a le plus de points.
+do
+  -- Décision pure
+  local function gr(nom, ordre, depense, id) return { groupID = id or ordre, displayName = nom, orderIndex = ordre, depense = depense } end
+  local r = ns.speParGroupes("PALADIN", { gr("Sacré", 0, 0), gr("Protection", 1, 1), gr("Vindicte", 2, 5) })
+  verifie("groupes : le plus de points gagne", "vindicte", r and r.cle)
+  verifie("groupes : le nom du jeu est gardé", "Vindicte", r and r.nom)
+  verifie("groupes : trois lignes de points", 3, r and #r.points)
+  r = ns.speParGroupes("PALADIN", { gr("Vindicte", 2, 5), gr("Sacré", 0, 0), gr("Protection", 1, 1) })
+  verifie("groupes : l'ordre des lignes n'importe pas", "vindicte", r and r.cle)
+  r = ns.speParGroupes("PALADIN", { gr("Sacré", 0, 3), gr("Protection", 1, 3), gr("Vindicte", 2, 1) })
+  verifie("groupes : égalité en tête, pas de spécialisation", nil, r and r.cle)
+  verifie("groupes : égalité signalée", true, r and r.egalite)
+  r = ns.speParGroupes("PALADIN", { gr("Sacré", 0, 0), gr("Protection", 1, 0), gr("Vindicte", 2, 0) })
+  verifie("groupes : zéro point, pas de spécialisation", nil, r and r.cle)
+  r = ns.speParGroupes("PALADIN", { gr("Groupe A", 4, 0), gr("Groupe B", 5, 2), gr("Groupe C", 6, 0) })
+  verifie("groupes : nom inconnu, reconnu par son rang (2e = Protection)", "protection", r and r.cle)
+  r = ns.speParGroupes("PALADIN", { gr("Groupe A", 10, 0), gr("Groupe B", 11, 0), gr("Groupe C", 12, 4) })
+  verifie("groupes : nom inconnu, 3e = Vindicte", "vindicte", r and r.cle)
+  verifie("groupes : un seul groupe, ancienne méthode", nil, ns.speParGroupes("PALADIN", { gr("Sacré", 0, 5) }))
+  verifie("groupes : aucun groupe, ancienne méthode", nil, ns.speParGroupes("PALADIN", nil))
+
+  -- L'export réel
+  local env = {}
+  local chargeur = assert(loadfile(dossier .. "../tests/donnees/export-paladin-forever.lua"))
+  setfenv(chargeur, env)
+  chargeur()
+  local export = env.ConseillerDB.export
+  verifie("export réel : 51 nœuds", 51, #export.noeuds)
+
+  local groupeDeX = function(x) return x <= 2820 and 1 or (x <= 6820 and 2 or 3) end
+  local noeudsParID, entreeParID = {}, {}
+  for _, n in ipairs(export.noeuds) do
+    noeudsParID[n.nodeID] = n
+    for _, en in ipairs(n.entrees) do entreeParID[en.entryID] = { noeud = n, spellID = en.spellID } end
+  end
+  -- Le personnage : 5 points en Vindicte (Bénédiction), 1 en Protection (Redoute), 1 point libre.
+  local rangs = {}
+  for _, n in ipairs(export.noeuds) do rangs[n.nodeID] = n.rang or 0 end
+  local function depense(g)
+    local t = 0
+    for _, n in ipairs(export.noeuds) do if groupeDeX(n.posX) == g then t = t + (rangs[n.nodeID] or 0) end end
+    return t
+  end
+  local libres = 1
+  local function achetable(n)
+    local ligne = math.floor((n.posY - 2130) / 600 + 0.5)
+    return libres > 0 and (rangs[n.nodeID] or 0) < n.maxRanks and depense(groupeDeX(n.posX)) >= 5 * ligne
+  end
+
+  -- Sauvegarde des fausses API de l'essai précédent
+  local NOMS_API = { "GetNodeInfo", "GetConfigInfo", "GetTreeNodes", "GetEntryInfo", "GetDefinitionInfo",
+    "GetGroupDisplayInfoByTreeID", "GetGroupCurrencyInfo" }
+  local sauve = { C_Traits = {}, noms = jeu.noms, sorts = jeu.sortsConnus, classe = jeu.classe, niveau = jeu.niveau,
+    spe = jeu.spe, nomSpe = jeu.nomSpe, config = jeu.config, noeuds = jeu.noeuds, grimoire = C_SpellBook.GetSpellBookItemInfo,
+    numLignes = C_SpellBook.GetSpellBookSkillLineInfo, psf = PlayerSpellsFrame }
+  for _, k in ipairs(NOMS_API) do sauve.C_Traits[k] = C_Traits[k] end
+
+  jeu.classe, jeu.niveau, jeu.config = "PALADIN", 16, export.configID
+  jeu.spe, jeu.nomSpe = 1, "Sacré" -- GetSpecialization rend 1 sur Forever : le jeu de talents « Principale », pas une spécialisation
+  jeu.noms, jeu.sortsConnus = {}, {}
+  for _, s in ipairs(export.grimoire) do jeu.noms[s.spellID] = s.nom; jeu.sortsConnus[s.spellID] = true end
+  for _, n in ipairs(export.noeuds) do for _, en in ipairs(n.entrees) do jeu.noms[en.spellID] = en.nom end end
+  C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = #export.grimoire } end
+  C_SpellBook.GetSpellBookItemInfo = function(i)
+    local s = export.grimoire[i]
+    return s and { spellID = s.spellID, name = s.nom, subName = s.sousTexte } or nil
+  end
+  C_Traits.GetConfigInfo = function() return { treeIDs = { 1100 } } end
+  C_Traits.GetTreeNodes = function()
+    local ids = {}
+    for _, n in ipairs(export.noeuds) do ids[#ids + 1] = n.nodeID end
+    return ids
+  end
+  C_Traits.GetNodeInfo = function(_, id)
+    local n = noeudsParID[id]
+    if not n then return nil end
+    local eids = {}
+    for _, en in ipairs(n.entrees) do eids[#eids + 1] = en.entryID end
+    local ok = achetable(n)
+    return { ID = id, maxRanks = n.maxRanks, currentRank = rangs[id], ranksPurchased = rangs[id], entryIDs = eids,
+      posX = n.posX, posY = n.posY, canPurchaseRank = ok, isAvailable = ok, groupIDs = { groupeDeX(n.posX) } }
+  end
+  C_Traits.GetEntryInfo = function(_, entryID) return { definitionID = entryID } end
+  C_Traits.GetDefinitionInfo = function(defID) return { spellID = entreeParID[defID].spellID } end
+  local ordreGroupes = { 0, 1, 2 }
+  C_Traits.GetGroupDisplayInfoByTreeID = function()
+    return { { groupID = 1, treeID = 1100, orderIndex = ordreGroupes[1], displayName = "Sacré" },
+      { groupID = 2, treeID = 1100, orderIndex = ordreGroupes[2], displayName = "Protection" },
+      { groupID = 3, treeID = 1100, orderIndex = ordreGroupes[3], displayName = "Vindicte" } }
+  end
+  C_Traits.GetGroupCurrencyInfo = function(_, ids)
+    local l = {}
+    for _, id in ipairs(ids) do l[#l + 1] = { traitNodeGroupID = id, currencyInfos = { { spent = depense(id) } } } end
+    return l
+  end
+  local function relire()
+    ns.speSale, ns.arbreSale, ns.talentsSale = true, true, true
+    evt("SPELLS_CHANGED")
+    return ns.construireEtat()
+  end
+
+  local e = relire()
+  verifie("export réel : 5 points en Vindicte", 5, depense(3))
+  verifie("export réel : la spécialisation vient des points (Vindicte), pas de GetSpecialization (Sacré)", "vindicte", e.speCle)
+  verifie("export réel : nom de la spécialisation", "Vindicte", e.speNom)
+  verifie("export réel : points par groupe lus", "Sacré 0, Protection 1, Vindicte 5", (function()
+    local t = {}
+    for _, p in ipairs(e.groupesTalents.points) do t[#t + 1] = p.nom .. " " .. p.depense end
+    return table.concat(t, ", ")
+  end)())
+  verifie("export réel : le build utilisé est celui de Vindicte", "vindicte", e.talents.speBuild)
+  verifie("export réel : le prochain talent existe (état « suivant »)", "suivant", e.talents.etat)
+  local noeudSuivant = noeudsParID[e.talents.nodeID]
+  verifie("export réel : le prochain talent est un talent de Vindicte", 3, noeudSuivant and groupeDeX(noeudSuivant.posX))
+  verifie("export réel : le prochain talent est achetable", true, noeudSuivant and achetable(noeudSuivant))
+  verifie("export réel : le prochain talent", "Jugement sanctifié", e.talents.nom)
+  verifie("export réel : aucun talent du build non reconnu", 0, e.talents.nbNonReconnus)
+
+  -- Chaque entrée de chacun des trois builds se résout, au bon groupe, avec des rangs possibles, dans l'ordre des paliers
+  local index = ns.indexArbre(ns.lireArbre(export.configID))
+  verifie("arbre réel : 51 nœuds lus", 51, index.nb)
+  local voulu = { vindicte = 3, protection = 2, sacre = 1 }
+  for cle, groupe in pairs(voulu) do
+    local build = D.BUILDS.PALADIN[cle].groupe
+    local res = ns.resoudreBuild(build, index)
+    verifie("build " .. cle .. " : 100 % des entrées reconnues (" .. #build .. ")", #build, #res.entrees)
+    verifie("build " .. cle .. " : aucune non reconnue", 0, #res.nonReconnus)
+    local bonGroupe, bonsRangs, montant, dernier, vus, doublons = true, true, true, 0, {}, 0
+    for _, en in ipairs(res.entrees) do
+      local n = noeudsParID[en.nodeID]
+      if groupeDeX(n.posX) ~= groupe then bonGroupe = false; io.write("   hors groupe : " .. tostring(en.nom) .. "\n") end
+      if en.rangs > n.maxRanks then bonsRangs = false; io.write("   trop de rangs : " .. tostring(en.nom) .. "\n") end
+      if n.posY < dernier then montant = false; io.write("   palier à rebours : " .. tostring(en.nom) .. "\n") end
+      dernier = n.posY
+      if vus[en.nodeID] then doublons = doublons + 1 end
+      vus[en.nodeID] = true
+    end
+    verifie("build " .. cle .. " : toutes les entrées dans le bon groupe de l'arbre", true, bonGroupe)
+    verifie("build " .. cle .. " : rangs voulus dans le maximum du nœud", true, bonsRangs)
+    verifie("build " .. cle .. " : ordre des paliers croissant (posY)", true, montant)
+    verifie("build " .. cle .. " : pas de talent en double", 0, doublons)
+  end
+
+  -- Le grimoire réel : la rotation de Vindicte retrouve Jugement, Frappe sacrée et un sceau
+  verifie("grimoire réel : Jugement résolu", 20271, ns.sorts.JUGEMENT and ns.sorts.JUGEMENT.id)
+  verifie("grimoire réel : Frappe sacrée résolue (rang 2)", 678, ns.sorts.FRAPPE_SACREE and ns.sorts.FRAPPE_SACREE.id)
+  verifie("grimoire réel : Sceau de piété résolu (rang 2)", 20287, ns.sorts.SCEAU_PIETE and ns.sorts.SCEAU_PIETE.id)
+  verifie("grimoire réel : Sceau de fureur résolu", 1311649, ns.sorts.SCEAU_FUREUR and ns.sorts.SCEAU_FUREUR.id)
+  verifie("grimoire réel : Fureur vertueuse résolue", 25780, ns.sorts.FUREUR and ns.sorts.FUREUR.id)
+  verifie("grimoire réel : la protection du début sert d'urgence défensive", 498, ns.sorts.BOUCLIER_DIVIN and ns.sorts.BOUCLIER_DIVIN.id)
+  local lignes = {}
+  for _, l in ipairs(e.rotation and e.rotation.lignesStatiques or {}) do lignes[l.sort] = true end
+  verifie("rotation Vindicte : Jugement", true, lignes.JUGEMENT == true)
+  verifie("rotation Vindicte : Frappe sacrée", true, lignes.FRAPPE_SACREE == true)
+  verifie("rotation Vindicte : un sceau", true, lignes.SCEAU_AUTORITE == true or lignes.SCEAU_PIETE == true)
+
+  -- La spécialisation suit les points
+  rangs[105706] = 0; rangs[105626] = 5 -- plus rien en Vindicte, 5 en Protection
+  verifie("la spécialisation suit les points (Protection)", "protection", relire().speCle)
+  rangs[105706] = 2; rangs[105626] = 2 -- égalité
+  e = relire()
+  verifie("égalité : pas de spécialisation, le conseil prend le relais", nil, e.speCle)
+  verifie("égalité : le build vient du conseil", "vindicte", e.talents.speBuild)
+  rangs[105706] = 5; rangs[105626] = 1
+  ordreGroupes = { 3, 4, 5 } -- autres numéros d'ordre : le nom du groupe fait foi
+  verifie("ordre d'affichage différent : toujours Vindicte", "vindicte", relire().speCle)
+  ordreGroupes = { 0, 1, 2 }
+
+  -- Retail : pas de groupes, l'ancienne méthode
+  local sauveGroupes = C_Traits.GetGroupDisplayInfoByTreeID
+  C_Traits.GetGroupDisplayInfoByTreeID = nil
+  jeu.spe, jeu.nomSpe, jeu.nbSpes = 3, "Vindicte", 3
+  verifie("sans groupes (Retail) : GetSpecialization", "vindicte", relire().speCle)
+  C_Traits.GetGroupDisplayInfoByTreeID = sauveGroupes
+  jeu.spe, jeu.nomSpe, jeu.nbSpes = 1, "Sacré", nil
+
+  -- Onglet Talents : la spécialisation du personnage diffère de la conseillée
+  e = relire()
+  e.situation = "groupe"
+  e.conseil = ns.speConseillee("PALADIN", "groupe", { manques = { "tank" } })
+  local vue = ns.vueTalents(e)
+  verifie("onglet Talents : « Tu es en Vindicte ; en groupe sans tank, Protection est conseillée »", true,
+    contient(vue, "Tu es en Vindicte ; en groupe sans tank, Protection est conseillée"))
+  verifie("onglet Talents : le build montré est celui du personnage", true, contient(vue, "Le build ci-dessous est celui de ta spécialisation (Vindicte)"))
+  e.conseil = ns.speConseillee("PALADIN", "solo", nil)
+  verifie("onglet Talents : même spécialisation, rien à signaler", true, contient(ns.vueTalents(e), "C'est celle que tu as déjà"))
+
+  -- /cs export : les groupes et les groupIDs des nœuds
+  relire()
+  ns.exporter()
+  local ex = ConseillerDB.export
+  verifie("export : trois groupes écrits", 3, ex.groupes and #ex.groupes)
+  verifie("export : groupe Vindicte et ses points", "Vindicte:5", ex.groupes and (ex.groupes[3].displayName .. ":" .. ex.groupes[3].depense))
+  verifie("export : orderIndex noté", 2, ex.groupes and ex.groupes[3].orderIndex)
+  verifie("export : la spécialisation écrite est Vindicte", "vindicte", ex.spe)
+  local avecGroupe = 0
+  for _, n in ipairs(ex.noeuds) do if n.groupIDs and n.groupIDs[1] then avecGroupe = avecGroupe + 1 end end
+  verifie("export : les groupIDs des nœuds sont écrits", 51, avecGroupe)
+
+  -- Le contour vert : la fenêtre, le bouton, et ce que /cs etat en dit
+  local function tourner() for _, f in ipairs(cadres) do local fn = f._scripts.OnUpdate; if fn then pcall(fn, f, 0.6) end end end
+  local function etatDit()
+    local dits = {}
+    local avant = print
+    print = function(t) dits[#dits + 1] = t end
+    SlashCmdList.CONSEILLER("etat")
+    print = avant
+    return table.concat(dits, "\n")
+  end
+  local bouton = bidon()
+  local visibleFenetre = true
+  local fenetreTalents = { IsVisible = function() return visibleFenetre end }
+  PlayerSpellsFrame = { TalentsFrame = fenetreTalents }
+  relire()
+  tourner()
+  local dit = etatDit()
+  verifie("/cs etat : points par groupe et spécialisation détectée", true,
+    contient(dit, "Sacré 0, Protection 1, Vindicte 5") and contient(dit, "spécialisation détectée : Vindicte"))
+  verifie("/cs etat : le build utilisé", true, contient(dit, "build utilisé : vindicte, solo (11 entrées)"))
+  verifie("/cs etat : le prochain talent, nom et nœud", true, contient(dit, "prochain talent : Jugement sanctifié (nœud 105701)"))
+  verifie("/cs etat : bouton introuvable dit en clair", true, contient(dit, "bouton du talent introuvable dans la fenêtre"))
+  -- Le bouton est trouvé par la méthode du jeu
+  fenetreTalents.GetTalentButtonByNodeID = function(_, id) if id == 105701 then return bouton end end
+  rawset(bouton, "IsVisible", function() return true end)
+  tourner()
+  verifie("contour : bouton trouvé par GetTalentButtonByNodeID", "ok", ns.diagContour)
+  verifie("/cs etat : contour posé", true, contient(etatDit(), "contour vert posé sur le talent"))
+  -- Repli : on parcourt les boutons quand la méthode ne le rend pas
+  fenetreTalents.GetTalentButtonByNodeID = function() return nil end
+  rawset(bouton, "GetNodeID", function() return 105701 end)
+  fenetreTalents.EnumerateAllTalentButtons = function()
+    local liste = { { GetNodeID = function() return 1 end }, bouton }
+    local i = 0
+    return function() i = i + 1; if liste[i] then return i, liste[i] end end
+  end
+  verifie("contour : repli par la liste des boutons", true, ns.boutonDuNoeud(fenetreTalents, 105701) == bouton)
+  verifie("contour : nœud inconnu, pas de bouton", nil, ns.boutonDuNoeud(fenetreTalents, 424242))
+  -- Fenêtre des talents fermée / absente
+  visibleFenetre = false
+  tourner()
+  verifie("contour : fenêtre fermée", "fenetreFermee", ns.diagContour)
+  PlayerSpellsFrame = nil
+  tourner()
+  verifie("contour : pas de fenêtre", "pasDeFenetre", ns.diagContour)
+  -- Ancienne fenêtre ClassTalentFrame
+  ClassTalentFrame = { TalentsTab = { IsVisible = function() return true end, GetTalentButtonByNodeID = function() return bouton end } }
+  tourner()
+  verifie("contour : ClassTalentFrame.TalentsTab accepté", "ok", ns.diagContour)
+  ClassTalentFrame = nil
+
+  -- Retour à l'état d'avant
+  PlayerSpellsFrame = sauve.psf
+  for _, k in ipairs(NOMS_API) do C_Traits[k] = sauve.C_Traits[k] end
+  C_SpellBook.GetSpellBookItemInfo, C_SpellBook.GetSpellBookSkillLineInfo = sauve.grimoire, sauve.numLignes
+  jeu.noms, jeu.sortsConnus, jeu.classe, jeu.niveau, jeu.spe, jeu.nomSpe, jeu.config, jeu.noeuds =
+    sauve.noms, sauve.sorts, sauve.classe, sauve.niveau, sauve.spe, sauve.nomSpe, sauve.config, sauve.noeuds
+  ns.speSale, ns.arbreSale, ns.talentsSale = true, true, true
+end
+
 if ok then io.write("Tout est bon.\n") end
 os.exit(ok and 0 or 1)

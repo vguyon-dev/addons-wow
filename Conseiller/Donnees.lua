@@ -492,23 +492,24 @@ D.SORTS = {
   },
   PALADIN = {
     -- Les rangs du Sceau de piété sont gardés en dernier : avant le niveau 20, il remplace le Sceau d'autorité.
+    -- Les identifiants relevés dans le jeu (export Forever du 10/11/2026) sont en tête : Sceau de piété (rangs 2 et 1), Sceau de fureur, Frappe sacrée (rangs 2 et 1), Horion sacré et Rempart de templier (sorts des talents). Le Sceau d'autorité garde les rangs du Sceau de piété en dernier.
     SCEAU_AUTORITE = S("Sceau d'autorité", "Seal of Command", 20920, 20919, 20918, 20915, 20375,
       20293, 20292, 20291, 20290, 20289, 20288, 20287, 21084),
-    SCEAU_PIETE = S("Sceau de piété", "Seal of Righteousness", 20293, 20292, 20291, 20290, 20289, 20288, 20287, 21084),
-    SCEAU_FUREUR = S("Sceau de fureur", "Seal of Fury"),
+    SCEAU_PIETE = S("Sceau de piété", "Seal of Righteousness", 20287, 21084, 20293, 20292, 20291, 20290, 20289, 20288),
+    SCEAU_FUREUR = S("Sceau de fureur", "Seal of Fury", 1311649),
     SCEAU_SAGESSE = S("Sceau de sagesse", "Seal of Wisdom", 27166, 20357, 20356, 20166),
     JUGEMENT = S("Jugement", "Judgement", 20271),
-    FRAPPE_SACREE = S("Frappe sacrée", "Holy Strike"),
-    REMPART = S("Rempart du templier", "Templar's Bulwark"),
+    FRAPPE_SACREE = S("Frappe sacrée", "Holy Strike", 678, 679),
+    REMPART = S("Rempart de templier", "Templar's Bulwark", 1311015),
     CONSECRATION = S("Consécration", "Consecration", 27173, 20924, 20923, 20922, 20116, 26573),
     EXORCISME = S("Exorcisme", "Exorcism", 27138, 10314, 10313, 10312, 5615, 5614, 879),
     MARTEAU_COLERE = S("Marteau de la colère", "Hammer of Wrath", 24275),
     FUREUR = S("Fureur vertueuse", "Righteous Fury", 25780),
     BOUCLIER_SACRE = S("Bouclier sacré", "Holy Shield", 27179, 20928, 20927, 20925),
     BOUCLIER_VENGEUR = S("Bouclier du vengeur", "Avenger's Shield", 32700, 31935),
-    HORION_SACRE = S("Horion sacré", "Holy Shock", 33072, 27175, 20930, 20929, 20473),
+    HORION_SACRE = S("Horion sacré", "Holy Shock", 1311606, 33072, 27175, 20930, 20929, 20473),
     IMPOSITION = S("Imposition des mains", "Lay on Hands", 27154, 10310, 2800, 633),
-    BOUCLIER_DIVIN = S("Bouclier divin", "Divine Shield", 1020, 642),
+    BOUCLIER_DIVIN = S("Bouclier divin", "Divine Shield", 1020, 642, 498),
     AURA_VINDICTE = S("Aura de vindicte", "Retribution Aura", 10301, 10300, 10299, 10298, 7294),
     BENEDICTION_PUISSANCE = S("Bénédiction de puissance", "Blessing of Might", 25291, 19838, 19837, 19836, 19835, 19834, 19740),
     ECLAIR_LUMINEUX = S("Éclair lumineux", "Flash of Light", 19943, 19942, 19941, 19940, 19939, 19750),
@@ -740,7 +741,7 @@ D.ROTATIONS = {
     protection = {
       URGENCE_IMPOSITION,
       URGENCE_BOUCLIER,
-      U("REMPART", "Rempart du templier si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
+      U("REMPART", "Rempart de templier si tu es à moins de 40 % de vie", PRET, VIE_MOI(40)),
       E("FUREUR", "Fureur vertueuse active (sinon tu ne tiens pas les monstres)", BUFF_MOI),
       E("SCEAU_FUREUR", "Sceau de fureur, s'il n'est pas actif", BUFF_MOI),
       E("SCEAU_PIETE", "Sceau de piété, s'il n'est pas actif (tant que tu n'as pas le Sceau de fureur)", BUFF_MOI, { "buffAbsent", "SCEAU_FUREUR" }),
@@ -1047,45 +1048,50 @@ B.CHASSEUR_PRECISION = {
   T("Récupération rapide", "Rapid Recuperation", 2),
 }
 
--- Paladin : Vindicte (Method et Tavern, niveau 30 puis projection).
+-- Paladin : noms et sorts relevés dans l'arbre réel de Forever (export du 10/11/2026, un seul arbre partagé en
+-- trois groupes : Sacré posX ≤ 2820, Protection 5020 à 6820, Vindicte 9080 à 10880). Le spellID réel est en tête de
+-- chaque entrée. Ordre : par palier (posY 2130, 2730, 3330, 3930, 4530, 5130, 5730 ; chaque palier demande 5 points de
+-- plus dans le groupe), et à l'intérieur d'un palier selon les guides. Les talents que les guides citent et que l'arbre
+-- de Forever n'a pas (Arbitre sacré, Sceau de fureur amélioré, Spécialisation arme à une main, Sanction, Voix de la
+-- vérité) sont retirés ; Conduit sacré est un talent de Sacré, pas de Vindicte.
+-- Vindicte (Method et Tavern, niveau 30 puis projection).
 B.PALADIN_VINDICTE = {
-  T("Bénédiction", "Benediction", 5),
-  T("Jugement sanctifié", "Sanctified Judgement", 3),
-  T("Jugement amélioré", "Improved Judgement", 1),
-  T("Poursuite de la justice", "Pursuit of Justice", 2),
-  T("Conviction", "Conviction", 5),
-  T("Arbitre sacré", "Sacred Arbiter", 1),
+  T("Bénédiction", "Benediction", 5, 20101),
+  T("Jugement sanctifié", "Sanctified Judgement", 3, 1311074),
+  T("Jugement amélioré", "Improved Judgement", 2, 25956),
+  T("Conviction", "Conviction", 3, 20117),
+  T("Poursuite de la justice", "Pursuit of Justice", 2, 26022),
   T("Sceau d'autorité", "Seal of Command", 1, 20375),
-  T("Conduit sacré", "Holy Conduit", 1),
-  T("Vengeance", "Vengeance", 5),
-  T("Spécialisation armes à deux mains", "Two-Handed Weapon Specialization", 3),
+  T("Justification", "Vindication", 3, 9452),
+  T("Spécialisation armes à deux mains", "Two-Handed Weapon Specialization", 3, 20111),
+  T("Vengeance", "Vengeance", 3, 20049),
   T("Repentir", "Repentance", 1, 20066),
+  T("Champion de la lumière", "Champion of Light", 5, 1311084),
 }
--- Paladin : Protection 0/26/0 (Tavern).
+-- Protection 0/26/0 (Tavern).
 B.PALADIN_PROTECTION = {
-  T("Redoute", "Redoubt", 5),
-  T("Spécialisation bouclier", "Shield Specialization", 3),
-  T("Précision", "Precision", 3),
-  T("Anticipation", "Anticipation", 3),
-  T("Sceau de fureur amélioré", "Improved Seal of Fury", 3),
-  T("Fureur vertueuse améliorée", "Improved Righteous Fury", 3),
-  T("Spécialisation arme à une main", "One-Handed Weapon Specialization", 5),
-  T("Jugement rapide", "Swift Judgement", 1),
-  T("Rempart du templier", "Templar's Bulwark", 1),
-  T("Sanction", "Reckoning", 4),
+  T("Redoute", "Redoubt", 5, 20127),
+  T("Précision", "Precision", 3, 20189),
+  T("Faveur du Gardien", "Guardian's Favor", 2, 20174),
+  T("Spécialisation bouclier", "Shield Specialization", 2, 20150),
+  T("Rempart de templier", "Templar's Bulwark", 1, 1311015),
+  T("Marteau de la justice amélioré", "Improved Hammer of Justice", 3, 20487),
+  T("Anticipation", "Anticipation", 3, 20096),
+  T("Jugement rapide", "Swift Judgement", 1, 1310994),
+  T("Fureur vertueuse améliorée", "Improved Righteous Fury", 3, 20468),
+  T("Bouclier sacré", "Holy Shield", 1, 20925),
 }
--- Paladin : Sacré 26/0/0 (Tavern).
+-- Sacré 26/0/0 (Tavern).
 B.PALADIN_SACRE = {
-  T("Voix de la vérité", "Voice of Truth", 5),
-  T("Pureté du pouvoir", "Purifying Power", 1),
-  T("Lumière guérisseuse", "Healing Light", 3),
-  T("Concentration spirituelle", "Spiritual Focus", 5),
-  T("Illumination", "Illumination", 5),
-  T("Horion sacré", "Holy Shock", 1, 20473),
-  T("Précision divine", "Divine Precision", 1),
-  T("Puissance sacrée", "Holy Power", 1),
-  T("Révérence", "Reverence", 3),
+  T("Focalisation spirituelle", "Spiritual Focus", 5, 20205),
+  T("Lumière guérisseuse", "Healing Light", 3, 20237),
+  T("Puissance purifiante", "Purifying Power", 2, 429144),
+  T("Révérence", "Reverence", 2, 1310899),
+  T("Illumination", "Illumination", 5, 20210),
   T("Faveur divine", "Divine Favor", 1, 20216),
+  T("Précision divine", "Divine Precision", 2, 1310904),
+  T("Horion sacré", "Holy Shock", 1, 1311606),
+  T("Puissance sacrée", "Holy Power", 1, 5923),
 }
 
 -- Guerrier : Armes à deux mains (ordre Method, spécialisation de donjon), puis les talents cités à côté.
