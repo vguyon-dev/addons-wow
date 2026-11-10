@@ -17,6 +17,15 @@
 --     seul message au chat à la connexion et une pastille dorée sur l'entrée, jusqu'à
 --     l'ouverture de la page. Pour annoncer du neuf : une entrée EN TÊTE de ns.NOUVEAUTES,
 --     avec la date du jour.
+--   - sous « Quoi de neuf », « Partager mes réglages » : un texte à copier (tous les réglages des
+--     addons chargés, seulement les clés de p.options, interrupteurs et nombres, au format
+--     « VA1;Addon:cle=valeur,… ») et un champ où coller celui d'un ami (bouton « Appliquer », qui
+--     passe par r.changer) ;
+--   - en haut de la page de chaque addon, l'interrupteur « Réglages propres à ce personnage » :
+--     la table sauvegardée garde db.compte (réglages communs) et db.parPerso["Nom-Royaume"]
+--     (réglages propres) à côté de ses clés à plat (db.cle, que les addons lisent comme avant) ;
+--     au chargement, db reçoit les valeurs du bon profil, et chaque r.appliquer les y réécrit.
+--     Seules les clés déclarées dans p.options sont concernées (pas les positions ni les listes).
 --
 -- Utilisation, dans le fichier principal de l'addon :
 --   local reglages = ns.creerReglages({
@@ -185,7 +194,7 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
-  { date = "2026-11-10", titre = "Sept améliorations d'un coup", lignes = {
+  { date = "2026-11-10", titre = "Huit améliorations d'un coup", lignes = {
     "Tous les addons ont le même visuel sombre et doré : fond sombre, bordure dorée, titre doré.",
     "Marchand auto peut vendre en plus l'équipement lié que ta classe ne peut pas porter. Jamais un objet épique, jamais un objet de ta liste à garder. Option coupée au départ.",
     "Sacs rangés : la banque aussi se range par catégories, dans une seconde fenêtre à gauche du sac.",
@@ -193,6 +202,8 @@ ns.NOUVEAUTES = {
     "Courrier : des destinataires rapides (tes autres personnages, tes derniers destinataires) et un bilan dans le chat à la fin d'une récupération.",
     "GPS : tu peux envoyer tes balises à ton groupe, et accepter celles de ton groupe.",
     "Cette page « Quoi de neuf » : quand il y a du nouveau, un message le dit une seule fois dans le chat, et un point doré reste sur « Quoi de neuf » tant que tu n'as pas ouvert la page.",
+    "Partager tes réglages : sous « Quoi de neuf », la page « Partager mes réglages » donne un texte à copier pour un ami, et un champ pour coller celui qu'on t'envoie. Les listes (objets ignorés, balises, courses) ne sont pas partagées.",
+    "Réglages propres à chaque personnage : en haut de la page de chaque addon, un interrupteur « Réglages propres à ce personnage ». Activé, ce personnage a ses réglages (copiés depuis les réglages actuels) et les autres ne changent pas. Coupé, il retrouve ceux du compte.",
   } },
   { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
     "Les réglages des 17 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
@@ -261,6 +272,261 @@ function ns.texteNouveautes(liste, vue)
   end
   if #morceaux == 0 then return "Rien de nouveau pour l'instant." end
   return table.concat(morceaux, "\n\n")
+end
+
+-- ============================================================ partage et profils des réglages
+-- Tout ce qui suit est de la logique pure (testée hors jeu) : le texte à partager avec un ami
+-- et les réglages propres à chaque personnage. Seules les clés déclarées dans p.options
+-- comptent, avec des valeurs booléennes ou des nombres : jamais les positions ni les listes.
+
+local function valeurSimple(v)
+  return type(v) == "boolean" or (type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge)
+end
+ns.valeurSimple = valeurSimple
+
+-- Les clés déclarées dans la liste d'options d'un addon, dans l'ordre et sans doublon.
+function ns.clesReglages(options)
+  local cles, vues = {}, {}
+  for _, opt in ipairs(type(options) == "table" and options or {}) do
+    if type(opt) == "table" and type(opt.cle) == "string" and opt.cle ~= "" and not vues[opt.cle] then
+      vues[opt.cle] = true
+      cles[#cles + 1] = opt.cle
+    end
+  end
+  return cles
+end
+
+-- Une copie des valeurs simples de ces clés : { cle = valeur }.
+function ns.copierReglages(source, cles)
+  local copie = {}
+  if type(source) ~= "table" then return copie end
+  for _, cle in ipairs(cles) do
+    if valeurSimple(source[cle]) then copie[cle] = source[cle] end
+  end
+  return copie
+end
+
+-- « Nom-Royaume » : la clé d'un personnage (nil si le jeu ne donne pas encore son nom).
+function ns.nomProfil(nom, royaume)
+  if type(nom) ~= "string" or nom == "" then return nil end
+  return nom .. "-" .. (type(royaume) == "string" and royaume or "")
+end
+
+-- ------------------------------------------------------- réglages propres à un personnage
+-- La sauvegarde de l'addon garde sa table de travail à plat (db.cle, lue partout par les
+-- addons) et deux tables à côté : db.compte = { cle = valeur } (réglages communs) et
+-- db.parPerso = { ["Nom-Royaume"] = { cle = valeur } } (réglages propres). Un personnage
+-- qui a une entrée dans parPerso est en mode « perso », les autres suivent le compte.
+
+-- Ce personnage a-t-il ses réglages propres ?
+function ns.modePerso(db, moi)
+  return moi ~= nil and type(db) == "table" and type(db.parPerso) == "table" and type(db.parPerso[moi]) == "table"
+end
+
+local function preparerProfils(db)
+  if type(db.compte) ~= "table" then db.compte = {} end
+  if type(db.parPerso) ~= "table" then db.parPerso = {} end
+end
+
+-- La valeur d'une clé dans un profil, sinon dans le compte, sinon la valeur de départ.
+local function valeurDeProfil(db, profil, cle, defauts)
+  local v = profil and profil[cle]
+  if not valeurSimple(v) then v = db.compte[cle] end
+  if not valeurSimple(v) and type(defauts) == "table" then v = defauts[cle] end
+  if valeurSimple(v) then return v end
+end
+
+-- Au chargement : recopie dans db les valeurs du bon profil. Premier lancement (compte
+-- vide) : le compte est rempli avec les valeurs actuelles, rien ne change pour le joueur.
+-- Renvoie « perso » ou « compte ».
+function ns.chargerProfil(db, cles, moi, defauts)
+  preparerProfils(db)
+  if next(db.compte) == nil then db.compte = ns.copierReglages(db, cles) end
+  local mode = ns.modePerso(db, moi) and "perso" or "compte"
+  local profil = mode == "perso" and db.parPerso[moi] or db.compte
+  for _, cle in ipairs(cles) do
+    local v = valeurDeProfil(db, profil, cle, defauts)
+    if v ~= nil then db[cle] = v end
+  end
+  return mode
+end
+
+-- À chaque changement : les valeurs de db sont aussi écrites dans le profil du personnage
+-- (ses réglages propres s'il en a, sinon ceux du compte). Renvoie « perso » ou « compte ».
+function ns.ecrireProfil(db, cles, moi)
+  preparerProfils(db)
+  local perso = ns.modePerso(db, moi)
+  local cible = perso and db.parPerso[moi] or db.compte
+  for _, cle in ipairs(cles) do
+    if valeurSimple(db[cle]) then cible[cle] = db[cle] end
+  end
+  return perso and "perso" or "compte"
+end
+
+-- Active (perso = vrai) ou coupe les réglages propres à ce personnage. Activer copie les
+-- valeurs actuelles dans parPerso[moi] ; couper efface parPerso[moi] et recharge le compte.
+-- Renvoie le mode obtenu (« compte » aussi quand le personnage est inconnu).
+function ns.changerMode(db, cles, moi, perso, defauts)
+  if moi == nil then return "compte" end
+  ns.ecrireProfil(db, cles, moi) -- ce qui a changé sans passer par r.changer n'est pas perdu
+  if perso then
+    if not ns.modePerso(db, moi) then db.parPerso[moi] = ns.copierReglages(db, cles) end
+    return "perso"
+  end
+  db.parPerso[moi] = nil
+  for _, cle in ipairs(cles) do
+    local v = valeurDeProfil(db, nil, cle, defauts)
+    if v ~= nil then db[cle] = v end
+  end
+  return "compte"
+end
+
+-- ------------------------------------------------------- le texte à partager
+-- Format : « VA1;Addon:cle=valeur,cle=valeur;Addon:… » (VA = addons de Valentin, 1 = version
+-- du format). Un interrupteur s'écrit 1 ou 0, un curseur par son nombre.
+
+local function formatNombre(v)
+  if v == math.floor(v) and math.abs(v) < 1e15 then return string.format("%d", v) end
+  return string.format("%.6g", v)
+end
+
+-- blocs = { { nom = "GPS", valeurs = { taille = 160, actif = true } }, … } -> le texte.
+function ns.encoderReglages(blocs)
+  local morceaux = {}
+  local liste = {}
+  for _, b in ipairs(type(blocs) == "table" and blocs or {}) do
+    if type(b) == "table" and type(b.nom) == "string" and b.nom:match("^[%w_]+$") and type(b.valeurs) == "table" then
+      liste[#liste + 1] = b
+    end
+  end
+  table.sort(liste, function(a, b) return a.nom < b.nom end)
+  for _, b in ipairs(liste) do
+    local cles = {}
+    for cle, v in pairs(b.valeurs) do
+      if type(cle) == "string" and cle:match("^[%w_]+$") and valeurSimple(v) then cles[#cles + 1] = cle end
+    end
+    table.sort(cles)
+    if #cles > 0 then
+      local paires = {}
+      for _, cle in ipairs(cles) do
+        local v = b.valeurs[cle]
+        if type(v) == "boolean" then v = v and 1 or 0 end
+        paires[#paires + 1] = cle .. "=" .. formatNombre(v)
+      end
+      morceaux[#morceaux + 1] = b.nom .. ":" .. table.concat(paires, ",")
+    end
+  end
+  return "VA1;" .. table.concat(morceaux, ";")
+end
+
+-- Un bout de texte reçu, court et sans code de couleur, pour un message d'erreur.
+local function extrait(s)
+  return (s:sub(1, 28):gsub("|", "||"))
+end
+
+-- Le texte reçu -> { Addon = { cle = nombre } }, ou nil et un message clair.
+function ns.decoderReglages(texte)
+  if type(texte) ~= "string" then return nil, "Colle d'abord le texte reçu." end
+  local t = texte:gsub("%s+", "") -- un texte collé peut avoir des retours à la ligne
+  if t == "" then return nil, "Colle d'abord le texte reçu." end
+  if #t > 20000 then return nil, "Ce texte est beaucoup trop long pour être un texte de réglages." end
+  local version = t:match("^VA(%d+);")
+  if not version then
+    return nil, "Ce n'est pas un texte de réglages : il doit commencer par « VA1; ». Copie-le en entier."
+  end
+  if version ~= "1" then
+    return nil, "Ce texte vient d'une autre version (VA" .. version .. ") : mets les addons à jour, des deux côtés."
+  end
+  local resultat, nombreDeBlocs = {}, 0
+  for bloc in (t:sub(5) .. ";"):gmatch("([^;]*);") do
+    if bloc ~= "" then
+      local nom, corps = bloc:match("^([%w_]+):(.*)$")
+      if not nom then
+        return nil, "Texte abîmé : « " .. extrait(bloc) .. " » n'est pas de la forme Addon:réglage=valeur."
+      end
+      local valeurs = resultat[nom] or {}
+      for paire in (corps .. ","):gmatch("([^,]*),") do
+        if paire ~= "" then
+          local cle, v = paire:match("^([%w_]+)=([%-%+%.%deE]+)$")
+          local n = v and tonumber(v)
+          if not cle or not n or n ~= n or n == math.huge or n == -math.huge then
+            return nil, "Texte abîmé dans « " .. nom .. " » : « " .. extrait(paire) .. " » n'est pas de la forme réglage=valeur."
+          end
+          valeurs[cle] = n
+        end
+      end
+      resultat[nom] = valeurs
+      nombreDeBlocs = nombreDeBlocs + 1
+    end
+  end
+  if nombreDeBlocs == 0 then return nil, "Ce texte ne contient aucun réglage." end
+  return resultat
+end
+
+-- La valeur à poser pour une option déclarée, d'après un nombre reçu ; nil si elle est
+-- refusée (un interrupteur ne prend que 0 ou 1 ; un curseur reste entre son minimum et
+-- son maximum, sur son pas).
+function ns.valeurValide(opt, brut)
+  if type(opt) ~= "table" or type(brut) ~= "number" then return nil end
+  if opt.type == "nombre" then
+    local mini, maxi, pas = nombre(opt.min, 0), nombre(opt.max, 10), nombre(opt.pas, 1)
+    if pas <= 0 then pas = 1 end
+    local v = math.max(mini, math.min(maxi, brut))
+    v = mini + math.floor((v - mini) / pas + 0.5) * pas
+    return math.max(mini, math.min(maxi, v))
+  end
+  if brut == 1 then return true end
+  if brut == 0 then return false end
+  return nil
+end
+
+-- Applique le texte décodé. cibles = { { nom = "GPS", options = { cle = option }, poser = fonction(cle, valeur) } }.
+-- Les addons et les clés inconnus sont ignorés (et comptés). Renvoie le bilan.
+function ns.appliquerPartage(recu, cibles)
+  local bilan = { appliques = 0, addons = 0, inconnus = 0, refuses = 0, absents = {} }
+  local vus = {}
+  for _, c in ipairs(cibles or {}) do
+    local valeurs = recu[c.nom]
+    if valeurs then
+      vus[c.nom] = true
+      local cles = {}
+      for cle in pairs(valeurs) do cles[#cles + 1] = cle end
+      table.sort(cles)
+      local n = 0
+      for _, cle in ipairs(cles) do
+        local opt = c.options and c.options[cle]
+        local v = opt and ns.valeurValide(opt, valeurs[cle])
+        if not opt then
+          bilan.inconnus = bilan.inconnus + 1
+        elseif v == nil or not pcall(c.poser, cle, v) then
+          bilan.refuses = bilan.refuses + 1
+        else
+          n = n + 1
+        end
+      end
+      if n > 0 then bilan.addons = bilan.addons + 1 end
+      bilan.appliques = bilan.appliques + n
+    end
+  end
+  for nom in pairs(recu) do
+    if not vus[nom] then bilan.absents[#bilan.absents + 1] = nom end
+  end
+  table.sort(bilan.absents)
+  return bilan
+end
+
+-- Le bilan en une phrase, pour la fenêtre.
+function ns.texteBilanPartage(bilan)
+  local t
+  if bilan.appliques == 0 then
+    t = "Aucun réglage appliqué."
+  else
+    t = bilan.appliques .. " réglage(s) appliqué(s) dans " .. bilan.addons .. " addon(s)."
+  end
+  if bilan.inconnus > 0 then t = t .. " " .. bilan.inconnus .. " réglage(s) inconnu(s) ignoré(s)." end
+  if bilan.refuses > 0 then t = t .. " " .. bilan.refuses .. " valeur(s) refusée(s)." end
+  if #bilan.absents > 0 then t = t .. " Pas chez toi : " .. table.concat(bilan.absents, ", ") .. "." end
+  return t
 end
 
 -- ============================================================ petits outils
@@ -350,6 +616,41 @@ end
 local function hauteurTexte(fs, defaut)
   local h = fs.GetStringHeight and fs:GetStringHeight()
   return math.max(nombre(h, defaut), defaut)
+end
+
+-- Un grand champ de texte sur plusieurs lignes, dans un cadre doré, qui défile (pour copier
+-- ou coller un long texte). Renvoie le champ et son cadre.
+local function creerChampDefilant(parent, largeur, hauteur)
+  local cadre = CreateFrame("Frame", nil, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  cadre:SetSize(largeur, hauteur)
+  if cadre.SetBackdrop then
+    cadre:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+    cadre:SetBackdropColor(0, 0, 0, 0.45)
+    cadre:SetBackdropBorderColor(0.80, 0.63, 0.30, 0.9)
+  end
+  local okD, defile = pcall(CreateFrame, "ScrollFrame", nil, cadre, "UIPanelScrollFrameTemplate")
+  if not okD or not defile then defile = CreateFrame("ScrollFrame", nil, cadre) end
+  defile:SetPoint("TOPLEFT", 6, -6)
+  defile:SetPoint("BOTTOMRIGHT", -26, 6)
+  local champ = CreateFrame("EditBox", nil, defile)
+  champ:SetMultiLine(true)
+  champ:SetAutoFocus(false)
+  champ:SetMaxLetters(20000)
+  champ:SetFontObject(ChatFontNormal or GameFontHighlight)
+  champ:SetWidth(largeur - 38)
+  champ:SetHeight(hauteur)
+  champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  defile:EnableMouseWheel(true)
+  defile:SetScript("OnMouseWheel", function(self, sens)
+    local maxi = nombre(self:GetVerticalScrollRange(), 0)
+    self:SetVerticalScroll(math.max(0, math.min(maxi, nombre(self:GetVerticalScroll(), 0) - sens * 30)))
+  end)
+  defile:SetScrollChild(champ)
+  -- Un clic dans le cadre, même à côté du texte, donne la main au champ.
+  cadre:EnableMouse(true)
+  cadre:SetScript("OnMouseDown", function() champ:SetFocus() end)
+  return champ, cadre
 end
 
 -- ============================================================ liste éditable
@@ -792,6 +1093,95 @@ local function leHub()
     if C_Timer and C_Timer.After then C_Timer.After(5, dire) else dire() end
   end
 
+  -- ----------------------------------------------------- Partager mes réglages
+  -- Sous « Quoi de neuf » : un texte à copier (tous les réglages de tous les addons chargés)
+  -- et un champ où coller celui d'un ami. Les listes (objets ignorés, balises…) ne partent pas.
+  local pagePartage = CreateFrame("Frame", nil, zone)
+  pagePartage:SetAllPoints()
+  pagePartage:Hide()
+  local entreePartage = { titre = "Partager mes réglages", icone = "Interface\\Icons\\INV_Letter_15", page = pagePartage, special = true }
+  hub.speciales[#hub.speciales + 1] = entreePartage
+
+  local titrePartage = pagePartage:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  titrePartage:SetPoint("TOPLEFT", 10, -6)
+  titrePartage:SetTextColor(1, 0.82, 0.30)
+  titrePartage:SetText("Partager mes réglages")
+  local explication = pagePartage:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  explication:SetPoint("TOPLEFT", titrePartage, "BOTTOMLEFT", 0, -6)
+  explication:SetWidth(PAGE - 20)
+  explication:SetJustifyH("LEFT")
+  explication:SetText("Les interrupteurs et les curseurs de tous les addons tiennent dans un seul texte. "
+    .. "Clique dans le premier cadre, Ctrl+A puis Ctrl+C pour le copier, et envoie-le à un ami. "
+    .. "Lui le colle dans le second cadre et clique sur « Appliquer ». "
+    .. "Les listes (objets ignorés, balises, courses…) ne sont pas partagées.")
+
+  local etiquetteEnvoi = pagePartage:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  etiquetteEnvoi:SetPoint("TOPLEFT", 10, -98)
+  etiquetteEnvoi:SetText("Mes réglages (à copier)")
+  local champEnvoi, cadreEnvoi = creerChampDefilant(pagePartage, PAGE - 10, 120)
+  cadreEnvoi:SetPoint("TOPLEFT", 8, -116)
+
+  local etiquetteRecu = pagePartage:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  etiquetteRecu:SetPoint("TOPLEFT", 10, -248)
+  etiquetteRecu:SetText("Réglages reçus (à coller)")
+  local champRecu, cadreRecu = creerChampDefilant(pagePartage, PAGE - 10, 100)
+  cadreRecu:SetPoint("TOPLEFT", 8, -266)
+
+  local resultatPartage = pagePartage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  resultatPartage:SetPoint("TOPLEFT", 10, -408)
+  resultatPartage:SetWidth(PAGE - 20)
+  resultatPartage:SetJustifyH("LEFT")
+
+  -- Le texte de mes réglages : un bloc par addon chargé.
+  local texteEnvoi = ""
+  local function calculerEnvoi()
+    local blocs = {}
+    for _, x in ipairs(hub.entrees) do
+      local pa = x.partage
+      if pa then
+        local ok, valeurs = pcall(pa.lire)
+        if ok then blocs[#blocs + 1] = { nom = pa.nom, valeurs = valeurs } end
+      end
+    end
+    texteEnvoi = ns.encoderReglages(blocs)
+    champEnvoi:SetText(texteEnvoi)
+  end
+  -- Le premier champ ne se modifie pas : une frappe remet le texte en place.
+  champEnvoi:SetScript("OnTextChanged", function(self, saisie)
+    if saisie and self:GetText() ~= texteEnvoi then
+      self:SetText(texteEnvoi)
+      self:HighlightText()
+    end
+  end)
+  champEnvoi:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+
+  local function appliquerRecu()
+    local recu, erreur = ns.decoderReglages(champRecu:GetText())
+    if not recu then
+      resultatPartage:SetText("|cffff4a3a" .. erreur .. "|r")
+      return
+    end
+    local cibles = {}
+    for _, x in ipairs(hub.entrees) do
+      if x.partage then cibles[#cibles + 1] = x.partage end
+    end
+    local bilan = ns.appliquerPartage(recu, cibles)
+    resultatPartage:SetText((bilan.appliques > 0 and "|cff3ddc3d" or "|cffff4a3a") .. ns.texteBilanPartage(bilan) .. "|r")
+    calculerEnvoi()
+  end
+  local boutonAppliquer = creerBouton(pagePartage, "Appliquer", "Applique les réglages du texte collé. Les addons ou les réglages que tu n'as pas sont ignorés.", appliquerRecu, 150)
+  boutonAppliquer:SetPoint("TOPLEFT", 8, -374)
+  local boutonVider = creerBouton(pagePartage, "Vider le champ", "Efface le texte collé.", function()
+    champRecu:SetText("")
+    resultatPartage:SetText("")
+  end, 130)
+  boutonVider:SetPoint("LEFT", boutonAppliquer, "RIGHT", 8, 0)
+
+  pagePartage:SetScript("OnShow", function()
+    calculerEnvoi()
+    resultatPartage:SetText("")
+  end)
+
   -- L'icône commune autour de la minimap : un clic ouvre la fenêtre.
   if not _G.ValentinAddonsMinimap then
     local bouton = CreateFrame("Button", "ValentinAddonsMinimap", Minimap)
@@ -874,6 +1264,12 @@ function ns.creerReglages(p)
   local r = {}
   local db
   local hub = leHub()
+  local cles = ns.clesReglages(p.options) -- les clés déclarées : les seules qui se partagent ou se rangent par personnage
+  local optionsParCle = {}
+  for _, opt in ipairs(p.options) do
+    if opt.cle then optionsParCle[opt.cle] = opt end
+  end
+  local moi -- « Nom-Royaume » du personnage, connu au chargement
 
   local function dire(texte) print("|cffffd200" .. p.titre .. "|r : " .. texte) end
   r.dire = dire
@@ -911,6 +1307,27 @@ function ns.creerReglages(p)
     etatGeneral:SetPoint("RIGHT", interrupteurGeneral, "LEFT", -8, 0)
   end
 
+  -- Réglages propres à ce personnage : un petit interrupteur sous l'interrupteur général.
+  local interrupteurPerso = creerInterrupteur(page, function(v)
+    if not moi or not db then return end
+    ns.changerMode(db, cles, moi, v, p.defauts)
+    r.appliquer()
+    dire(v and "réglages propres à ce personnage (copiés depuis les réglages actuels)."
+      or "réglages communs à tout le compte (ceux du compte sont rechargés).")
+  end)
+  interrupteurPerso:SetScale(0.85)
+  interrupteurPerso:SetPoint("TOPRIGHT", -30, -52)
+  local textePerso = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  textePerso:SetPoint("RIGHT", interrupteurPerso, "LEFT", -8, 0)
+  textePerso:SetText("Réglages propres à ce personnage")
+  interrupteurPerso:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:AddLine("Réglages propres à ce personnage")
+    GameTooltip:AddLine("Coupé : les réglages de cet addon sont les mêmes pour tous tes personnages. Activé : ce personnage a les siens (copiés depuis les réglages actuels), les autres personnages ne changent pas. Seuls les interrupteurs et les curseurs sont concernés, pas les listes ni les positions.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  interrupteurPerso:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
   -- ------------------------------------------------------- onglets
   -- Un onglet par section ({ titre = … }) ; les options d'avant la première
   -- section vont dans « Général » ; contenu() a son propre onglet.
@@ -945,7 +1362,7 @@ function ns.creerReglages(p)
     local largeur = nombre(b.texte:GetStringWidth(), #o.titre * 7) + 22
     if x + largeur > PAGE then x, ligne = 4, ligne + 1 end
     b:SetSize(largeur, 24)
-    b:SetPoint("TOPLEFT", x, -50 - ligne * 26)
+    b:SetPoint("TOPLEFT", x, -76 - ligne * 26)
     b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     b.trait = b:CreateTexture(nil, "ARTWORK")
     b.trait:SetColorTexture(1, 0.82, 0, 1)
@@ -955,7 +1372,7 @@ function ns.creerReglages(p)
     o.bouton = b
     x = x + largeur + 4
   end
-  local hautOnglets = 50 + (ligne + 1) * 26 + 6
+  local hautOnglets = 76 + (ligne + 1) * 26 + 6
 
   -- ------------------------------------------------------- boutons d'action, en bas
   local actions = {}
@@ -1135,6 +1552,8 @@ function ns.creerReglages(p)
       interrupteurGeneral.poser(db.actif)
       etatGeneral:SetText(db.actif and "|cff3ddc3dActivé|r" or "|cffff4a3aCoupé|r")
     end
+    interrupteurPerso.poser(ns.modePerso(db, moi))
+    interrupteurPerso.permettre(moi ~= nil)
     for _, ctl in ipairs(controles) do
       local dispo = disponible(ctl.opt)
       if ctl.interrupteur then
@@ -1235,6 +1654,8 @@ function ns.creerReglages(p)
 
   -- ------------------------------------------------------- changements
   function r.appliquer()
+    -- Les valeurs actuelles vont aussi dans le profil du personnage (ses réglages propres, sinon le compte).
+    ns.ecrireProfil(db, cles, moi)
     iconeMini:SetDesaturated(not db.actif)
     mini:SetShown(db.minimap == true)
     if page:IsShown() then majFenetre() end
@@ -1278,10 +1699,21 @@ function ns.creerReglages(p)
     r.db = db
     -- Une seule fois : l'icône à part laisse la place à l'icône commune.
     if not db.iconeCommune then db.minimap = false; db.iconeCommune = true end
+    -- Réglages du compte ou propres à ce personnage : la table de travail reçoit les bonnes valeurs
+    -- avant que l'addon les lise.
+    local nomJoueur = UnitName and UnitName("player")
+    if nomJoueur == UNKNOWNOBJECT then nomJoueur = nil end
+    moi = ns.nomProfil(nomJoueur, GetRealmName and GetRealmName())
+    ns.chargerProfil(db, cles, moi, p.defauts)
     r.hub = ns.inscrireAuHub({
       titre = p.titre, icone = p.icone, db = db, ouvrir = r.montrer, basculer = r.basculer,
       panneau = p.ouvrirHub, textePanneau = p.texteHub, page = page, recherche = recherche, allerOnglet = choisirOnglet,
       actif = function() return db.actif and true or false end,
+      partage = {
+        nom = NOM_ADDON, options = optionsParCle,
+        lire = function() return ns.copierReglages(db, cles) end,
+        poser = function(cle, valeur) r.changer(cle, valeur) end,
+      },
     })
     placerMini()
     if p.auChargement then p.auChargement(db) end

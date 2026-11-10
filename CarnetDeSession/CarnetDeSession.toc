@@ -3,7 +3,7 @@
 ## Notes: Temps de jeu, or, expérience et monstres tués depuis la connexion, avec l'historique des sessions.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.6.0
+## Version: 0.7.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## SavedVariables: CarnetDeSessionDB
 ## SavedVariablesPerCharacter: CarnetDeSessionPerso

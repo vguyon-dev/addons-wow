@@ -262,6 +262,314 @@ do
   end
   hub.messageNouveau = nil
 end
+-- Les réglages propres à chaque personnage (Reglages.lua)
+do
+  local cles = { "actif", "taille", "son" }
+  local defauts = { actif = true, taille = 100, son = true }
+  local function fmt(t) return tostring(t.actif) .. "/" .. tostring(t.taille) .. "/" .. tostring(t.son) end
+  local function combien(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+  verifie("profils : clés déclarées, sans titre ni doublon", "actif,taille,son",
+    table.concat(ns.clesReglages({ { titre = "S" }, { cle = "actif" }, { cle = "taille", type = "nombre" }, { cle = "son" }, { cle = "son" }, 5, { cle = 3 }, { cle = "" } }), ","))
+  verifie("profils : options absentes", 0, #ns.clesReglages(nil))
+  local copie = ns.copierReglages({ a = true, b = 3, c = { 1 }, d = "x", e = 0 / 0, f = 1 / 0, g = false }, { "a", "b", "c", "d", "e", "f", "g", "h" })
+  verifie("profils : seules les valeurs simples sont copiées", "a,b,g", (function()
+    local l = {} for k in pairs(copie) do l[#l + 1] = k end table.sort(l) return table.concat(l, ",") end)())
+  verifie("profils : source absente", 0, combien(ns.copierReglages(nil, { "a" })))
+  verifie("profils : nom du personnage", "Aela-Elune", ns.nomProfil("Aela", "Elune"))
+  verifie("profils : royaume inconnu", "Aela-", ns.nomProfil("Aela", nil))
+  verifie("profils : nom inconnu", "nil", tostring(ns.nomProfil(nil, "Elune")))
+  verifie("profils : nom vide", "nil", tostring(ns.nomProfil("", "Elune")))
+
+  -- Premier lancement : le compte reprend les valeurs actuelles, rien ne change.
+  local db = { actif = true, taille = 120, son = false, position = { x = 5 }, liste = { 1, 2 } }
+  verifie("profils : premier lancement, mode compte", "compte", ns.chargerProfil(db, cles, "A-R", defauts))
+  verifie("profils : le compte reprend les valeurs actuelles", "true/120/false", fmt(db.compte))
+  verifie("profils : la table de travail ne change pas", "true/120/false", fmt(db))
+  verifie("profils : personne n'a de réglages propres", 0, combien(db.parPerso))
+  verifie("profils : les positions et les listes ne sont pas touchées", "5/2", db.position.x .. "/" .. #db.liste)
+  verifie("profils : ni positions ni listes dans le compte", 3, combien(db.compte))
+
+  -- Le personnage A change un réglage : c'est le compte qui le garde.
+  db.taille = 150
+  verifie("profils : écriture en mode compte", "compte", ns.ecrireProfil(db, cles, "A-R"))
+  verifie("profils : le compte a la nouvelle valeur", 150, db.compte.taille)
+
+  -- A passe en réglages propres : copie des valeurs actuelles, le compte ne bouge plus.
+  verifie("profils : activer les réglages propres", "perso", ns.changerMode(db, cles, "A-R", true, defauts))
+  verifie("profils : A est en mode perso", true, ns.modePerso(db, "A-R"))
+  verifie("profils : copie des valeurs actuelles", "true/150/false", fmt(db.parPerso["A-R"]))
+  db.son = true
+  verifie("profils : écriture en mode perso", "perso", ns.ecrireProfil(db, cles, "A-R"))
+  verifie("profils : le réglage va chez A", true, db.parPerso["A-R"].son)
+  verifie("profils : le compte n'a pas bougé", false, db.compte.son)
+  verifie("profils : activer deux fois ne perd rien", "true/150/true", (function()
+    ns.changerMode(db, cles, "A-R", true, defauts) return fmt(db.parPerso["A-R"]) end)())
+
+  -- B se connecte (mode compte) : il voit le compte, pas les réglages de A.
+  verifie("profils : B suit le compte", "compte", ns.chargerProfil(db, cles, "B-R", defauts))
+  verifie("profils : B reçoit les valeurs du compte", "true/150/false", fmt(db))
+  db.taille = 200
+  ns.ecrireProfil(db, cles, "B-R")
+  verifie("profils : B change le compte", 200, db.compte.taille)
+  verifie("profils : A n'a pas changé", 150, db.parPerso["A-R"].taille)
+
+  -- A revient : il retrouve les siens.
+  verifie("profils : A revient en mode perso", "perso", ns.chargerProfil(db, cles, "A-R", defauts))
+  verifie("profils : A retrouve ses réglages", "true/150/true", fmt(db))
+  verifie("profils : le compte est intact", "true/200/false", fmt(db.compte))
+  -- B revient aussi, puis A : les deux alternent sans se mélanger.
+  ns.chargerProfil(db, cles, "B-R", defauts)
+  verifie("profils : B revient, valeurs du compte", "true/200/false", fmt(db))
+  ns.chargerProfil(db, cles, "A-R", defauts)
+  verifie("profils : A revient encore", "true/150/true", fmt(db))
+
+  -- A coupe ses réglages propres : ils sont effacés, le compte est rechargé.
+  verifie("profils : couper les réglages propres", "compte", ns.changerMode(db, cles, "A-R", false, defauts))
+  verifie("profils : plus de réglages propres pour A", false, ns.modePerso(db, "A-R"))
+  verifie("profils : la table de travail reçoit le compte", "true/200/false", fmt(db))
+  verifie("profils : l'entrée de A est effacée", "nil", tostring(db.parPerso["A-R"]))
+  verifie("profils : couper sans en avoir est sans effet", "compte", ns.changerMode(db, cles, "A-R", false, defauts))
+
+  -- Une clé ajoutée plus tard (absente du compte et du profil) : la valeur de départ, sans fuite.
+  local cles2 = { "actif", "taille", "son", "nouveau" }
+  local defauts2 = { actif = true, taille = 100, son = true, nouveau = 7 }
+  ns.changerMode(db, cles2, "A-R", true, defauts2)
+  db.nouveau = 9 -- A règle la nouvelle clé dans ses réglages propres
+  ns.ecrireProfil(db, cles2, "A-R")
+  verifie("profils : clé ajoutée, écrite chez A", 9, db.parPerso["A-R"].nouveau)
+  verifie("profils : clé ajoutée, pas dans le compte", "nil", tostring(db.compte.nouveau))
+  ns.chargerProfil(db, cles2, "B-R", defauts2)
+  verifie("profils : clé ajoutée, B reçoit la valeur de départ (pas celle de A)", 7, db.nouveau)
+  ns.chargerProfil(db, cles2, "A-R", defauts2)
+  verifie("profils : clé ajoutée, A retrouve la sienne", 9, db.nouveau)
+  local dbVieille = { actif = true, taille = 80, son = true }
+  ns.chargerProfil(dbVieille, { "actif", "taille", "son" }, "C-R", defauts)
+  local dbNouvelleCle = dbVieille
+  ns.chargerProfil(dbNouvelleCle, cles2, "C-R", defauts2)
+  verifie("profils : clé ajoutée après coup, valeur de départ", 7, dbNouvelleCle.nouveau)
+  verifie("profils : clé ajoutée après coup, valeurs anciennes gardées", 80, dbNouvelleCle.taille)
+  ns.ecrireProfil(dbNouvelleCle, cles2, "C-R")
+  verifie("profils : clé ajoutée après coup, retenue dans le compte", 7, dbNouvelleCle.compte.nouveau)
+
+  -- Personnage encore inconnu (le jeu ne donne pas son nom) : on reste sur le compte.
+  local dbX = { actif = true, taille = 90, son = true }
+  verifie("profils : sans nom, mode compte", "compte", ns.chargerProfil(dbX, cles, nil, defauts))
+  verifie("profils : sans nom, activer ne fait rien", "compte", ns.changerMode(dbX, cles, nil, true, defauts))
+  verifie("profils : sans nom, aucune entrée créée", 0, combien(dbX.parPerso))
+  verifie("profils : sans nom, pas de mode perso", false, ns.modePerso(dbX, nil))
+
+  -- Sauvegarde abîmée : les tables sont refaites, une entrée qui n'est pas une table est ignorée.
+  local dbCasse = { actif = true, taille = 70, son = false, compte = "x", parPerso = 5 }
+  verifie("profils : sauvegarde abîmée", "compte", ns.chargerProfil(dbCasse, cles, "A-R", defauts))
+  verifie("profils : sauvegarde abîmée, compte refait", "true/70/false", fmt(dbCasse.compte))
+  dbCasse.parPerso["A-R"] = "n'importe quoi"
+  verifie("profils : entrée abîmée ignorée", false, ns.modePerso(dbCasse, "A-R"))
+  dbCasse.parPerso["A-R"] = { actif = true, taille = "grand", son = false }
+  ns.chargerProfil(dbCasse, cles, "A-R", defauts)
+  verifie("profils : valeur abîmée, retour au compte", 70, dbCasse.taille)
+  verifie("profils : valeur abîmée, valeur saine gardée", false, dbCasse.son)
+end
+-- Le texte à partager (Reglages.lua)
+do
+  local blocs = {
+    { nom = "SacsRanges", valeurs = { vueCategories = true, ecart = 3, bavard = false } },
+    { nom = "GPS", valeurs = { taille = 160, actif = true, ratio = 0.5, decalage = -4, liste = { 1 }, ["mauvaise cle"] = 1 } },
+    { nom = "Vide", valeurs = {} },
+    { nom = "Mauvais nom", valeurs = { a = 1 } },
+    "pas un bloc",
+  }
+  local texte = ns.encoderReglages(blocs)
+  verifie("partage : texte compact, trié, versionné",
+    "VA1;GPS:actif=1,decalage=-4,ratio=0.5,taille=160;SacsRanges:bavard=0,ecart=3,vueCategories=1", texte)
+  verifie("partage : rien à partager", "VA1;", ns.encoderReglages({}))
+  verifie("partage : liste absente", "VA1;", ns.encoderReglages(nil))
+  local recu = ns.decoderReglages(texte)
+  verifie("partage : aller-retour, un interrupteur", 1, recu and recu.SacsRanges.vueCategories)
+  verifie("partage : aller-retour, un interrupteur coupé", 0, recu and recu.SacsRanges.bavard)
+  verifie("partage : aller-retour, un curseur", 160, recu and recu.GPS.taille)
+  verifie("partage : aller-retour, un nombre à virgule", 0.5, recu and recu.GPS.ratio)
+  verifie("partage : aller-retour, un nombre négatif", -4, recu and recu.GPS.decalage)
+  verifie("partage : aller-retour, la liste n'est pas partagée", "nil", tostring(recu and recu.GPS.liste))
+  verifie("partage : aller-retour, deux addons seulement", "GPS,SacsRanges", (function()
+    local l = {} for k in pairs(recu) do l[#l + 1] = k end table.sort(l) return table.concat(l, ",") end)())
+  local coupe = ns.decoderReglages("  VA1;GPS:taille=160,\n actif=1 ;\nSacsRanges:ecart=3  ")
+  verifie("partage : espaces et retours à la ligne ignorés", "160/1/3", coupe and (coupe.GPS.taille .. "/" .. coupe.GPS.actif .. "/" .. coupe.SacsRanges.ecart))
+  local souple = ns.decoderReglages("VA1;GPS:a=1;;GPS:b=0,,c=2e1;")
+  verifie("partage : blocs et paires vides permis, blocs d'un même addon réunis", "1/0/20", souple and (souple.GPS.a .. "/" .. souple.GPS.b .. "/" .. souple.GPS.c))
+  local function erreur(t) local r, e = ns.decoderReglages(t) return r == nil and e or "pas d'erreur" end
+  verifie("partage : texte vide", "Colle d'abord le texte reçu.", erreur(""))
+  verifie("partage : que des espaces", "Colle d'abord le texte reçu.", erreur("  \n "))
+  verifie("partage : pas un texte", "Colle d'abord le texte reçu.", erreur(nil))
+  verifie("partage : pas un texte de réglages", true, erreur("bonjour, voici mes réglages"):find("commencer par « VA1; »", 1, true) ~= nil)
+  verifie("partage : début coupé", true, erreur("GPS:taille=160"):find("commencer par", 1, true) ~= nil)
+  verifie("partage : une autre version", true, erreur("VA2;GPS:taille=160"):find("autre version (VA2)", 1, true) ~= nil)
+  verifie("partage : aucun réglage", "Ce texte ne contient aucun réglage.", erreur("VA1;"))
+  verifie("partage : que des blocs vides", "Ce texte ne contient aucun réglage.", erreur("VA1;;;"))
+  verifie("partage : bloc sans deux-points", true, erreur("VA1;GPS"):find("« GPS »", 1, true) ~= nil)
+  verifie("partage : bloc sans nom", true, erreur("VA1;:a=1"):find("Texte abîmé", 1, true) ~= nil)
+  verifie("partage : paire sans valeur", true, erreur("VA1;GPS:taille"):find("dans « GPS » : « taille »", 1, true) ~= nil)
+  verifie("partage : valeur qui n'est pas un nombre", true, erreur("VA1;GPS:taille=grand"):find("« taille=grand »", 1, true) ~= nil)
+  verifie("partage : nombre abîmé", true, erreur("VA1;GPS:taille=1.2.3"):find("« taille=1.2.3 »", 1, true) ~= nil)
+  verifie("partage : nombre infini refusé", true, erreur("VA1;GPS:taille=1e999"):find("Texte abîmé", 1, true) ~= nil)
+  verifie("partage : texte coupé en plein milieu", true, erreur("VA1;GPS:taille=160;SacsRanges:ec"):find("« ec »", 1, true) ~= nil)
+  verifie("partage : les codes de couleur collés sont neutralisés", true, erreur("VA1;GPS:|cffff0000x=1"):find("||cffff0000", 1, true) ~= nil)
+  verifie("partage : texte énorme refusé", true, erreur("VA1;GPS:a=1;" .. string.rep("A:b=1;", 4000)):find("trop long", 1, true) ~= nil)
+
+  -- Une valeur reçue devient la valeur d'un réglage, ou elle est refusée.
+  local inter = {}
+  local curseur = { type = "nombre", min = 60, max = 300, pas = 10 }
+  verifie("valeur : interrupteur 1", true, ns.valeurValide(inter, 1))
+  verifie("valeur : interrupteur 0", false, ns.valeurValide(inter, 0))
+  verifie("valeur : interrupteur 2 refusé", "nil", tostring(ns.valeurValide(inter, 2)))
+  verifie("valeur : interrupteur 0,5 refusé", "nil", tostring(ns.valeurValide(inter, 0.5)))
+  verifie("valeur : curseur dans les bornes", 160, ns.valeurValide(curseur, 160))
+  verifie("valeur : curseur arrondi sur son pas", 170, ns.valeurValide(curseur, 166))
+  verifie("valeur : curseur trop haut", 300, ns.valeurValide(curseur, 9999))
+  verifie("valeur : curseur trop bas", 60, ns.valeurValide(curseur, -5))
+  verifie("valeur : option absente", "nil", tostring(ns.valeurValide(nil, 1)))
+  verifie("valeur : pas un nombre", "nil", tostring(ns.valeurValide(inter, "1")))
+
+  -- Appliquer : les addons et les clés inconnus sont ignorés, et comptés.
+  local posees = {}
+  local function cible(nom, options, refuse)
+    return { nom = nom, options = options, poser = function(cle, v)
+      if refuse == cle then error("refusé par l'addon") end
+      posees[#posees + 1] = nom .. "." .. cle .. "=" .. tostring(v)
+    end }
+  end
+  local cibles = {
+    cible("GPS", { taille = curseur, actif = inter, ordre = inter }, "ordre"),
+    cible("SacsRanges", { vueCategories = inter }),
+    cible("Muet", { x = inter }),
+  }
+  local bilan = ns.appliquerPartage({
+    GPS = { taille = 166, actif = 1, inconnue = 1, ordre = 1 },
+    SacsRanges = { vueCategories = 0, bavard = 1 },
+    Absent = { a = 1 },
+    Aussi = { b = 1 },
+  }, cibles)
+  verifie("appliquer : les réglages posés, dans l'ordre", "GPS.actif=true,GPS.taille=170,SacsRanges.vueCategories=false", table.concat(posees, ","))
+  verifie("appliquer : réglages appliqués", 3, bilan.appliques)
+  verifie("appliquer : addons touchés", 2, bilan.addons)
+  verifie("appliquer : clés inconnues", 2, bilan.inconnus)
+  verifie("appliquer : un addon qui refuse", 1, bilan.refuses)
+  verifie("appliquer : addons absents chez moi", "Absent,Aussi", table.concat(bilan.absents, ","))
+  verifie("appliquer : le bilan en une phrase",
+    "3 réglage(s) appliqué(s) dans 2 addon(s). 2 réglage(s) inconnu(s) ignoré(s). 1 valeur(s) refusée(s). Pas chez toi : Absent, Aussi.",
+    ns.texteBilanPartage(bilan))
+  local vide = ns.appliquerPartage({ Autre = { a = 1 } }, cibles)
+  verifie("appliquer : rien d'appliqué", "Aucun réglage appliqué. Pas chez toi : Autre.", ns.texteBilanPartage(vide))
+  local refus = ns.appliquerPartage({ GPS = { actif = 7 } }, cibles)
+  verifie("appliquer : valeur refusée", "Aucun réglage appliqué. 1 valeur(s) refusée(s).", ns.texteBilanPartage(refus))
+end
+-- Réglages propres à un personnage, de bout en bout : chargement, r.changer, partage.
+do
+  local ecouteurs = {}
+  local vrai = CreateFrame
+  CreateFrame = function()
+    local f = bidon()
+    local scripts = {}
+    rawset(f, "SetScript", function(_, nom, fn) scripts[nom] = fn end)
+    rawset(f, "RegisterEvent", function(self, ev) if ev == "ADDON_LOADED" then ecouteurs[#ecouteurs + 1] = scripts end end)
+    rawset(f, "UnregisterEvent", function() end)
+    return f
+  end
+  local vraiPrint, vraiUnitName, vraiRoyaume = print, UnitName, GetRealmName
+  print = function() end
+  GetRealmName = function() return "Elune" end
+  local options = {
+    { cle = "actif", libelle = "Activer" },
+    { titre = "Section" },
+    { cle = "son", libelle = "Son" },
+    { cle = "taille", type = "nombre", libelle = "Taille", min = 60, max = 300, pas = 10 },
+  }
+  local defauts = { actif = true, son = true, taille = 100, liste = {} }
+  -- Une connexion : l'addon se charge avec la sauvegarde `sauve` pour le personnage `nom`.
+  local function connexion(nom, sauve)
+    UnitName = function() return nom end
+    _G.FauxPersoDB = sauve
+    ecouteurs = {}
+    local nsX = {}
+    assert(loadfile(reglagesLua))("FauxPerso", nsX)
+    local r = nsX.creerReglages({ titre = "FauxPerso", icone = "x", nomDB = "FauxPersoDB", defauts = defauts, options = options })
+    for _, scripts in ipairs(ecouteurs) do scripts.OnEvent({ UnregisterEvent = function() end }, "ADDON_LOADED", "FauxPerso") end
+    return r, _G.FauxPersoDB, nsX
+  end
+  local function entree()
+    for i = #_G.ValentinAddons.entrees, 1, -1 do
+      if _G.ValentinAddons.entrees[i].titre == "FauxPerso" then return _G.ValentinAddons.entrees[i], i end
+    end
+  end
+  local function oterEntree()
+    local _, i = entree()
+    while i do
+      table.remove(_G.ValentinAddons.entrees, i)
+      _, i = entree()
+    end
+  end
+
+  -- Une vieille sauvegarde, à plat, d'avant les profils.
+  local r, db = connexion("Aela", { actif = true, son = false, taille = 120, position = { x = 3 }, liste = { 1 } })
+  verifie("de bout en bout : le compte reprend la vieille sauvegarde", "true/false/120", tostring(db.compte.actif) .. "/" .. tostring(db.compte.son) .. "/" .. tostring(db.compte.taille))
+  verifie("de bout en bout : rien n'a changé pour le joueur", "false/120", tostring(db.son) .. "/" .. tostring(db.taille))
+  verifie("de bout en bout : la liste et la position sont à leur place", "3/1", db.position.x .. "/" .. #db.liste)
+  r.changer("taille", 150)
+  verifie("de bout en bout : r.changer écrit aussi dans le compte", 150, db.compte.taille)
+  -- Une écriture directe dans db, suivie de r.appliquer (comme le font des commandes d'addons).
+  db.son = true
+  r.appliquer()
+  verifie("de bout en bout : r.appliquer garde une écriture directe", true, db.compte.son)
+
+  -- Aela passe en réglages propres (ce que fait l'interrupteur de l'en-tête) et règle sa taille.
+  ns.changerMode(db, ns.clesReglages(options), "Aela-Elune", true, defauts)
+  r.appliquer()
+  r.changer("taille", 200)
+  verifie("de bout en bout : la taille d'Aela est à elle", 200, db.parPerso["Aela-Elune"].taille)
+  verifie("de bout en bout : le compte garde 150", 150, db.compte.taille)
+  -- Le texte à partager est celui des réglages actuels.
+  local e = entree()
+  verifie("de bout en bout : l'addon est inscrit pour le partage", "FauxPerso", e and e.partage and e.partage.nom)
+  verifie("de bout en bout : le partage lit les réglages de la clé déclarée", 200, e and e.partage.lire().taille)
+  verifie("de bout en bout : le partage ne lit pas la liste", "nil", tostring(e and e.partage.lire().liste))
+  verifie("de bout en bout : le texte de partage", "VA1;FauxPerso:actif=1,son=1,taille=200",
+    ns.encoderReglages({ { nom = "FauxPerso", valeurs = e.partage.lire() } }))
+  oterEntree()
+
+  -- Bob se connecte avec la même sauvegarde : il suit le compte.
+  local r2, db2 = connexion("Bob", db)
+  verifie("de bout en bout : Bob suit le compte", 150, db2.taille)
+  verifie("de bout en bout : Bob n'a pas de réglages propres", false, ns.modePerso(db2, "Bob-Elune"))
+  r2.changer("taille", 90)
+  verifie("de bout en bout : Bob change le compte", 90, db2.compte.taille)
+  verifie("de bout en bout : Aela garde les siens", 200, db2.parPerso["Aela-Elune"].taille)
+  -- Appliquer un texte reçu passe par r.changer : le profil du personnage le garde.
+  local e2 = entree()
+  local bilan = ns.appliquerPartage(ns.decoderReglages("VA1;FauxPerso:taille=250,son=0,inconnue=1;Autre:x=1"), { e2.partage })
+  verifie("de bout en bout : texte reçu appliqué", "2/1", bilan.appliques .. "/" .. bilan.inconnus)
+  verifie("de bout en bout : le texte reçu va dans le compte de Bob", "250/false", tostring(db2.compte.taille) .. "/" .. tostring(db2.compte.son))
+  verifie("de bout en bout : le texte reçu ne touche pas Aela", 200, db2.parPerso["Aela-Elune"].taille)
+  oterEntree()
+
+  -- Aela revient : ses réglages propres, puis elle les coupe et retrouve le compte.
+  local r3, db3 = connexion("Aela", db2)
+  verifie("de bout en bout : Aela retrouve les siens", 200, db3.taille)
+  ns.changerMode(db3, ns.clesReglages(options), "Aela-Elune", false, defauts)
+  r3.appliquer()
+  verifie("de bout en bout : Aela coupe ses réglages propres, retrouve le compte", 250, db3.taille)
+  verifie("de bout en bout : plus d'entrée pour Aela", "nil", tostring(db3.parPerso["Aela-Elune"]))
+  oterEntree()
+
+  -- Un nom encore inconnu du jeu : tout reste sur le compte, sans erreur.
+  UnitName = function() return nil end
+  local r4, db4 = connexion(nil, db3)
+  UnitName = function() return nil end
+  r4.changer("taille", 110)
+  verifie("de bout en bout : sans nom, le compte garde tout", 110, db4.compte.taille)
+  oterEntree()
+
+  print, UnitName, GetRealmName = vraiPrint, vraiUnitName, vraiRoyaume
+  CreateFrame = vrai
+end
 -- La part de « À vendre » qui n'est pas grise, pour Marchand auto.
 local lus = {
   { sac = 0, case = 1, lien = "[Gris]", id = 1, qualite = 0, categorie = "vendre" },

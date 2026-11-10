@@ -3,7 +3,7 @@
 ## Notes: Accepte invocations, résurrections et invitations de tes proches, refuse duels et chartes, petits réglages d'écran.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.2.0
+## Version: 0.3.0
 ## IconTexture: Interface\Icons\INV_Misc_Pillow_01
 ## SavedVariables: ConfortDB
 ## AddonCompartmentFunc: Confort_OuvrirReglages

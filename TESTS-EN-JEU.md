@@ -32,6 +32,14 @@ Avant de commencer :
 - [ ] À la première connexion après la mise à jour : un seul message dans le chat « Addons de Valentin : il y a du nouveau… » (pas 17), quelques secondes après l'arrivée dans le jeu, et une pastille dorée sur « Quoi de neuf » (et la ligne « Il y a du nouveau » dans la bulle de l'engrenage de la minimap).
 - [ ] Clic sur « Quoi de neuf » : les nouveautés s'affichent dans un cadre qui défile à la molette, les plus récentes en premier, marquées « [nouveau] » ; la pastille disparaît.
 - [ ] `/reload` : plus de message, plus de pastille. Les nouveautés s'ouvrent toujours quand on clique sur l'entrée.
+- [ ] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas.
+- [ ] Changer un réglage (par exemple la taille de la flèche du GPS), coller l'ancien texte dans le second cadre, « Appliquer » : message vert « N réglage(s) appliqué(s) dans M addon(s) », et le réglage revient à l'ancienne valeur tout de suite, sans `/reload`.
+- [ ] Texte abîmé : retirer le début « VA1; » ou couper le texte au milieu d'un réglage, « Appliquer » : message rouge clair, rien n'est changé. Cadre vide : « Colle d'abord le texte reçu. »
+- [ ] Les listes (objets ignorés de Butin rapide, balises du GPS, courses de Métiers auto) ne bougent pas après « Appliquer ».
+- [ ] En haut à droite de la page de chaque addon, sous l'interrupteur général : « Réglages propres à ce personnage » avec son petit interrupteur (bulle d'aide au survol), sans chevaucher la description ni les onglets (Sacs rangés et Quêtes auto : onglets sur deux lignes).
+- [ ] Activer l'interrupteur sur un addon, changer un réglage, puis se connecter avec un autre personnage : l'autre personnage garde les réglages communs. Revenir sur le premier : il retrouve les siens. Couper l'interrupteur : il retrouve ceux du compte.
+- [ ] Carnet de session et Butin rapide (qui ont aussi une sauvegarde par personnage) : session, historique et bilan de farm toujours là après la mise à jour, interrupteur « propres à ce personnage » sans effet sur eux.
+- [ ] Au premier lancement après la mise à jour, aucun réglage n'a changé sur aucun personnage (rien ne bouge tant qu'on n'active pas l'interrupteur).
 
 ## Sacs rangés
 
