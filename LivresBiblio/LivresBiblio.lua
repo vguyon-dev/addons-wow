@@ -340,7 +340,7 @@ end
 -- Le panneau /livres
 -- ---------------------------------------------------------------------------
 
-local panneau = CreateFrame("Frame", "LivresBiblioPanneau", UIParent, "BasicFrameTemplateWithInset")
+local panneau = CreateFrame("Frame", "LivresBiblioPanneau", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 panneau:SetSize(400, 460)
 panneau:SetPoint("LEFT", UIParent, "LEFT", 60, 0)
 panneau:SetMovable(true)
@@ -351,9 +351,7 @@ panneau:SetScript("OnDragStart", panneau.StartMoving)
 panneau:SetScript("OnDragStop", panneau.StopMovingOrSizing)
 panneau:Hide()
 tinsert(UISpecialFrames, panneau:GetName())
-local titre = panneau.TitleText or panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-if not panneau.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Livres de bibliothèque")
+ns.habiller(panneau, { titre = "Livres de bibliothèque", fermer = true })
 local resume = panneau:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 resume:SetPoint("TOPLEFT", 16, -32)
 resume:SetWidth(370)

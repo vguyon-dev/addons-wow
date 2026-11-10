@@ -188,15 +188,7 @@ local function creerPanneau()
   panneau = CreateFrame("Frame", "EncheresPanneau", AuctionHouseFrame, BackdropTemplateMixin and "BackdropTemplate" or nil)
   panneau:SetSize(410, 400)
   panneau:SetPoint("TOPLEFT", AuctionHouseFrame, "TOPRIGHT", 4, 0)
-  if panneau.SetBackdrop then
-    panneau:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    panneau:SetBackdropColor(0.07, 0.06, 0.045, 0.96)
-    panneau:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
-  end
-  local t = panneau:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  t:SetPoint("TOPLEFT", 14, -12)
-  t:SetText("Enchères")
+  ns.habiller(panneau, { titre = "Enchères", trait = false })
 
   local bReleve = ns.creerBouton(panneau, "Relever les prix", "Relevé complet de l'hôtel des ventes : le prix le plus bas de chaque objet est gardé. Le jeu le permet une fois toutes les 15 minutes.", lancerReleve, 150)
   bReleve:SetPoint("TOPLEFT", 14, -40)

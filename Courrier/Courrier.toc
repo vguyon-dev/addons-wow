@@ -3,7 +3,7 @@
 ## Notes: Récupère le courrier en un clic : tout, l'or seulement, ou les courriers cochés. Jamais de contre-remboursement payé.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.2.0
 ## IconTexture: Interface\Icons\INV_Letter_15
 ## SavedVariables: CourrierDB
 ## AddonCompartmentFunc: Courrier_OuvrirReglages

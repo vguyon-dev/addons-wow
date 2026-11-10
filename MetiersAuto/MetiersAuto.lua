@@ -592,18 +592,7 @@ fenetreCourses:SetScript("OnDragStop", function(self)
   local point, _, pointRelatif, x, y = self:GetPoint()
   db.positionCourses = { point, pointRelatif, x, y }
 end)
-fenetreCourses:SetBackdrop({
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 },
-})
-fenetreCourses:SetBackdropColor(0, 0, 0, 0.75)
-local titreCourses = fenetreCourses:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-titreCourses:SetPoint("TOPLEFT", 10, -8)
-titreCourses:SetText("Liste de courses")
-local fermer = CreateFrame("Button", nil, fenetreCourses, "UIPanelCloseButton")
-fermer:SetSize(22, 22)
-fermer:SetPoint("TOPRIGHT", -2, -2)
+local _, fermer = ns.habiller(fenetreCourses, { titre = "Liste de courses", fermer = true })
 fermer:SetScript("OnClick", function() ns.reglages.changer("afficherCourses", false) end)
 local lignes = {}
 

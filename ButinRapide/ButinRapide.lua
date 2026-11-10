@@ -213,12 +213,7 @@ local alerte = CreateFrame("Frame", "ButinRapideAlerte", UIParent, "BackdropTemp
 alerte:SetSize(320, 96)
 alerte:SetPoint("TOP", 0, -140)
 alerte:SetFrameStrata("DIALOG")
-alerte:SetBackdrop({
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 },
-})
-alerte:SetBackdropColor(0.25, 0, 0, 0.9)
+local _, fermerAlerte = ns.habiller(alerte, { fermer = true })
 alerte:Hide()
 local alerteTexte = alerte:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 alerteTexte:SetPoint("TOPLEFT", 10, -10)
@@ -227,9 +222,6 @@ alerteTexte:SetJustifyH("LEFT")
 local boutonJeter = CreateFrame("Button", nil, alerte, "UIPanelButtonTemplate")
 boutonJeter:SetSize(300, 24)
 boutonJeter:SetPoint("BOTTOM", 0, 10)
-local fermerAlerte = CreateFrame("Button", nil, alerte, "UIPanelCloseButton")
-fermerAlerte:SetSize(22, 22)
-fermerAlerte:SetPoint("TOPRIGHT", -2, -2)
 
 local restes = {} -- liens laissés au sol faute de place
 local grisChoisi  -- { sac, case, lien, valeur }
@@ -349,18 +341,7 @@ fenetreBilan:SetScript("OnDragStop", function(self)
   local point, _, pointRelatif, x, y = self:GetPoint()
   db.positionBilan = { point, pointRelatif, x, y }
 end)
-fenetreBilan:SetBackdrop({
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 },
-})
-fenetreBilan:SetBackdropColor(0, 0, 0, 0.75)
-local titreBilan = fenetreBilan:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-titreBilan:SetPoint("TOPLEFT", 10, -8)
-titreBilan:SetText("Bilan de farm")
-local fermerBilan = CreateFrame("Button", nil, fenetreBilan, "UIPanelCloseButton")
-fermerBilan:SetSize(22, 22)
-fermerBilan:SetPoint("TOPRIGHT", -2, -2)
+local _, fermerBilan = ns.habiller(fenetreBilan, { titre = "Bilan de farm", fermer = true })
 fermerBilan:SetScript("OnClick", function() ns.reglages.changer("bilan", false) end)
 local texteBilan = fenetreBilan:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 texteBilan:SetPoint("TOPLEFT", 10, -28)

@@ -193,7 +193,7 @@ end
 -- Le panneau
 -- ---------------------------------------------------------------------------
 
-local panneau = CreateFrame("Frame", "QuetesDuGroupePanneau", UIParent, "BasicFrameTemplateWithInset")
+local panneau = CreateFrame("Frame", "QuetesDuGroupePanneau", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 ns.panneau = panneau
 panneau:SetSize(380, 420)
 panneau:SetPoint("LEFT", UIParent, "LEFT", 40, 0)
@@ -205,9 +205,7 @@ panneau:SetScript("OnDragStart", panneau.StartMoving)
 panneau:SetScript("OnDragStop", panneau.StopMovingOrSizing)
 panneau:Hide()
 tinsert(UISpecialFrames, panneau:GetName())
-local titre = panneau.TitleText or panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-if not panneau.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Quêtes du groupe")
+ns.habiller(panneau, { titre = "Quêtes du groupe", fermer = true })
 
 local defile = CreateFrame("ScrollFrame", nil, panneau, "UIPanelScrollFrameTemplate")
 defile:SetPoint("TOPLEFT", 12, -30)

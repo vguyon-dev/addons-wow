@@ -291,7 +291,7 @@ BINDING_NAME_SACSRANGES_RANGER = "Ranger les sacs"
 -- Le panneau
 -- ---------------------------------------------------------------------------
 
-local panneau = CreateFrame("Frame", "SacsRangesPanneau", UIParent, "BasicFrameTemplateWithInset")
+local panneau = CreateFrame("Frame", "SacsRangesPanneau", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 panneau:SetSize(380, 420)
 panneau:SetPoint("RIGHT", UIParent, "RIGHT", -300, 0)
 panneau:SetMovable(true)
@@ -302,9 +302,7 @@ panneau:SetScript("OnDragStart", panneau.StartMoving)
 panneau:SetScript("OnDragStop", panneau.StopMovingOrSizing)
 panneau:Hide()
 tinsert(UISpecialFrames, panneau:GetName())
-local titre = panneau.TitleText or panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-if not panneau.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Sacs rangés")
+ns.habiller(panneau, { titre = "Sacs rangés", fermer = true })
 
 local boutonRanger = CreateFrame("Button", nil, panneau, "UIPanelButtonTemplate")
 boutonRanger:SetSize(160, 24)

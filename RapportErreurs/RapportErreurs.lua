@@ -390,7 +390,7 @@ end
 -- Le panneau : tout le texte dans une zone que l'on peut copier (Ctrl+A, Ctrl+C).
 -- ---------------------------------------------------------------------------
 
-local panneau = CreateFrame("Frame", "RapportErreursPanneau", UIParent, "BasicFrameTemplateWithInset")
+local panneau = CreateFrame("Frame", "RapportErreursPanneau", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 panneau:SetSize(620, 460)
 panneau:SetPoint("CENTER")
 panneau:SetMovable(true)
@@ -401,9 +401,7 @@ panneau:SetScript("OnDragStop", panneau.StopMovingOrSizing)
 panneau:SetFrameStrata("DIALOG")
 panneau:Hide()
 tinsert(UISpecialFrames, "RapportErreursPanneau")
-local titre = panneau.TitleText or panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-if not panneau.TitleText then titre:SetPoint("TOP", 0, -5) end
-titre:SetText("Rapport d'erreurs")
+ns.habiller(panneau, { titre = "Rapport d'erreurs", fermer = true })
 
 local defile = CreateFrame("ScrollFrame", nil, panneau, "UIPanelScrollFrameTemplate")
 defile:SetPoint("TOPLEFT", 12, -30)

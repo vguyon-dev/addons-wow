@@ -85,13 +85,6 @@ end
 local fenetre = CreateFrame("Frame", "CarnetDeSessionFrame", UIParent, "BackdropTemplate")
 fenetre:SetSize(230, 121)
 fenetre:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
-fenetre:SetBackdrop({
-  bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-  edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  tile = true, tileSize = 16, edgeSize = 16,
-  insets = { left = 4, right = 4, top = 4, bottom = 4 },
-})
-fenetre:SetBackdropColor(0, 0, 0, 0.8)
 fenetre:SetClampedToScreen(true) -- impossible de la perdre hors de l'écran
 fenetre:Hide()
 
@@ -106,13 +99,7 @@ fenetre:SetScript("OnDragStop", function(self)
   db.position = { point, pointRelatif, x, y }
 end)
 
-local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-titre:SetPoint("TOPLEFT", 10, -9)
-titre:SetText("Carnet de session")
-
-local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
-fermer:SetSize(24, 24)
-fermer:SetPoint("TOPRIGHT", -2, -2)
+local _, fermer = ns.habiller(fenetre, { titre = "Carnet de session", fermer = true })
 
 -- Une ligne = un libellé à gauche et une valeur à droite.
 local lignes = {}

@@ -50,6 +50,99 @@ local LARGEUR, HAUTEUR, COTE, PAGE = 790, 570, 200, 540
 local FOND = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
   edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } }
 
+-- ============================================================ l'habillage commun
+-- Le visuel « sombre et doré » de toutes les fenêtres propres aux addons.
+
+local HABILLAGE = {
+  fond = { 0.07, 0.06, 0.045, 0.96 },
+  bordure = { 0.80, 0.63, 0.30, 1 },
+  couleurTitre = { 1, 0.82, 0.30 },
+}
+
+-- Ce que ns.habiller va appliquer, options facultatives comprises (fonction pure,
+-- testée hors jeu). options : titre = "…", fermer = vrai, trait = faux pour
+-- sans filet doré sous le titre, fond = { r, v, b, a }, bordure = { r, v, b, a }.
+function ns.styleHabillage(options)
+  options = type(options) == "table" and options or {}
+  local function couleur(c, defaut, avecAlpha)
+    if type(c) ~= "table" then c = defaut end
+    local r, v, b = nombre(c[1], defaut[1]), nombre(c[2], defaut[2]), nombre(c[3], defaut[3])
+    if avecAlpha then return { r, v, b, nombre(c[4], defaut[4] or 1) } end
+    return { r, v, b }
+  end
+  local titre = type(options.titre) == "string" and options.titre ~= "" and options.titre or nil
+  return {
+    fond = couleur(options.fond, HABILLAGE.fond, true),
+    bordure = couleur(options.bordure, HABILLAGE.bordure, true),
+    couleurTitre = couleur(options.couleurTitre, HABILLAGE.couleurTitre, false),
+    titre = titre,
+    fermer = options.fermer and true or false,
+    trait = titre ~= nil and options.trait ~= false,
+  }
+end
+
+-- Habille un cadre : fond sombre, bordure dorée et, si on les demande, un titre doré
+-- et une croix de fermeture. Un cadre sans SetBackdrop (créé sans BackdropTemplate)
+-- reçoit un enfant BackdropTemplate en fond. Renvoie le titre et la croix (ou nil) :
+-- l'appelant peut donner son propre OnClick à la croix.
+-- Rien d'autre n'est touché : ni position, ni scripts, ni taille.
+function ns.habiller(cadre, options)
+  if not cadre then return end
+  local s = ns.styleHabillage(options)
+
+  local cible = cadre
+  if not cadre.SetBackdrop then
+    cible = cadre.fondHabille
+    if not cible and BackdropTemplateMixin then
+      local ok, enfant = pcall(CreateFrame, "Frame", nil, cadre, "BackdropTemplate")
+      if ok and enfant then
+        enfant:SetAllPoints(cadre)
+        local niveau = cadre.GetFrameLevel and cadre:GetFrameLevel() or 1
+        enfant:SetFrameLevel(math.max(niveau - 1, 0))
+        enfant:EnableMouse(false)
+        cadre.fondHabille = enfant
+        cible = enfant
+      end
+    end
+  end
+  if cible and cible.SetBackdrop then
+    cible:SetBackdrop(FOND)
+    cible:SetBackdropColor(s.fond[1], s.fond[2], s.fond[3], s.fond[4])
+    cible:SetBackdropBorderColor(s.bordure[1], s.bordure[2], s.bordure[3], s.bordure[4])
+  end
+
+  local titre, fermer
+  if s.titre then
+    titre = cadre.titreHabille
+    if not titre then
+      titre = cadre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+      titre:SetPoint("TOPLEFT", 12, -8)
+      cadre.titreHabille = titre
+    end
+    titre:SetText(s.titre)
+    titre:SetTextColor(s.couleurTitre[1], s.couleurTitre[2], s.couleurTitre[3])
+    if s.trait and not cadre.traitHabille then
+      local trait = cadre:CreateTexture(nil, "ARTWORK")
+      trait:SetColorTexture(s.bordure[1], s.bordure[2], s.bordure[3], 0.6)
+      trait:SetPoint("TOPLEFT", 6, -27)
+      trait:SetPoint("TOPRIGHT", -6, -27)
+      trait:SetHeight(1)
+      cadre.traitHabille = trait
+    end
+  end
+  if s.fermer then
+    fermer = cadre.fermerHabille
+    if not fermer then
+      fermer = CreateFrame("Button", nil, cadre, "UIPanelCloseButton")
+      fermer:SetSize(22, 22)
+      fermer:SetPoint("TOPRIGHT", -2, -2)
+      fermer:SetScript("OnClick", function() cadre:Hide() end)
+      cadre.fermerHabille = fermer
+    end
+  end
+  return titre, fermer
+end
+
 -- Recherche sans accents ni majuscules.
 local ACCENTS = { ["à"] = "a", ["â"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e", ["î"] = "i",
   ["ï"] = "i", ["ô"] = "o", ["ù"] = "u", ["û"] = "u", ["ç"] = "c", ["É"] = "e", ["À"] = "a", ["Ê"] = "e",

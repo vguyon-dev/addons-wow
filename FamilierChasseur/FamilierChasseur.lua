@@ -93,12 +93,7 @@ end
 local alerte = CreateFrame("Frame", "FamilierChasseurAlerte", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 alerte:SetSize(300, 86)
 alerte:SetPoint("TOP", UIParent, "TOP", 0, -200)
-if alerte.SetBackdrop then
-  alerte:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-  alerte:SetBackdropColor(0.10, 0.05, 0.03, 0.92)
-  alerte:SetBackdropBorderColor(1, 0.3, 0.2, 1)
-end
+ns.habiller(alerte)
 alerte:Hide()
 -- L'alerte se déplace en la faisant glisser (position gardée).
 alerte:SetMovable(true)

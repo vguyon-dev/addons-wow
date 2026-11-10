@@ -205,12 +205,7 @@ local function creerInterface()
   barre:SetPoint("TOPLEFT", MailFrame, "BOTTOMLEFT", 0, -2)
   barre:SetPoint("TOPRIGHT", MailFrame, "BOTTOMRIGHT", 0, -2)
   barre:SetHeight(58)
-  if barre.SetBackdrop then
-    barre:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    barre:SetBackdropColor(0.07, 0.06, 0.045, 0.95)
-    barre:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
-  end
+  ns.habiller(barre)
 
   local defs = {
     { "tout", "Tout récupérer", "L'or et les objets de tous les courriers. Les contre-remboursements sont laissés de côté." },

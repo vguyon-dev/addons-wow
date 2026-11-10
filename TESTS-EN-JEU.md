@@ -46,12 +46,14 @@ Avant de commencer :
 - [ ] Apparence « cadre du jeu » et nouveau visuel.
 - [ ] Retail : le sac rangé et ses cases (tout n'a été vu que sur Forever).
 - [ ] Barre Ranger, Analyse et Banque collée au sac du jeu, quand le sac rangé est décoché.
+- [ ] Panneau d'analyse (`/sr`) : fond sombre, bordure dorée, titre doré avec sa croix ; la croix et Échap le ferment ; il se déplace toujours à la souris.
 
 ## Butin rapide
 
 - [ ] Touche d'interaction sur les cadavres : la même touche que la récolte de Métiers auto, sans couper la récolte.
 - [ ] Liste « Objets à ne jamais ramasser » (dépôt, croix).
 - [ ] Couper l'addon pendant qu'une fenêtre de butin est ouverte : la fenêtre redevient visible.
+- [ ] Alerte « sacs pleins » et bilan de farm (`/br bilan`) : fond sombre, bordure dorée, croix qui marche (la croix du bilan le décoche dans les réglages) ; le bilan garde sa place après un `/reload`.
 
 ## Courrier (nouveau)
 
@@ -62,6 +64,7 @@ Avant de commencer :
 - [ ] Un contre-remboursement est laissé de côté.
 - [ ] Sacs pleins : l'addon s'arrête avec un message.
 - [ ] « Arrêter » pendant la récupération.
+- [ ] La barre sous la boîte aux lettres garde son fond sombre et sa bordure dorée (même visuel qu'avant).
 
 ## GPS (nouveau)
 
@@ -96,6 +99,7 @@ Avant de commencer :
 - [ ] `/reload` : les prix et la liste sont gardés.
 - [ ] Butin rapide : la ligne « Hôtel des ventes » du bilan de farm utilise nos prix.
 - [ ] Forever : vérifier que l'hôtel des ventes y a bien le relevé complet (sinon, le dire).
+- [ ] Le panneau à droite de l'hôtel des ventes garde son fond sombre, sa bordure dorée et son titre « Enchères » doré (même visuel qu'avant).
 
 ## Barres de vie (nouveau)
 
@@ -140,6 +144,19 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] Liste « Nourriture qu'il aime » dans les réglages : glisser sa viande, elle passe en premier.
 - [ ] En ville (auberge, capitale) : pas d'alerte « pas appelé ».
 - [ ] Pas d'erreur « fonction protégée » quand l'alerte change juste après un combat.
+- [ ] L'alerte du familier a le même visuel sombre et doré que les autres fenêtres (texte toujours rouge), se déplace à la souris, et sa croix la ferme comme avant.
+
+## Fenêtres au visuel sombre et doré
+
+Même fond sombre, même bordure dorée et titre doré que la fenêtre de réglages (le jeu ne montre plus le cadre bleu-gris d'origine).
+
+- [ ] Carnet de session (`/carnet`) : fond sombre, titre doré, croix ; il garde sa place après un `/reload` et se déplace toujours.
+- [ ] Liste de courses de Métiers auto (`/mt courses 5 <recette>`) : fond sombre, titre doré, la croix la décoche dans les réglages, la place est gardée.
+- [ ] Panneau de Livres de bibliothèque (`/livres`, Forever) : fond sombre, titre doré, croix, Échap le ferme.
+- [ ] Panneau de Quêtes du groupe (`/qg`) : fond sombre, titre doré, croix, Échap le ferme.
+- [ ] Rapport d'erreurs (`/re`) : fond sombre, titre doré, croix, Échap le ferme, le texte reste sélectionnable et copiable.
+- [ ] Sur chacune : rien ne chevauche le titre, le texte reste lisible, aucune erreur Lua (BugSack) à l'ouverture, en combat ou non.
+- [ ] Retail et Forever : même rendu (si le cadre n'a pas de fond, un cadre enfant le dessine derrière).
 
 ## Plus anciens, jamais confirmés
 
