@@ -19,6 +19,7 @@ local DEFAUTS = {
   actif = true,
   prixBulles = true,   -- le prix dans les bulles d'objets
   panneau = true,      -- le panneau à côté de l'hôtel des ventes
+  conseilPrix = true,  -- le prix conseillé quand tu déposes un objet dans l'onglet Vendre
   royaumes = {},       -- [royaume] = { [numéro d'objet] = { prix, date } }
   courses = {},        -- { "nom de l'objet", … }
   minimap = false,
@@ -74,6 +75,41 @@ end
 function ns.attenteReleve(dernier, maintenant)
   if not dernier then return 0 end
   return math.max(0, 900 - (maintenant - dernier))
+end
+
+-- Le prix conseillé pour mettre un objet en vente (en cuivre).
+--   plusBas : le prix le plus bas connu (à l'unité), nil si on n'en connaît pas
+--   marchand : le prix de vente au marchand (plancher), nil si inconnu
+--   lot : vrai pour un produit vendu en lot (on compte à l'unité), faux pour un objet unique
+-- Rend le prix, et une raison : "sous", "plancher" ou "inconnu" (prix nil).
+function ns.prixConseille(plusBas, marchand, lot)
+  if type(plusBas) ~= "number" or plusBas <= 0 then return nil, "inconnu" end
+  local p
+  if lot then
+    p = plusBas - 1
+  else
+    -- Objet unique : 1 argent de moins, arrondi à l'argent (100 cuivres).
+    p = math.floor((plusBas - 100) / 100) * 100
+  end
+  local plancher = type(marchand) == "number" and marchand > 0 and marchand or nil
+  if plancher and p < plancher then return plancher, "plancher" end
+  if p < 1 then return 1, "plancher" end
+  return p, "sous"
+end
+
+-- Les deux lignes du conseil, prêtes à afficher.
+--   formatOr : fonction qui met un prix en texte (le jeu fournit la sienne)
+-- Rend le texte du prix connu et le texte du conseil.
+function ns.texteConseil(plusBas, age, conseil, raison, lot, formatOr)
+  formatOr = formatOr or tostring
+  if raison == "inconnu" or not conseil then
+    return "Pas de prix connu pour cet objet.", "Pas de prix conseillé : relève les prix de l'hôtel des ventes."
+  end
+  local unite = lot and " l'unité" or ""
+  local connu = "Le plus bas connu : " .. formatOr(plusBas) .. unite .. " (" .. ns.age(age) .. ")"
+  local avis = "Prix conseillé : " .. formatOr(conseil) .. unite
+  if raison == "plancher" then avis = avis .. " (pas sous le prix du marchand)" end
+  return connu, avis
 end
 
 if not CreateFrame or not C_AuctionHouse then return end -- hors jeu (ou sans hôtel des ventes moderne)
@@ -183,10 +219,13 @@ end
 -- ---------------------------------------------------------------------------
 
 local panneau
+local majConseil
+local courant -- { cadre = cadre de mise en vente du jeu, id = numéro d'objet, lot = vrai si produit en lot }
+
 local function creerPanneau()
   if panneau or not AuctionHouseFrame then return end
   panneau = CreateFrame("Frame", "EncheresPanneau", AuctionHouseFrame, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  panneau:SetSize(410, 400)
+  panneau:SetSize(410, 480)
   panneau:SetPoint("TOPLEFT", AuctionHouseFrame, "TOPRIGHT", 4, 0)
   ns.habiller(panneau, { titre = "Enchères", trait = false })
 
@@ -222,8 +261,53 @@ local function creerPanneau()
     vider = function() db.courses = {} end,
   })
 
+  -- Le prix conseillé quand un objet est déposé dans l'onglet Vendre du jeu.
+  local filet = panneau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  filet:SetPoint("TOPLEFT", 16, -372)
+  filet:SetText("Mise en vente")
+  local conseilConnu = panneau:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  conseilConnu:SetPoint("TOPLEFT", filet, "BOTTOMLEFT", 0, -6)
+  conseilConnu:SetWidth(380)
+  conseilConnu:SetJustifyH("LEFT")
+  local conseilAvis = panneau:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  conseilAvis:SetPoint("TOPLEFT", conseilConnu, "BOTTOMLEFT", 0, -4)
+  conseilAvis:SetWidth(380)
+  conseilAvis:SetJustifyH("LEFT")
+  local bPrix
+  bPrix = ns.creerBouton(panneau, "Mettre ce prix", "Remplit le champ de prix du jeu. C'est toi qui cliques ensuite sur le bouton de mise en vente.", function()
+    local c = courant
+    if not (c and bPrix.prix and c.cadre:IsVisible()) then return end
+    local champ = c.cadre.PriceInput
+    if champ and champ.SetAmount then pcall(champ.SetAmount, champ, bPrix.prix) end
+  end, 130)
+  bPrix:SetPoint("TOPLEFT", 14, -432)
+
+  majConseil = function()
+    if not panneau then return end
+    local actif = db.conseilPrix and courant and courant.cadre and courant.cadre:IsVisible()
+    filet:SetShown(actif and true or false)
+    conseilConnu:SetShown(actif and true or false)
+    conseilAvis:SetShown(actif and true or false)
+    bPrix:SetShown(false)
+    bPrix.prix = nil
+    if not actif then return end
+    local p, age = Encheres_Prix(courant.id)
+    local marchand
+    local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if f then marchand = select(11, f(courant.id)) end
+    local conseil, raison = ns.prixConseille(p, marchand, courant.lot)
+    local connu, avis = ns.texteConseil(p, age, conseil, raison, courant.lot, texteOr)
+    conseilConnu:SetText(connu)
+    conseilAvis:SetText(avis)
+    if conseil and courant.cadre.PriceInput and courant.cadre.PriceInput.SetAmount then
+      bPrix.prix = conseil
+      bPrix:Show()
+    end
+  end
+
   majPanneau = function()
     if not panneau then return end
+    if majConseil then majConseil() end
     local n = 0
     for _ in pairs(royaume()) do n = n + 1 end
     if releve then
@@ -238,6 +322,37 @@ local function creerPanneau()
         .. (attente > 0 and (" · prochain dans " .. math.ceil(attente / 60) .. " min") or ""))
     end
     majListe()
+  end
+end
+
+-- Quand un objet est déposé dans l'onglet Vendre (objet unique ou produit en lot).
+local crochetsPoses = {}
+local function surObjetDepose(cadre, lot)
+  return function(_, emplacement)
+    courant = nil
+    if emplacement and C_Item and C_Item.GetItemID and (not emplacement.IsValid or emplacement:IsValid()) then
+      local ok, id = pcall(C_Item.GetItemID, emplacement)
+      if ok and id then courant = { cadre = cadre, id = id, lot = lot } end
+    end
+    if majConseil then majConseil() end
+  end
+end
+
+local function poserCrochets()
+  if not AuctionHouseFrame or not hooksecurefunc then return end
+  for _, def in ipairs({ { "ItemSellFrame", false }, { "CommoditiesSellFrame", true } }) do
+    local cadre = AuctionHouseFrame[def[1]]
+    if cadre and cadre.SetItem and not crochetsPoses[cadre] then
+      crochetsPoses[cadre] = true
+      pcall(hooksecurefunc, cadre, "SetItem", surObjetDepose(cadre, def[2]))
+      if cadre.HookScript then
+        pcall(cadre.HookScript, cadre, "OnHide", function() if majConseil then majConseil() end end)
+      end
+    end
+  end
+  if not crochetsPoses[AuctionHouseFrame] and AuctionHouseFrame.SetDisplayMode then
+    crochetsPoses[AuctionHouseFrame] = true
+    pcall(hooksecurefunc, AuctionHouseFrame, "SetDisplayMode", function() if majConseil then majConseil() end end)
   end
 end
 
@@ -280,6 +395,8 @@ ns.reglages = ns.creerReglages({
       aide = "« Enchères : 12 pa, il y a 3 h » : le prix le plus bas vu au dernier relevé, à l'unité." },
     { cle = "panneau", libelle = "Le panneau à côté de l'hôtel des ventes",
       aide = "Le bouton « Relever les prix » et la liste de courses (un clic lance la recherche)." },
+    { cle = "conseilPrix", libelle = "Le prix conseillé quand je mets un objet en vente", dependDe = "panneau",
+      aide = "Dépose un objet dans l'onglet Vendre : le panneau affiche le prix le plus bas connu et un prix conseillé (un peu en dessous, jamais sous le prix du marchand). « Mettre ce prix » remplit le champ du jeu, c'est toi qui valides la mise en vente." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
@@ -306,6 +423,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
   if evenement == "AUCTION_HOUSE_SHOW" then
     if not db.actif or not db.panneau then return end
     creerPanneau()
+    poserCrochets()
     if panneau then panneau:Show(); majPanneau() end
   elseif evenement == "AUCTION_HOUSE_CLOSED" then
     attendReleve = false

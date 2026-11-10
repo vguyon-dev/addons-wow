@@ -114,6 +114,11 @@ Avant de commencer :
 - [ ] Butin rapide : la ligne « Hôtel des ventes » du bilan de farm utilise nos prix.
 - [ ] Forever : vérifier que l'hôtel des ventes y a bien le relevé complet (sinon, le dire).
 - [ ] Le panneau à droite de l'hôtel des ventes garde son fond sombre, sa bordure dorée et son titre « Enchères » doré (même visuel qu'avant).
+- [ ] Onglet Vendre, objet unique (arme, armure) déposé : le bloc « Mise en vente » donne le plus bas connu avec son âge et un prix conseillé arrondi à l'argent. « Mettre ce prix » remplit le champ de prix du jeu ; la mise en vente reste un clic de ta part.
+- [ ] Onglet Vendre, produit en lot (étoffe, herbe) déposé : prix « l'unité », 1 cuivre sous le plus bas ; « Mettre ce prix » remplit le prix unitaire du jeu.
+- [ ] Objet jamais relevé : « Pas de prix connu » et pas de bouton. Objet dont le plus bas est sous le prix du marchand : conseil au prix du marchand, avec la mention.
+- [ ] Retirer l'objet, ou changer d'onglet : le bloc « Mise en vente » disparaît. Réglage « Le prix conseillé… » décoché : plus de bloc.
+- [ ] Forever : vérifier que les cadres ItemSellFrame et CommoditiesSellFrame existent et que le champ se remplit (sinon, seul le texte du conseil doit rester, sans erreur dans BugSack).
 
 ## Barres de vie (nouveau)
 
