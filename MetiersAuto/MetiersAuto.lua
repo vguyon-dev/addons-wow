@@ -695,6 +695,7 @@ ns.reglages = ns.creerReglages({
   },
   -- Zone « Touches et outils » : les touches, le mode pêche, les endroits connus,
   -- la place des fenêtres et la liste de courses.
+  ongletContenu = "Outils",
   contenu = function(fenetre, y, r)
     local function texteFixe(x, haut, largeur)
       local fs = fenetre:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

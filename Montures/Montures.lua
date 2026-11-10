@@ -225,6 +225,7 @@ ns.reglages = ns.creerReglages({
       db.positionBouton = nil; placerBouton()
     end },
   },
+  ongletContenu = "Touche",
   contenu = function(f, y)
     local t = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     t:SetPoint("TOPLEFT", 20, y - 4)

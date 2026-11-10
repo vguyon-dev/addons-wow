@@ -60,5 +60,16 @@ verifie("clé stable pendant qu'on vide le courrier", ns.cleCourrier(colis),
 verifie("texte d'or", "4 po 80 pa", ns.texteArgent(48000))
 verifie("texte d'or : rien", "0 pc", ns.texteArgent(0))
 
+-- La recherche de la fenêtre de réglages commune (Reglages.lua)
+local entrees = {
+  { titre = "Sacs rangés", recherche = { { libelle = "Section « À équiper » et flèche verte", aide = "Les objets meilleurs", section = "Conseils", onglet = 2 } } },
+  { titre = "GPS", recherche = { { libelle = "Taille de la flèche", section = "GPS", onglet = 1 }, { libelle = "Épingle du jeu", section = "GPS", onglet = 1 } } },
+}
+verifie("recherche : « fleche » sans accent, dans deux addons", 2, #ns.chercherReglages(entrees, "fleche"))
+verifie("recherche : par le nom de l'addon", 2, #ns.chercherReglages(entrees, "gps"))
+verifie("recherche : le bon onglet", 2, (ns.chercherReglages(entrees, "equiper")[1] or { item = {} }).item.onglet)
+verifie("recherche : rien", 0, #ns.chercherReglages(entrees, "licorne"))
+verifie("recherche : texte vide", 0, #ns.chercherReglages(entrees, ""))
+
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)

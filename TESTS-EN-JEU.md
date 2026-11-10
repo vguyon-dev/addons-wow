@@ -9,22 +9,25 @@ Avant de commencer :
 - [ ] Désactiver Pawn, pour ne voir que notre avis sur les objets.
 - [ ] Vérifier que BugSack est actif sur Forever.
 
-## Menu commun et fenêtres de réglages
+## La fenêtre de réglages commune (refaite le 10/11)
 
-- [ ] Clic gauche sur une ligne du menu « Addons de Valentin » : la fenêtre de réglages de l'addon s'ouvre.
-- [ ] Clic droit : l'addon s'active ou se coupe, et le menu affiche « activé » ou « coupé ».
-- [ ] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs et Sacs rangés : leur panneau s'ouvre.
-- [ ] Carnet de session : la ligne affiche activé ou coupé ; une fois coupé, plus rien n'est compté et sa fenêtre disparaît.
-- [ ] Réglages de Métiers auto et de Quêtes auto, les plus longs : la fenêtre tient dans l'écran et défile à la molette.
-- [ ] Le curseur « Écart de niveau » de Sacs rangés s'affiche et se règle (glisser, molette).
-- [ ] Les cases se grisent bien : tout est grisé quand l'addon est coupé, et « Garder le cadre du jeu » reste grisé sans le sac rangé.
-- [ ] Listes éditables : glisser un objet du sac dans « Gris à garder » (Marchand auto), le retirer avec la croix, puis « Tout retirer ».
-- [ ] Marchand auto, « Stock à racheter » : la quantité est prise en compte et la ligne affiche « 20 x Nom ».
-- [ ] Quêtes auto : « Ignorer le PNJ en face » en parlant à un PNJ, puis la liste des PNJ ignorés.
-- [ ] Rapport d'erreurs : la ligne « En direct », « Envoyer une erreur d'essai » et « Demander son rapport ».
-- [ ] Métiers auto : « N endroits connus ici », « Oublier cette carte », la touche du mode pêche affichée.
-- [ ] Livres de bibliothèque : « Balise vers le livre le plus proche » et « Tout remettre à trouver » (avec la confirmation).
-- [ ] Carnet de session : les 5 dernières sessions, « Remettre à zéro » et « Recentrer ».
+- [ ] Clic sur l'engrenage de la minimap : la fenêtre « Addons de Valentin » s'ouvre, sans erreur. Échap la ferme.
+- [ ] À gauche : les 17 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
+- [ ] Clic droit sur un addon de la liste : il s'active ou se coupe, le point change de couleur.
+- [ ] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs ou Sacs rangés : son panneau s'ouvre.
+- [ ] En-tête d'une page : icône, nom, description, et l'interrupteur général « Activé / Coupé ».
+- [ ] Les onglets : un par section ; l'onglet choisi est souligné en doré. Sacs rangés et Quêtes auto en ont beaucoup : ils passent sur deux lignes sans se chevaucher.
+- [ ] Les interrupteurs basculent (vert à droite = activé) et l'effet est immédiat.
+- [ ] Addon coupé : ses options sont grisées. Une option qui dépend d'une autre est grisée tant que l'autre est coupée.
+- [ ] Les curseurs (taille de la flèche du GPS, écart de niveau de Sacs rangés) : glisser, molette, valeur affichée.
+- [ ] Une aide sur plusieurs lignes ne chevauche pas l'option suivante.
+- [ ] Un onglet long défile à la molette, avec sa barre de défilement.
+- [ ] Les boutons d'action en bas de la page (Ranger maintenant, Balise ici, Choisir la touche…).
+- [ ] Les onglets de listes : Marchand auto « Listes », Butin rapide « Objets ignorés », Quêtes auto « Listes », GPS « Balises », Familier « Nourriture », Carnet « Sessions », Métiers auto « Outils », Montures « Touche », Rapport d'erreurs « En direct ».
+- [ ] Glisser un objet du sac dans une liste, le retirer avec la croix.
+- [ ] Recherche en haut : taper « fleche » liste les réglages de plusieurs addons ; un clic mène au bon addon et au bon onglet.
+- [ ] Les commandes (/sr options, /gps, /qa…) ouvrent la fenêtre directement sur le bon addon.
+- [ ] Échap > Options > AddOns : le bouton « Ouvrir les réglages » marche aussi.
 
 ## Sacs rangés
 

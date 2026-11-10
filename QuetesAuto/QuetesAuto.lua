@@ -755,6 +755,7 @@ local reglages = ns.creerReglages({
   },
   -- Zone « Listes et outils » : PNJ et quêtes ignorés (avec leur croix), cinématiques,
   -- place du bouton à l'écran.
+  ongletContenu = "Listes",
   contenu = function(fenetre, y, r)
     local t = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)

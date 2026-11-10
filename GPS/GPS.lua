@@ -489,6 +489,7 @@ ns.reglages = ns.creerReglages({
       db.positionFleche = nil; placerFleche()
     end },
   },
+  ongletContenu = "Balises",
   contenu = function(f, y)
     -- Ce que fait la flèche en ce moment, et sinon pourquoi elle est cachée.
     local diag = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")

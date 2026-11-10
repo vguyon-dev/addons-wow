@@ -1,199 +1,81 @@
 -- ============================================================================
--- Reglages.lua : fenêtre de réglages complète + icône commune de la minimap.
+-- Reglages.lua : LA fenêtre de réglages de tous les addons de Valentin.
 --
 -- Fichier COMMUN : la même copie se trouve dans chaque addon du dépôt
 -- (QuetesAuto, MarchandAuto…). Si tu le modifies, recopie-le dans les autres
 -- (un test vérifie qu'ils sont identiques).
 --
+-- Une seule fenêtre « Addons de Valentin » (créée par le premier addon chargé) :
+--   - à gauche, la liste des addons avec un point vert (activé) ou rouge (coupé) ;
+--     clic = ses réglages, clic droit = activer ou couper, Maj+clic = son panneau ;
+--   - à droite, la page de l'addon : interrupteur général, un onglet par
+--     section, des interrupteurs et des curseurs, les boutons d'action en bas ;
+--   - en haut, une recherche qui trouve un réglage dans tous les addons.
+--
 -- Utilisation, dans le fichier principal de l'addon :
 --   local reglages = ns.creerReglages({
 --     titre = "Mon addon",                      -- nom affiché
---     icone = "Interface\\Icons\\…",            -- icône de minimap
+--     icone = "Interface\\Icons\\…",
 --     nomDB = "MonAddonDB",                     -- SavedVariables du .toc
 --     defauts = { actif = true, … },            -- valeurs de départ
 --     options = {
---       { titre = "Section" },
---       { cle = "x", libelle = "…", aide = "…" },              -- case à cocher
---       { cle = "x", libelle = "…", dependDe = "y" },          -- grisée si y est décochée
---       { cle = "x", libelle = "…", dependDe = "!y" },         -- grisée si y est cochée
+--       { titre = "Section" },                                 -- un onglet
+--       { cle = "x", libelle = "…", aide = "…" },              -- interrupteur
+--       { cle = "x", libelle = "…", dependDe = "y" },          -- grisé si y est coupé
+--       { cle = "x", libelle = "…", dependDe = "!y" },         -- grisé si y est activé
 --       { cle = "n", type = "nombre", libelle = "…", min = 0, max = 20, pas = 1 }, -- curseur
 --     },
---     boutons = { { texte = "…", aide = "…", action = fonction }, … }, -- en haut de la fenêtre
---     ouvrirHub = fonction, texteHub = "…",     -- le panneau de l'addon : un bouton en haut
---                                               -- de la fenêtre et Maj+clic dans le menu commun
---     contenu = function(f, y, r) … return y, maj end, -- facultatif : zone en plus
---     astuce = "texte en bas de la fenêtre",    -- facultatif
+--     boutons = { { texte = "…", aide = "…", action = fonction }, … }, -- en bas de la page
+--     ouvrirHub = fonction, texteHub = "…",     -- le panneau de l'addon : un bouton en bas
+--                                               -- de la page et Maj+clic dans la liste
+--     contenu = function(f, y, r) … return y, maj end, -- facultatif : un onglet en plus
+--     ongletContenu = "Listes",                 -- le nom de cet onglet (« Détails » sinon)
+--     astuce = "texte sous le premier onglet",  -- facultatif
 --     auChargement = function(db) … end,        -- quand les réglages sont lus
 --     surChangement = function(db) … end,       -- après chaque changement
 --   })
--- Quand l'addon a une case « actif », les autres cases sont grisées tant qu'il
--- est coupé (sauf « minimap » et les options marquées toujours = true).
--- Tout s'applique tout de suite, sans /reload. La fenêtre défile quand elle est
--- plus haute que l'écran.
+-- Quand l'addon a une option « actif », les autres sont grisées tant qu'il est
+-- coupé (sauf « minimap » et les options marquées toujours = true).
+-- Tout s'applique tout de suite, sans /reload.
 --
 -- ns.creerListe(parent, y, spec) : une liste d'objets éditable (retrait d'une
 -- ligne, dépôt d'un objet du sac), à utiliser dans contenu().
---
--- Icône commune : tous les addons de Valentin passent par UNE seule icône
--- autour de la minimap (ns.inscrireAuHub). Le premier addon chargé la crée, les
--- autres s'y ajoutent. Clic gauche sur une ligne = ses réglages complets.
 -- ============================================================================
 
 local NOM_ADDON, ns = ...
 
 local function nombre(v, defaut) return type(v) == "number" and v or defaut end
 
--- ============================================================ icône commune
--- Une entrée : { titre, icone, db, ouvrir = fonction, basculer = fonction ou nil,
---               actif = fonction qui renvoie vrai/faux, ou nil, panneau = fonction ou nil }.
--- La position de l'icône est gardée dans le db de chaque addon inscrit (angleHub),
--- comme ça elle survit même si on n'installe qu'une partie des addons.
-function ns.inscrireAuHub(e)
-  local hub = _G.ValentinAddons
-  if not hub then
-    hub = { entrees = {} }
-    _G.ValentinAddons = hub
+local LARGEUR, HAUTEUR, COTE, PAGE = 790, 570, 200, 540
+local FOND = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } }
 
-    local bouton = CreateFrame("Button", "ValentinAddonsMinimap", Minimap)
-    bouton:SetSize(31, 31)
-    bouton:SetFrameStrata("MEDIUM")
-    bouton:SetFrameLevel(8)
-    bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    bouton:RegisterForDrag("LeftButton")
-    bouton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    local fond = bouton:CreateTexture(nil, "BACKGROUND")
-    fond:SetSize(20, 20)
-    fond:SetPoint("TOPLEFT", 7, -5)
-    fond:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-    local icone = bouton:CreateTexture(nil, "ARTWORK")
-    icone:SetSize(17, 17)
-    icone:SetPoint("TOPLEFT", 7, -6)
-    icone:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")
-    local cadre = bouton:CreateTexture(nil, "OVERLAY")
-    cadre:SetSize(53, 53)
-    cadre:SetPoint("TOPLEFT")
-    cadre:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+-- Recherche sans accents ni majuscules.
+local ACCENTS = { ["à"] = "a", ["â"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e", ["î"] = "i",
+  ["ï"] = "i", ["ô"] = "o", ["ù"] = "u", ["û"] = "u", ["ç"] = "c", ["É"] = "e", ["À"] = "a", ["Ê"] = "e",
+  ["È"] = "e", ["Ç"] = "c", ["Î"] = "i", ["Ô"] = "o", ["Â"] = "a", ["Ù"] = "u", ["Û"] = "u", ["œ"] = "oe" }
+local function simple(t)
+  t = tostring(t or "")
+  for a, b in pairs(ACCENTS) do t = t:gsub(a, b) end
+  return t:lower()
+end
+ns.simpleRecherche = simple
 
-    -- Angle gardé : celui du premier addon inscrit qui en a un.
-    local function angle()
-      for _, x in ipairs(hub.entrees) do
-        if x.db and x.db.angleHub then return x.db.angleHub end
+-- Les réglages qui contiennent le texte cherché.
+--   entrees : { { titre, recherche = { { libelle, aide, section, onglet } } } }
+-- Renvoie { { entree, item } } (fonction pure, testée hors jeu).
+function ns.chercherReglages(entrees, texte)
+  local q = simple(texte)
+  local resultats = {}
+  if q == "" then return resultats end
+  for _, e in ipairs(entrees) do
+    for _, item in ipairs(e.recherche or {}) do
+      if simple(item.libelle .. " " .. (item.aide or "") .. " " .. e.titre):find(q, 1, true) then
+        resultats[#resultats + 1] = { entree = e, item = item }
       end
-      return 200
     end
-    function hub.placer()
-      local rayon = Minimap:GetWidth() / 2 + 5
-      local a = math.rad(angle())
-      bouton:ClearAllPoints()
-      bouton:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * rayon, math.sin(a) * rayon)
-    end
-    local function suivreSouris()
-      local cx, cy = Minimap:GetCenter()
-      local sx, sy = GetCursorPosition()
-      local echelle = Minimap:GetEffectiveScale()
-      local a = math.deg(math.atan2(sy / echelle - cy, sx / echelle - cx))
-      for _, x in ipairs(hub.entrees) do if x.db then x.db.angleHub = a end end
-      hub.placer()
-    end
-    bouton:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", suivreSouris) end)
-    bouton:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-
-    -- Le menu : une ligne par addon. Clic gauche = réglages, clic droit = activer ou
-    -- couper, Maj+clic = le panneau de l'addon quand il en a un.
-    local menu = CreateFrame("Frame", "ValentinAddonsMenu", UIParent, "BasicFrameTemplateWithInset")
-    menu:SetFrameStrata("DIALOG")
-    menu:SetClampedToScreen(true)
-    menu:Hide()
-    tinsert(UISpecialFrames, menu:GetName()) -- Échap le ferme
-    local titreMenu = menu.TitleText or menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    if not menu.TitleText then titreMenu:SetPoint("TOP", 0, -5) end
-    titreMenu:SetText("Addons de Valentin")
-    local aideMenu = menu:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    aideMenu:SetJustifyH("LEFT")
-    aideMenu:SetText("Clic gauche : tous les réglages\nClic droit : activer ou couper\nMaj+clic : le panneau de l'addon")
-    local lignes = {}
-
-    function hub.majMenu()
-      table.sort(hub.entrees, function(a, b) return a.titre < b.titre end)
-      local y = -30
-      for i, x in ipairs(hub.entrees) do
-        local l = lignes[i]
-        if not l then
-          l = CreateFrame("Button", nil, menu)
-          l:SetSize(236, 24)
-          l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-          l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-          l.icone = l:CreateTexture(nil, "ARTWORK")
-          l.icone:SetSize(20, 20)
-          l.icone:SetPoint("LEFT", 4, 0)
-          l.nom = l:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-          l.nom:SetPoint("LEFT", l.icone, "RIGHT", 6, 0)
-          l.etat = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-          l.etat:SetPoint("RIGHT", -6, 0)
-          lignes[i] = l
-        end
-        l:SetPoint("TOPLEFT", 12, y)
-        l.icone:SetTexture(x.icone)
-        l.nom:SetText(x.titre)
-        local actif = x.actif and x.actif()
-        if actif == nil then l.etat:SetText("")
-        elseif actif then l.etat:SetText("|cff00ff00activé|r")
-        else l.etat:SetText("|cffff4040coupé|r") end
-        l.icone:SetDesaturated(actif == false)
-        l:SetScript("OnClick", function(_, souris)
-          if souris == "RightButton" and x.basculer then
-            x.basculer()
-            hub.majMenu()
-          elseif IsShiftKeyDown() and x.panneau then
-            menu:Hide()
-            x.panneau()
-          else
-            menu:Hide()
-            x.ouvrir()
-          end
-        end)
-        l:SetScript("OnEnter", function(self)
-          if not x.panneau then return end
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:AddLine(x.titre)
-          GameTooltip:AddLine("Maj+clic : " .. (x.textePanneau or "le panneau"), 1, 1, 1)
-          GameTooltip:Show()
-        end)
-        l:SetScript("OnLeave", function() GameTooltip:Hide() end)
-        l:Show()
-        y = y - 26
-      end
-      for i = #hub.entrees + 1, #lignes do lignes[i]:Hide() end
-      aideMenu:ClearAllPoints()
-      aideMenu:SetPoint("TOPLEFT", 16, y - 6)
-      menu:SetSize(260, -y + 56)
-    end
-
-    bouton:SetScript("OnClick", function(self)
-      if menu:IsShown() then menu:Hide() return end
-      hub.majMenu()
-      menu:ClearAllPoints()
-      menu:SetPoint("TOPRIGHT", self, "BOTTOMLEFT", 0, 0)
-      menu:Show()
-    end)
-    bouton:SetScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-      GameTooltip:AddLine("Addons de Valentin")
-      for _, x in ipairs(hub.entrees) do
-        local actif = x.actif and x.actif()
-        local etat = actif == nil and "" or (actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
-        GameTooltip:AddDoubleLine(x.titre, etat, 1, 1, 1)
-      end
-      GameTooltip:AddLine("Clic : la liste des addons\nGlisser : déplacer", 0.7, 0.7, 0.7)
-      GameTooltip:Show()
-    end)
-    bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
   end
-  table.insert(hub.entrees, e)
-  hub.placer()
-  -- Un réglage change ailleurs (commande, raccourci) : le menu ouvert se remet à jour.
-  e.maj = function() if ValentinAddonsMenu and ValentinAddonsMenu:IsShown() then hub.majMenu() end end
-  return e
+  return resultats
 end
 
 -- ============================================================ petits outils
@@ -207,7 +89,7 @@ local function creerBouton(parent, texte, aide, action, largeur)
   if aide then
     b:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      GameTooltip:AddLine(texte)
+      GameTooltip:AddLine(self:GetText() or texte)
       GameTooltip:AddLine(aide, 1, 1, 1, true)
       GameTooltip:Show()
     end)
@@ -217,11 +99,48 @@ local function creerBouton(parent, texte, aide, action, largeur)
 end
 ns.creerBouton = creerBouton
 
+-- Un interrupteur : vert à droite = activé, rouge sombre à gauche = coupé.
+local function creerInterrupteur(parent, surClic)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(42, 20)
+  local bord = b:CreateTexture(nil, "BACKGROUND")
+  bord:SetAllPoints()
+  bord:SetColorTexture(0, 0, 0, 1)
+  local fond = b:CreateTexture(nil, "BORDER")
+  fond:SetPoint("TOPLEFT", 1, -1)
+  fond:SetPoint("BOTTOMRIGHT", -1, 1)
+  local pastille = b:CreateTexture(nil, "ARTWORK")
+  pastille:SetSize(16, 16)
+  pastille:SetColorTexture(0.88, 0.82, 0.70, 1)
+  local etat = false
+  function b.poser(v)
+    etat = v and true or false
+    pastille:ClearAllPoints()
+    if etat then
+      fond:SetColorTexture(0.16, 0.52, 0.12, 1)
+      pastille:SetPoint("RIGHT", -2, 0)
+    else
+      fond:SetColorTexture(0.32, 0.10, 0.07, 1)
+      pastille:SetPoint("LEFT", 2, 0)
+    end
+  end
+  function b.permettre(v)
+    if v then b:Enable() else b:Disable() end
+    b:SetAlpha(v and 1 or 0.4)
+  end
+  b:SetScript("OnClick", function()
+    if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856) end
+    surClic(not etat)
+  end)
+  b.poser(false)
+  return b
+end
+
 -- Un curseur fait main (les modèles du jeu changent d'une version à l'autre).
 local function creerCurseur(parent, mini, maxi, pas)
   local s = CreateFrame("Slider", nil, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
   s:SetOrientation("HORIZONTAL")
-  s:SetSize(200, 16)
+  s:SetSize(170, 16)
   if s.SetBackdrop then
     s:SetBackdrop({
       bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
@@ -313,9 +232,10 @@ function ns.creerListe(parent, y, spec)
   cadre:SetScript("OnMouseWheel", function(_, sens)
     local nouveau = math.max(0, math.min(decalage - sens, math.max(0, #donnees - visibles)))
     if nouveau == decalage then
-      -- La liste ne bouge plus (courte, ou au bout) : c'est la fenêtre qui défile.
+      -- La liste ne bouge plus (courte, ou au bout) : c'est la page qui défile.
       local defile = parent.GetParent and parent:GetParent()
-      local roulette = defile and defile.GetScript and defile:GetScript("OnMouseWheel")
+      local estDefilant = defile and defile.IsObjectType and defile:IsObjectType("ScrollFrame")
+      local roulette = estDefilant and defile:GetScript("OnMouseWheel")
       if roulette then roulette(defile, sens) end
       return
     end
@@ -392,17 +312,23 @@ function ns.creerListe(parent, y, spec)
   return y, maj
 end
 
--- ============================================================ fenêtre de réglages
+-- ============================================================ la fenêtre commune
+-- _G.ValentinAddons : { entrees, fenetre, zone, courant, … }, créé par le premier
+-- addon chargé. Une entrée : { titre, icone, db, ouvrir, basculer, actif = fonction,
+-- panneau = fonction ou nil, page = cadre, recherche = { … }, allerOnglet = fonction }.
 
-function ns.creerReglages(p)
-  local r = {}
-  local db
+local function leHub()
+  local hub = _G.ValentinAddons
+  if hub and hub.pret then return hub end
+  hub = hub or {}
+  hub.entrees = hub.entrees or {}
+  _G.ValentinAddons = hub
 
-  local function dire(texte) print("|cffffd200" .. p.titre .. "|r : " .. texte) end
-  r.dire = dire
-
-  local LARGEUR = 460
-  local fenetre = CreateFrame("Frame", NOM_ADDON .. "Reglages", UIParent, "BasicFrameTemplateWithInset")
+  -- Si une copie précédente a échoué en route, on repart de sa fenêtre.
+  local fenetre = _G.ValentinAddonsReglages
+    or CreateFrame("Frame", "ValentinAddonsReglages", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  hub.fenetre = fenetre
+  fenetre:SetSize(LARGEUR, HAUTEUR)
   fenetre:SetPoint("CENTER")
   fenetre:SetFrameStrata("DIALOG")
   fenetre:SetToplevel(true)
@@ -412,121 +338,500 @@ function ns.creerReglages(p)
   fenetre:RegisterForDrag("LeftButton")
   fenetre:SetScript("OnDragStart", fenetre.StartMoving)
   fenetre:SetScript("OnDragStop", fenetre.StopMovingOrSizing)
+  if fenetre.SetBackdrop then
+    fenetre:SetBackdrop(FOND)
+    fenetre:SetBackdropColor(0.07, 0.06, 0.045, 0.97)
+    fenetre:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
+  end
   fenetre:Hide()
-  tinsert(UISpecialFrames, fenetre:GetName()) -- Échap la ferme
-  local titre = fenetre.TitleText or fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  if not fenetre.TitleText then titre:SetPoint("TOP", 0, -5) end
-  titre:SetText(p.titre .. " : réglages")
+  tinsert(UISpecialFrames, "ValentinAddonsReglages") -- Échap la ferme
 
-  -- Le contenu défile quand il dépasse l'écran.
-  local ok, defile = pcall(CreateFrame, "ScrollFrame", NOM_ADDON .. "ReglagesDefile", fenetre, "UIPanelScrollFrameTemplate")
-  if not ok or not defile then defile = CreateFrame("ScrollFrame", nil, fenetre) end
-  defile:SetPoint("TOPLEFT", 6, -28)
-  defile:SetPoint("BOTTOMRIGHT", -28, 8)
-  local f = CreateFrame("Frame", nil, defile)
-  f:SetSize(LARGEUR - 40, 10)
-  defile:SetScrollChild(f)
+  local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  titre:SetPoint("TOPLEFT", 14, -12)
+  titre:SetText("Addons de Valentin")
+  local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
+  fermer:SetPoint("TOPRIGHT", 0, 0)
+  fermer:SetScript("OnClick", function() fenetre:Hide() end)
+  local trait = fenetre:CreateTexture(nil, "ARTWORK")
+  trait:SetColorTexture(0.80, 0.63, 0.30, 0.6)
+  trait:SetPoint("TOPLEFT", 6, -38)
+  trait:SetPoint("TOPRIGHT", -6, -38)
+  trait:SetHeight(1)
+
+  local okR, recherche = pcall(CreateFrame, "EditBox", "ValentinAddonsRecherche", fenetre, "SearchBoxTemplate")
+  if not okR or not recherche then recherche = CreateFrame("EditBox", "ValentinAddonsRecherche", fenetre, "InputBoxTemplate") end
+  recherche:SetSize(220, 20)
+  recherche:SetPoint("TOPRIGHT", -40, -10)
+  recherche:SetAutoFocus(false)
+  hub.recherche = recherche
+
+  -- La liste des addons, à gauche.
+  local cote = CreateFrame("Frame", nil, fenetre)
+  cote:SetPoint("TOPLEFT", 6, -42)
+  cote:SetPoint("BOTTOMLEFT", 6, 6)
+  cote:SetWidth(COTE)
+  local fondCote = cote:CreateTexture(nil, "BACKGROUND")
+  fondCote:SetAllPoints()
+  fondCote:SetColorTexture(0, 0, 0, 0.25)
+  local aideCote = cote:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  aideCote:SetPoint("BOTTOMLEFT", 6, 6)
+  aideCote:SetWidth(COTE - 12)
+  aideCote:SetJustifyH("LEFT")
+  aideCote:SetText("Clic droit : activer ou couper\nMaj+clic : le panneau de l'addon")
+
+  -- La zone des pages, à droite.
+  local zone = CreateFrame("Frame", nil, fenetre)
+  zone:SetPoint("TOPLEFT", COTE + 14, -44)
+  zone:SetPoint("BOTTOMRIGHT", -8, 8)
+  hub.zone = zone
+
+  -- Les résultats de la recherche.
+  local resultats = CreateFrame("Frame", nil, zone)
+  resultats:SetAllPoints()
+  resultats:Hide()
+  local titreResultats = resultats:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  titreResultats:SetPoint("TOPLEFT", 8, -6)
+  local lignesResultats = {}
+
+  local lignes = {}
+  function hub.majCote()
+    table.sort(hub.entrees, function(a, b) return a.titre < b.titre end)
+    for i, e in ipairs(hub.entrees) do
+      local l = lignes[i]
+      if not l then
+        l = CreateFrame("Button", nil, cote)
+        l:SetSize(COTE - 8, 24)
+        l:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 25)
+        l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+        l.choisi = l:CreateTexture(nil, "BACKGROUND")
+        l.choisi:SetAllPoints()
+        l.choisi:SetColorTexture(0.80, 0.63, 0.30, 0.22)
+        l.icone = l:CreateTexture(nil, "ARTWORK")
+        l.icone:SetSize(18, 18)
+        l.icone:SetPoint("LEFT", 4, 0)
+        l.nom = l:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        l.nom:SetPoint("LEFT", l.icone, "RIGHT", 6, 0)
+        l.point = l:CreateTexture(nil, "OVERLAY")
+        l.point:SetSize(8, 8)
+        l.point:SetPoint("RIGHT", -6, 0)
+        lignes[i] = l
+      end
+      l.icone:SetTexture(e.icone)
+      l.nom:SetText(e.titre)
+      local actif = e.actif and e.actif()
+      l.point:SetShown(actif ~= nil)
+      if actif then l.point:SetColorTexture(0.24, 0.86, 0.24, 1) else l.point:SetColorTexture(1, 0.29, 0.23, 1) end
+      l.icone:SetDesaturated(actif == false)
+      if e == hub.courant then l.nom:SetTextColor(1, 0.82, 0) else l.nom:SetTextColor(1, 1, 1) end
+      l.choisi:SetShown(e == hub.courant)
+      l:SetScript("OnClick", function(_, souris)
+        if souris == "RightButton" then
+          if e.basculer then e.basculer() end
+        elseif IsShiftKeyDown() and e.panneau then
+          fenetre:Hide()
+          e.panneau()
+        else
+          recherche:SetText("")
+          if recherche.ClearFocus then recherche:ClearFocus() end
+          hub.selectionner(e)
+        end
+      end)
+      l:Show()
+    end
+    for i = #hub.entrees + 1, #lignes do lignes[i]:Hide() end
+    -- Beaucoup d'addons : la fenêtre grandit pour tous les montrer.
+    fenetre:SetHeight(math.max(HAUTEUR, #hub.entrees * 25 + 96))
+  end
+
+  function hub.selectionner(e)
+    hub.courant = e or hub.courant or hub.entrees[1]
+    for _, x in ipairs(hub.entrees) do
+      if x.page and x ~= hub.courant then x.page:Hide() end
+    end
+    resultats:Hide()
+    if hub.courant and hub.courant.page then hub.courant.page:Show() end
+    hub.majCote()
+  end
+
+  function hub.montrer(e)
+    if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+    if fenetre:IsShown() then fenetre:Raise() else fenetre:Show() end
+    if recherche:GetText() ~= "" then recherche:SetText("") end
+    hub.selectionner(e)
+  end
+
+  function hub.basculerFenetre()
+    if fenetre:IsShown() then fenetre:Hide() else hub.montrer(nil) end
+  end
+
+  -- La recherche : chaque résultat mène au bon addon et au bon onglet.
+  function hub.chercher(texte)
+    local trouves = ns.chercherReglages(hub.entrees, texte)
+    if simple(texte) == "" then hub.selectionner(hub.courant) return end
+    for _, x in ipairs(hub.entrees) do
+      if x.page then x.page:Hide() end
+    end
+    resultats:Show()
+    titreResultats:SetText(#trouves == 0 and "Aucun réglage ne contient ce texte."
+      or (#trouves .. " réglage(s) trouvé(s)" .. (#trouves > 14 and ", les 14 premiers ci-dessous" or "") .. " : clique pour y aller"))
+    for i = 1, math.max(#trouves, #lignesResultats) do
+      local l = lignesResultats[i]
+      local t = trouves[i]
+      if t and i <= 14 then
+        if not l then
+          l = CreateFrame("Button", nil, resultats)
+          l:SetSize(PAGE, 32)
+          l:SetPoint("TOPLEFT", 4, -28 - (i - 1) * 34)
+          l:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+          l.chemin = l:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+          l.chemin:SetPoint("TOPLEFT", 6, -2)
+          l.libelle = l:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+          l.libelle:SetPoint("TOPLEFT", 6, -14)
+          lignesResultats[i] = l
+        end
+        l.chemin:SetText(t.entree.titre .. "  >  " .. (t.item.section or ""))
+        l.libelle:SetText(t.item.libelle)
+        l:SetScript("OnClick", function()
+          recherche:SetText("")
+          if recherche.ClearFocus then recherche:ClearFocus() end
+          hub.selectionner(t.entree)
+          if t.entree.allerOnglet then t.entree.allerOnglet(t.item.onglet) end
+        end)
+        l:Show()
+      elseif l then
+        l:Hide()
+      end
+    end
+  end
+  recherche:HookScript("OnTextChanged", function(self) hub.chercher(self:GetText()) end)
+
+  -- L'icône commune autour de la minimap : un clic ouvre la fenêtre.
+  if not _G.ValentinAddonsMinimap then
+    local bouton = CreateFrame("Button", "ValentinAddonsMinimap", Minimap)
+    bouton:SetSize(31, 31)
+    bouton:SetFrameStrata("MEDIUM")
+    bouton:SetFrameLevel(8)
+    bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    bouton:RegisterForDrag("LeftButton")
+    bouton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    local fond = bouton:CreateTexture(nil, "BACKGROUND")
+    fond:SetSize(20, 20)
+    fond:SetPoint("TOPLEFT", 7, -5)
+    fond:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    local icone = bouton:CreateTexture(nil, "ARTWORK")
+    icone:SetSize(17, 17)
+    icone:SetPoint("TOPLEFT", 7, -6)
+    icone:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")
+    local cadre = bouton:CreateTexture(nil, "OVERLAY")
+    cadre:SetSize(53, 53)
+    cadre:SetPoint("TOPLEFT")
+    cadre:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    -- Angle gardé : celui du premier addon inscrit qui en a un.
+    local function angle()
+      for _, x in ipairs(hub.entrees) do
+        if x.db and x.db.angleHub then return x.db.angleHub end
+      end
+      return 200
+    end
+    function hub.placer()
+      local rayon = nombre(Minimap:GetWidth(), 140) / 2 + 5
+      local a = math.rad(angle())
+      bouton:ClearAllPoints()
+      bouton:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * rayon, math.sin(a) * rayon)
+    end
+    local function suivreSouris()
+      local cx, cy = Minimap:GetCenter()
+      local sx, sy = GetCursorPosition()
+      local echelle = Minimap:GetEffectiveScale()
+      local a = math.deg(math.atan2(sy / echelle - cy, sx / echelle - cx))
+      for _, x in ipairs(hub.entrees) do if x.db then x.db.angleHub = a end end
+      hub.placer()
+    end
+    bouton:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", suivreSouris) end)
+    bouton:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+    bouton:SetScript("OnClick", function() hub.basculerFenetre() end)
+    bouton:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      GameTooltip:AddLine("Addons de Valentin")
+      for _, x in ipairs(hub.entrees) do
+        local actif = x.actif and x.actif()
+        local etat = actif == nil and "" or (actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
+        GameTooltip:AddDoubleLine(x.titre, etat, 1, 1, 1)
+      end
+      GameTooltip:AddLine("Clic : tous les réglages\nGlisser : déplacer", 0.7, 0.7, 0.7)
+      GameTooltip:Show()
+    end)
+    bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+  hub.placer = hub.placer or function() end
+  hub.pret = true
+  return hub
+end
+
+-- Inscrit un addon dans la fenêtre commune.
+function ns.inscrireAuHub(e)
+  local hub = leHub()
+  table.insert(hub.entrees, e)
+  hub.placer()
+  hub.majCote()
+  -- Un réglage change ailleurs (commande, raccourci) : la liste se remet à jour.
+  e.maj = function() hub.majCote() end
+  return e
+end
+
+-- ============================================================ la page d'un addon
+
+function ns.creerReglages(p)
+  local r = {}
+  local db
+  local hub = leHub()
+
+  local function dire(texte) print("|cffffd200" .. p.titre .. "|r : " .. texte) end
+  r.dire = dire
+
+  local page = CreateFrame("Frame", NOM_ADDON .. "Reglages", hub.zone)
+  page:SetAllPoints()
+  page:Hide()
+
+  -- ------------------------------------------------------- en-tête
+  local icone = page:CreateTexture(nil, "ARTWORK")
+  icone:SetSize(34, 34)
+  icone:SetPoint("TOPLEFT", 6, -4)
+  icone:SetTexture(p.icone)
+  local nom = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  nom:SetPoint("TOPLEFT", icone, "TOPRIGHT", 10, -1)
+  nom:SetText(p.titre)
+  local description = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  description:SetPoint("TOPLEFT", nom, "BOTTOMLEFT", 0, -3)
+  description:SetWidth(PAGE - 190)
+  description:SetJustifyH("LEFT")
+  if description.SetMaxLines then description:SetMaxLines(2) end
+  local lireNotes = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+  if lireNotes then
+    local okN, notes = pcall(lireNotes, NOM_ADDON, "Notes")
+    if okN and type(notes) == "string" then description:SetText(notes) end
+  end
+
+  local aActif = false
+  for _, opt in ipairs(p.options) do if opt.cle == "actif" then aActif = true end end
+  local interrupteurGeneral, etatGeneral
+  if aActif then
+    interrupteurGeneral = creerInterrupteur(page, function(v) r.changer("actif", v) end)
+    interrupteurGeneral:SetPoint("TOPRIGHT", -30, -10)
+    etatGeneral = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    etatGeneral:SetPoint("RIGHT", interrupteurGeneral, "LEFT", -8, 0)
+  end
+
+  -- ------------------------------------------------------- onglets
+  -- Un onglet par section ({ titre = … }) ; les options d'avant la première
+  -- section vont dans « Général » ; contenu() a son propre onglet.
+  local onglets = {}
+  local courant
+  for _, opt in ipairs(p.options) do
+    if opt.titre then
+      courant = { titre = opt.titre, options = {} }
+      onglets[#onglets + 1] = courant
+    else
+      if not courant then
+        courant = { titre = "Général", options = {} }
+        onglets[#onglets + 1] = courant
+      end
+      -- L'interrupteur général est déjà dans l'en-tête.
+      if opt.cle ~= "actif" then courant.options[#courant.options + 1] = opt end
+    end
+  end
+  -- Une section qui n'avait que « actif » : on ne garde pas un onglet vide.
+  for i = #onglets, 1, -1 do
+    if #onglets[i].options == 0 then table.remove(onglets, i) end
+  end
+  if p.contenu then onglets[#onglets + 1] = { titre = p.ongletContenu or "Détails", contenu = true, options = {} } end
+  if #onglets == 0 then onglets[1] = { titre = "Général", options = {} } end
+
+  local x, ligne = 4, 0
+  for _, o in ipairs(onglets) do
+    local b = CreateFrame("Button", nil, page)
+    b.texte = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    b.texte:SetPoint("CENTER")
+    b.texte:SetText(o.titre)
+    local largeur = nombre(b.texte:GetStringWidth(), #o.titre * 7) + 22
+    if x + largeur > PAGE then x, ligne = 4, ligne + 1 end
+    b:SetSize(largeur, 24)
+    b:SetPoint("TOPLEFT", x, -50 - ligne * 26)
+    b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    b.trait = b:CreateTexture(nil, "ARTWORK")
+    b.trait:SetColorTexture(1, 0.82, 0, 1)
+    b.trait:SetPoint("BOTTOMLEFT", 4, 0)
+    b.trait:SetPoint("BOTTOMRIGHT", -4, 0)
+    b.trait:SetHeight(2)
+    o.bouton = b
+    x = x + largeur + 4
+  end
+  local hautOnglets = 50 + (ligne + 1) * 26 + 6
+
+  -- ------------------------------------------------------- boutons d'action, en bas
+  local actions = {}
+  if p.ouvrirHub then
+    actions[1] = { texte = p.texteHub or "Ouvrir le panneau", aide = "Aussi : Maj+clic sur son nom dans la liste des addons.",
+      action = function() hub.fenetre:Hide(); p.ouvrirHub() end }
+  end
+  for _, b in ipairs(p.boutons or {}) do actions[#actions + 1] = b end
+  local places, bx, rangee = {}, 4, 0
+  for _, a in ipairs(actions) do
+    local largeur = a.largeur or 150
+    if bx + largeur > PAGE then bx, rangee = 4, rangee + 1 end
+    places[#places + 1] = { a = a, x = bx, rangee = rangee, largeur = largeur }
+    bx = bx + largeur + 6
+  end
+  local hautActions = #actions > 0 and ((rangee + 1) * 26 + 8) or 0
+  for _, pl in ipairs(places) do
+    local b = creerBouton(page, pl.a.texte, pl.a.aide, pl.a.action, pl.largeur)
+    b:SetPoint("BOTTOMLEFT", pl.x, 4 + (rangee - pl.rangee) * 26)
+  end
+
+  -- ------------------------------------------------------- le contenu qui défile
+  local okD, defile = pcall(CreateFrame, "ScrollFrame", NOM_ADDON .. "ReglagesDefile", page, "UIPanelScrollFrameTemplate")
+  if not okD or not defile then defile = CreateFrame("ScrollFrame", nil, page) end
+  defile:SetPoint("TOPLEFT", 0, -hautOnglets)
+  defile:SetPoint("BOTTOMRIGHT", -26, hautActions + 2)
   defile:EnableMouseWheel(true)
   defile:SetScript("OnMouseWheel", function(self, sens)
     local maxi = nombre(self:GetVerticalScrollRange(), 0)
-    self:SetVerticalScroll(math.max(0, math.min(maxi, self:GetVerticalScroll() - sens * 40)))
+    self:SetVerticalScroll(math.max(0, math.min(maxi, nombre(self:GetVerticalScroll(), 0) - sens * 40)))
   end)
 
-  local y = -4
-
-  -- Les boutons d'action, en haut : le panneau de l'addon d'abord.
-  local actions = {}
-  if p.ouvrirHub then
-    actions[1] = { texte = p.texteHub or "Ouvrir le panneau", aide = "Aussi : Maj+clic sur sa ligne dans le menu des addons.",
-      action = function() fenetre:Hide(); p.ouvrirHub() end }
-  end
-  for _, b in ipairs(p.boutons or {}) do actions[#actions + 1] = b end
-  if #actions > 0 then
-    local x = 16
-    for _, a in ipairs(actions) do
-      local largeur = a.largeur or 136
-      if x + largeur > LARGEUR - 50 then x = 16; y = y - 26 end
-      local b = creerBouton(f, a.texte, a.aide, a.action, largeur)
-      b:SetPoint("TOPLEFT", x, y)
-      x = x + largeur + 6
-    end
-    y = y - 32
-  end
-
-  -- Les options : cases et curseurs.
   local controles = {}
-  local aActif = false
-  for _, opt in ipairs(p.options) do if opt.cle == "actif" then aActif = true end end
+  local majContenu
 
-  for _, opt in ipairs(p.options) do
-    if opt.titre then
-      local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-      t:SetPoint("TOPLEFT", 16, y - 6)
-      t:SetText(opt.titre)
-      y = y - 30
-    elseif opt.type == "nombre" then
-      local libelle = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-      libelle:SetPoint("TOPLEFT", 20, y - 2)
-      libelle:SetText(opt.libelle)
-      local s = creerCurseur(f, opt.min or 0, opt.max or 10, opt.pas or 1)
-      s:SetPoint("TOPLEFT", 24, y - 22)
-      local valeur = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-      valeur:SetPoint("LEFT", s, "RIGHT", 12, 0)
-      local aide = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-      aide:SetPoint("TOPLEFT", 20, y - 42)
-      aide:SetWidth(380)
-      aide:SetJustifyH("LEFT")
-      aide:SetText(opt.aide or "")
+  -- Une option = une ligne : libellé et aide à gauche, interrupteur ou curseur à droite.
+  local function ligneOption(parent, opt, y)
+    local rangeeOpt = CreateFrame("Frame", nil, parent)
+    rangeeOpt:SetPoint("TOPLEFT", 0, y)
+    rangeeOpt:SetWidth(PAGE)
+    local libelle = rangeeOpt:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    libelle:SetPoint("TOPLEFT", 8, -7)
+    libelle:SetJustifyH("LEFT")
+    libelle:SetText(opt.libelle)
+    local aide = rangeeOpt:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    aide:SetPoint("TOPLEFT", libelle, "BOTTOMLEFT", 0, -2)
+    aide:SetJustifyH("LEFT")
+    aide:SetText(opt.aide or "")
+    local ctl = { opt = opt, libelle = libelle, aide = aide, rangee = rangeeOpt }
+    if opt.type == "nombre" then
+      libelle:SetWidth(PAGE - 270)
+      aide:SetWidth(PAGE - 270)
+      local s = creerCurseur(rangeeOpt, opt.min or 0, opt.max or 10, opt.pas or 1)
+      s:SetPoint("TOPRIGHT", -62, -8)
+      local valeur = rangeeOpt:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      valeur:SetPoint("LEFT", s, "RIGHT", 8, 0)
       local enCours = false
-      s:SetScript("OnValueChanged", function(self, v)
-        v = math.floor(v / (opt.pas or 1) + 0.5) * (opt.pas or 1)
-        valeur:SetText(opt.format and opt.format(v) or tostring(v))
+      local function texte(v) return opt.format and opt.format(v) or tostring(v) end
+      s:SetScript("OnValueChanged", function(_, v)
+        local mini, pas = opt.min or 0, opt.pas or 1
+        v = mini + math.floor((nombre(v, mini) - mini) / pas + 0.5) * pas
+        valeur:SetText(texte(v))
         if not enCours and db and db[opt.cle] ~= v then r.changer(opt.cle, v) end
       end)
-      controles[#controles + 1] = { opt = opt, curseur = s, libelle = libelle, aide = aide,
-        poser = function(v) enCours = true; s:SetValue(v or opt.min or 0); enCours = false
-          valeur:SetText(opt.format and opt.format(v or 0) or tostring(v or 0)) end }
-      y = y - 46 - (opt.aide and hauteurTexte(aide, 10) or 0) - 6
+      ctl.curseur = s
+      ctl.poser = function(v)
+        enCours = true
+        s:SetValue(v or opt.min or 0)
+        enCours = false
+        valeur:SetText(texte(v or opt.min or 0))
+      end
     else
-      local c = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-      c:SetSize(26, 26)
-      c:SetPoint("TOPLEFT", 16, y)
-      local libelle = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-      libelle:SetPoint("TOPLEFT", c, "TOPRIGHT", 4, -2)
-      libelle:SetWidth(360)
-      libelle:SetJustifyH("LEFT")
-      libelle:SetText(opt.libelle)
-      local aide = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-      aide:SetPoint("TOPLEFT", libelle, "BOTTOMLEFT", 0, -2)
-      aide:SetWidth(360)
-      aide:SetJustifyH("LEFT")
-      aide:SetText(opt.aide or "")
-      c:SetScript("OnClick", function(self) r.changer(opt.cle, self:GetChecked() and true or false) end)
-      controles[#controles + 1] = { opt = opt, case = c, libelle = libelle, aide = aide }
-      -- La hauteur suit le texte : une aide sur deux ou trois lignes ne chevauche plus la suivante.
-      y = y - math.max(30, hauteurTexte(libelle, 12) + (opt.aide and hauteurTexte(aide, 10) or 0) + 10)
+      libelle:SetWidth(PAGE - 80)
+      aide:SetWidth(PAGE - 80)
+      ctl.interrupteur = creerInterrupteur(rangeeOpt, function(v) r.changer(opt.cle, v) end)
+      ctl.interrupteur:SetPoint("TOPRIGHT", -10, -8)
     end
+    local h = math.max(36, hauteurTexte(libelle, 12) + (opt.aide and hauteurTexte(aide, 10) + 2 or 0) + 16)
+    rangeeOpt:SetHeight(h)
+    local filet = rangeeOpt:CreateTexture(nil, "BACKGROUND")
+    filet:SetColorTexture(1, 1, 1, 0.07)
+    filet:SetPoint("BOTTOMLEFT", 4, 0)
+    filet:SetPoint("BOTTOMRIGHT", -4, 0)
+    filet:SetHeight(1)
+    controles[#controles + 1] = ctl
+    parent.rangees = parent.rangees or {}
+    parent.rangees[#parent.rangees + 1] = ctl
+    return y - h
   end
 
-  local majContenu
-  if p.contenu then y, majContenu = p.contenu(f, y, r) end
-
-  if p.astuce then
-    local astuce = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    astuce:SetPoint("TOPLEFT", 16, y - 10)
-    astuce:SetWidth(390)
-    astuce:SetJustifyH("LEFT")
-    astuce:SetText(p.astuce)
-    y = y - 16 - hauteurTexte(astuce, 24)
+  local recherche = {}
+  for i, o in ipairs(onglets) do
+    local f = CreateFrame("Frame", nil, defile)
+    f:SetSize(PAGE, 10)
+    f:Hide()
+    o.cadre = f
+    local y = -2
+    if o.contenu then
+      y, majContenu = p.contenu(f, -4, r)
+      y = nombre(y, -200)
+    else
+      for _, opt in ipairs(o.options) do
+        y = ligneOption(f, opt, y)
+        recherche[#recherche + 1] = { libelle = opt.libelle, aide = opt.aide, section = o.titre, onglet = i }
+      end
+    end
+    if i == 1 and p.astuce then
+      local astuce = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+      o.astuce = astuce
+      astuce:SetPoint("TOPLEFT", 8, y - 10)
+      astuce:SetWidth(PAGE - 20)
+      astuce:SetJustifyH("LEFT")
+      astuce:SetText(p.astuce)
+      y = y - 16 - hauteurTexte(astuce, 24)
+    end
+    o.hauteur = -y + 8
+    f:SetHeight(o.hauteur)
   end
-  local hauteurContenu = -y + 8
-  f:SetHeight(hauteurContenu)
+
+  -- Remet chaque ligne à sa vraie hauteur, une fois les textes mesurables.
+  local function disposer(o)
+    if o.contenu or not o.cadre.rangees then return end
+    local y = -2
+    for _, ctl in ipairs(o.cadre.rangees) do
+      local h = math.max(36, hauteurTexte(ctl.libelle, 12) + (ctl.opt.aide and hauteurTexte(ctl.aide, 10) + 2 or 0) + 16)
+      ctl.rangee:ClearAllPoints()
+      ctl.rangee:SetPoint("TOPLEFT", 0, y)
+      ctl.rangee:SetHeight(h)
+      y = y - h
+    end
+    if o.astuce then
+      o.astuce:ClearAllPoints()
+      o.astuce:SetPoint("TOPLEFT", 8, y - 10)
+      y = y - 16 - hauteurTexte(o.astuce, 24)
+    end
+    o.hauteur = -y + 8
+    o.cadre:SetHeight(o.hauteur)
+  end
+
+  local ongletOuvert = 1
+  local function choisirOnglet(i)
+    if not onglets[i] then i = 1 end
+    ongletOuvert = i
+    disposer(onglets[i])
+    for j, o in ipairs(onglets) do
+      o.cadre:SetShown(j == i)
+      o.bouton.trait:SetShown(j == i)
+      if j == i then o.bouton.texte:SetTextColor(1, 0.82, 0) else o.bouton.texte:SetTextColor(0.6, 0.57, 0.5) end
+    end
+    defile:SetScrollChild(onglets[i].cadre)
+    defile:SetVerticalScroll(0)
+    local barre = defile.ScrollBar or _G[NOM_ADDON .. "ReglagesDefileScrollBar"]
+    local visible = nombre(defile:GetHeight(), 0)
+    if visible <= 0 then visible = HAUTEUR - 52 - hautOnglets - hautActions end
+    if barre then barre:SetShown(onglets[i].hauteur > visible) end
+  end
+  for i, o in ipairs(onglets) do
+    o.bouton:SetScript("OnClick", function() choisirOnglet(i) end)
+  end
 
   -- Une option est grisée quand ce dont elle dépend n'est pas réglé comme il faut.
   local function disponible(opt)
-    if aActif and opt.cle ~= "actif" and opt.cle ~= "minimap" and not opt.toujours and not db.actif then
-      return false
-    end
+    if aActif and opt.cle ~= "minimap" and not opt.toujours and not db.actif then return false end
     local d = opt.dependDe
     if not d then return true end
     if d:sub(1, 1) == "!" then return not db[d:sub(2)] end
@@ -534,65 +839,57 @@ function ns.creerReglages(p)
   end
 
   local function majFenetre()
+    if not db then return end
+    if interrupteurGeneral then
+      interrupteurGeneral.poser(db.actif)
+      etatGeneral:SetText(db.actif and "|cff3ddc3dActivé|r" or "|cffff4a3aCoupé|r")
+    end
     for _, ctl in ipairs(controles) do
       local dispo = disponible(ctl.opt)
-      if ctl.case then
-        ctl.case:SetChecked(db[ctl.opt.cle] and true or false)
-        if dispo then ctl.case:Enable() else ctl.case:Disable() end
+      if ctl.interrupteur then
+        ctl.interrupteur.poser(db[ctl.opt.cle])
+        ctl.interrupteur.permettre(dispo)
       else
         ctl.poser(db[ctl.opt.cle])
         if dispo then ctl.curseur:Enable() else ctl.curseur:Disable() end
-        ctl.curseur:SetAlpha(dispo and 1 or 0.5)
+        ctl.curseur:SetAlpha(dispo and 1 or 0.4)
       end
       if dispo then ctl.libelle:SetTextColor(1, 1, 1) else ctl.libelle:SetTextColor(0.5, 0.5, 0.5) end
     end
     if majContenu then majContenu(db) end
   end
-  r.majFenetre = function() if fenetre:IsShown() then majFenetre() end end
-
-  fenetre:SetScript("OnShow", function()
-    -- La fenêtre prend la hauteur de son contenu, sans dépasser 85 % de l'écran.
-    local ecran = nombre(UIParent:GetHeight(), 768) / nombre(fenetre:GetScale(), 1)
-    local h = math.min(hauteurContenu + 36, ecran * 0.85)
-    local defileUtile = hauteurContenu + 36 > ecran * 0.85
-    fenetre:SetSize(LARGEUR, h)
-    local barre = defile.ScrollBar or _G[NOM_ADDON .. "ReglagesDefileScrollBar"]
-    if barre then barre:SetShown(defileUtile) end
-    defile:SetPoint("BOTTOMRIGHT", defileUtile and -28 or -8, 8)
-    defile:SetVerticalScroll(0)
+  r.majFenetre = function() if page:IsShown() then majFenetre() end end
+  page:SetScript("OnShow", function()
+    choisirOnglet(ongletOuvert)
     majFenetre()
   end)
 
-  -- Ouvre ou ferme (icône, commande) ; montrer() ouvre toujours (menu commun).
+  -- Ouvre ou ferme (icône, commande) ; montrer() ouvre toujours.
+  function r.montrer() hub.montrer(r.hub) end
   function r.ouvrir()
-    if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
-    fenetre:SetShown(not fenetre:IsShown())
-  end
-  function r.montrer()
-    if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
-    if fenetre:IsShown() then fenetre:Raise() else fenetre:Show() end
+    if hub.fenetre:IsShown() and hub.courant == r.hub and page:IsShown() then hub.fenetre:Hide() else r.montrer() end
   end
   -- Nom global pour le .toc (## AddonCompartmentFunc) et les raccourcis.
   _G[NOM_ADDON .. "_OuvrirReglages"] = r.ouvrir
 
   -- Page dans Échap > Options > AddOns, avec un bouton qui ouvre la fenêtre.
-  local page = CreateFrame("Frame")
-  page.name = p.titre
-  local pageTexte = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local pageJeu = CreateFrame("Frame")
+  pageJeu.name = p.titre
+  local pageTexte = pageJeu:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   pageTexte:SetPoint("TOPLEFT", 16, -16)
-  pageTexte:SetText("Tous les réglages de " .. p.titre .. " sont dans sa fenêtre :")
-  local pageBouton = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+  pageTexte:SetText("Tous les réglages de " .. p.titre .. " sont dans la fenêtre des addons de Valentin :")
+  local pageBouton = CreateFrame("Button", nil, pageJeu, "UIPanelButtonTemplate")
   pageBouton:SetSize(200, 26)
   pageBouton:SetPoint("TOPLEFT", pageTexte, "BOTTOMLEFT", 0, -12)
   pageBouton:SetText("Ouvrir les réglages")
-  pageBouton:SetScript("OnClick", r.montrer)
+  pageBouton:SetScript("OnClick", function() r.montrer() end)
   if Settings and Settings.RegisterCanvasLayoutCategory then
-    Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(page, page.name))
+    Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(pageJeu, pageJeu.name))
   elseif InterfaceOptions_AddCategory then
-    InterfaceOptions_AddCategory(page)
+    InterfaceOptions_AddCategory(pageJeu)
   end
 
-  -- ------------------------------------------------------- icône minimap
+  -- ------------------------------------------------------- icône minimap à part
   local mini = CreateFrame("Button", NOM_ADDON .. "Minimap", Minimap)
   mini:SetSize(31, 31)
   mini:SetFrameStrata("MEDIUM")
@@ -616,12 +913,11 @@ function ns.creerReglages(p)
 
   -- Place l'icône sur le bord de la minimap, à l'angle donné (0° = à droite).
   local function placerMini()
-    local rayon = Minimap:GetWidth() / 2 + 5
+    local rayon = nombre(Minimap:GetWidth(), 140) / 2 + 5
     local a = math.rad(db.angleMinimap or 225)
     mini:ClearAllPoints()
     mini:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * rayon, math.sin(a) * rayon)
   end
-  -- Pendant qu'on la fait glisser, l'icône suit la souris autour de la minimap.
   local function suivreSouris()
     local cx, cy = Minimap:GetCenter()
     local sx, sy = GetCursorPosition()
@@ -650,7 +946,7 @@ function ns.creerReglages(p)
   function r.appliquer()
     iconeMini:SetDesaturated(not db.actif)
     mini:SetShown(db.minimap == true)
-    if fenetre:IsShown() then majFenetre() end
+    if page:IsShown() then majFenetre() end
     if r.hub then r.hub.maj() end
     if p.surChangement then p.surChangement(db) end
   end
@@ -665,10 +961,10 @@ function ns.creerReglages(p)
     dire(db.actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
   end
 
-  -- Bascule une case par son nom (pour la commande slash). Renvoie vrai si trouvée.
-  function r.basculerOption(nom)
+  -- Bascule une option par son nom (pour la commande slash). Renvoie vrai si trouvée.
+  function r.basculerOption(nomOption)
     for _, opt in ipairs(p.options) do
-      if opt.cle and opt.cle:lower() == nom and opt.type ~= "nombre" then
+      if opt.cle and opt.cle:lower() == nomOption and opt.type ~= "nombre" then
         r.changer(opt.cle, not db[opt.cle])
         dire(opt.libelle .. " : " .. (db[opt.cle] and "|cff00ff00oui|r" or "|cffff4040non|r"))
         return true
@@ -679,8 +975,8 @@ function ns.creerReglages(p)
   -- ------------------------------------------------------- chargement
   local ecouteur = CreateFrame("Frame")
   ecouteur:RegisterEvent("ADDON_LOADED")
-  ecouteur:SetScript("OnEvent", function(self, _, nom)
-    if nom ~= NOM_ADDON then return end
+  ecouteur:SetScript("OnEvent", function(self, _, nomCharge)
+    if nomCharge ~= NOM_ADDON then return end
     self:UnregisterEvent("ADDON_LOADED")
     local sauve = _G[p.nomDB] or {}
     _G[p.nomDB] = sauve
@@ -691,11 +987,9 @@ function ns.creerReglages(p)
     r.db = db
     -- Une seule fois : l'icône à part laisse la place à l'icône commune.
     if not db.iconeCommune then db.minimap = false; db.iconeCommune = true end
-    -- Dans le menu commun, le clic gauche ouvre toujours les réglages complets ;
-    -- le panneau de l'addon passe par Maj+clic et par le bouton en haut de la fenêtre.
     r.hub = ns.inscrireAuHub({
       titre = p.titre, icone = p.icone, db = db, ouvrir = r.montrer, basculer = r.basculer,
-      panneau = p.ouvrirHub, textePanneau = p.texteHub,
+      panneau = p.ouvrirHub, textePanneau = p.texteHub, page = page, recherche = recherche, allerOnglet = choisirOnglet,
       actif = function() return db.actif and true or false end,
     })
     placerMini()

@@ -390,6 +390,7 @@ reglages = ns.creerReglages({
     { texte = "Recentrer", aide = "Replace la fenêtre du carnet au milieu de l'écran.", action = recentrer },
   },
   -- Les dernières sessions de ce personnage, directement dans la fenêtre.
+  ongletContenu = "Sessions",
   contenu = function(f, y)
     local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("TOPLEFT", 16, y - 6)

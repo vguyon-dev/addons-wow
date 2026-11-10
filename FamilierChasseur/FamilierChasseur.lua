@@ -240,6 +240,7 @@ ns.reglages = ns.creerReglages({
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
   },
+  ongletContenu = "Nourriture",
   contenu = function(f, y)
     local maj
     y, maj = ns.creerListe(f, y, {
