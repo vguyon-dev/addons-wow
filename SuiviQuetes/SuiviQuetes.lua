@@ -1290,7 +1290,10 @@ ns.reglages = ns.creerReglages({
 -- Événements
 -- ---------------------------------------------------------------------------
 
+local noterGenres -- définie plus bas (commande /sq genre) ; appelée aussi à la déconnexion
+
 local ecouteur = CreateFrame("Frame")
+pcall(ecouteur.RegisterEvent, ecouteur, "PLAYER_LOGOUT")
 for _, e in ipairs({ "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED", "SUPER_TRACKING_CHANGED", "ZONE_CHANGED_NEW_AREA",
                      "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "BAG_UPDATE_COOLDOWN" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
@@ -1299,6 +1302,12 @@ if ecouteur.RegisterUnitEvent then pcall(ecouteur.RegisterUnitEvent, ecouteur, "
 
 ecouteur:SetScript("OnEvent", function(_, evenement)
   if not db then return end
+  if evenement == "PLAYER_LOGOUT" then
+    -- À chaque déconnexion ou /reload, on garde dans la sauvegarde ce que le jeu dit des quêtes :
+    -- cela permet de régler le tri sans recopier le chat.
+    if noterGenres then pcall(noterGenres, true) end
+    return
+  end
   if evenement == "BAG_UPDATE_COOLDOWN" then
     for _, b in ipairs(boutonsObjets) do majRecharge(b) end
     return
@@ -1322,19 +1331,24 @@ end)
 -- ---------------------------------------------------------------------------
 
 -- Pour chaque quête suivie : ce que le jeu en dit et le genre retenu.
-local function commandeGenre()
+-- silencieux = vrai : rien dans le chat, on remplit seulement db.diagnostic (lu hors jeu dans la sauvegarde).
+noterGenres = function(silencieux)
   if not db then return end
   local quetes = collecter(true) -- sans les filtres d'affichage : on veut tout voir
-  if #quetes == 0 then dire("aucune quête suivie à examiner.") return end
-  dire("ce que le jeu dit de tes quêtes suivies (" .. #quetes .. ") :")
+  db.diagnostic = { date = date and date("%Y-%m-%d %H:%M") or "", lignes = {} }
+  if #quetes == 0 then if not silencieux then dire("aucune quête suivie à examiner.") end return end
+  if not silencieux then dire("ce que le jeu dit de tes quêtes suivies (" .. #quetes .. ") :") end
   local function v(x) if x == nil then return "-" end return tostring(x) end
   for _, q in ipairs(quetes) do
     local i = q.infos
-    dire(string.format("%s (n° %d) : rubrique=%s, tagID=%s, tagName=%s, classification=%s, campagne=%s, frequence=%s, groupe=%s, fini=%s -> %s%s",
+    local ligne = (string.format("%s (n° %d) : rubrique=%s, tagID=%s, tagName=%s, classification=%s, campagne=%s, frequence=%s, groupe=%s, fini=%s -> %s%s",
       q.titre, q.numero, v(i.rubrique), v(i.tagID), v(i.tagName), v(i.classification), v(i.campaignID), v(i.frequency),
       v(i.suggestedGroup), i.fini and "oui" or "non", NOMS_GENRES[q.genre] or q.genre, q.manuel and " (choix manuel)" or ""))
+    db.diagnostic.lignes[#db.diagnostic.lignes + 1] = ligne
+    if not silencieux then dire(ligne) end
   end
 end
+local function commandeGenre() noterGenres(false) end
 
 local function commande(texte)
   local c = strtrim(texte or ""):lower()
