@@ -448,7 +448,33 @@ local function titreDe(v, i)
   return v.titres[i]
 end
 
+-- La lueur « nouvel objet » du jeu (bleue ou de la couleur de la qualité). Dans ses sacs, le jeu
+-- la règle lui-même à chaque affichage ; dans notre fenêtre personne ne le faisait, et après un
+-- /reload toutes les cases restaient allumées jusqu'au survol. On l'éteint, sauf si le jeu dit
+-- que l'objet vient vraiment d'arriver dans le sac.
+local function reglerLueur(b)
+  local nouveau = false
+  if C_NewItems and C_NewItems.IsNewItem then
+    local parent = b:GetParent()
+    local ok, r = pcall(C_NewItems.IsNewItem, parent and parent:GetID() or 0, b:GetID())
+    nouveau = ok and r == true
+  end
+  local nom = b.GetName and b:GetName()
+  local paye = b.BattlepayItemTexture or (nom and _G[nom .. "BattlepayItemTexture"])
+  if paye and paye.Hide then paye:Hide() end
+  local lueur = b.NewItemTexture or (nom and _G[nom .. "NewItemTexture"])
+  if lueur and lueur.Hide and not nouveau then
+    lueur:Hide()
+    for _, cle in ipairs({ "flashAnim", "newitemglowAnim" }) do
+      local anim = b[cle]
+      if anim and anim.Stop then pcall(anim.Stop, anim) end
+    end
+  end
+end
+ns.reglerLueur = reglerLueur
+
 local function remplir(b, icone, nombre, verrou, qualite, lien)
+  reglerLueur(b)
   if SetItemButtonTexture then SetItemButtonTexture(b, icone) end
   if SetItemButtonCount then SetItemButtonCount(b, nombre or 0) end
   if SetItemButtonDesaturated then SetItemButtonDesaturated(b, verrou) end
