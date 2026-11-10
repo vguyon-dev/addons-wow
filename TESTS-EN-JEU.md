@@ -12,7 +12,7 @@ Avant de commencer :
 ## La fenêtre de réglages commune (refaite le 10/11)
 
 - [ ] Clic sur l'engrenage de la minimap : la fenêtre « Addons de Valentin » s'ouvre, sans erreur. Échap la ferme.
-- [ ] À gauche : les 17 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
+- [ ] À gauche : les 18 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
 - [ ] Clic droit sur un addon de la liste : il s'active ou se coupe, le point change de couleur.
 - [ ] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs ou Sacs rangés : son panneau s'ouvre.
 - [ ] En-tête d'une page : icône, nom, description, et l'interrupteur général « Activé / Coupé ».
@@ -172,6 +172,25 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] « Seulement mes favorites » : seulement celles marquées d'une étoile dans le journal des montures.
 - [ ] Le bouton à l'écran : clic pour monter, glisser pour le déplacer, clic droit pour les réglages.
 - [ ] En combat : message « pas de monture en combat », sans erreur.
+
+## Conseiller (nouveau)
+
+À lancer sur le chasseur, puis sur un paladin si possible. L'API des talents et des barres de Forever n'a été vérifiée que dans la documentation de Blizzard, jamais en jeu.
+
+- [ ] `/conseil` (ou `/cs`) ouvre la fenêtre : en-tête avec classe, niveau, race, spécialisation et situation ; les 5 onglets Talents, Rotation, Équipement, Métiers, Race s'affichent sans erreur (BugSack).
+- [ ] `/cs etat` : classe, spécialisation, situation, nombre de sorts connus. Si la spécialisation est « inconnue », noter ce que le jeu donne (Forever n'a peut-être pas de spécialisations au sens de Midnight).
+- [ ] `/cs export` puis `/reload` : `ConseillerDB.export` dans `WTF\Account\<compte>\SavedVariables\Conseiller.lua` contient `noeuds` (nodeID, posX, posY, maxRanks, entrees avec spellID et nom) et `grimoire`. Si « configuration active introuvable », le jeu ne donne pas l'arbre : le noter.
+- [ ] Onglet Talents : « Build pas encore écrit… fais /cs export puis /reload » tant qu'aucun build n'est écrit ; la spécialisation conseillée et le « Pourquoi » s'affichent.
+- [ ] Rotation, chasseur, avec une cible attaquable : un contour bleu pulse sur le bouton de la barre d'action du prochain sort (Marque du chasseur, Morsure de serpent…). Le sort doit être posé sur une barre ; sinon l'onglet le dit.
+- [ ] En combat : le contour continue de bouger sans erreur ni message « taint » ou « fonction protégée » dans BugSack.
+- [ ] Passage au mode C : si le jeu cache les temps de recharge en combat, un seul message dit que Conseiller passe à la liste, et le cadre « Rotation » apparaît (déplaçable, « Replacer la liste de priorité » dans les réglages le remet). Noter si cela arrive vraiment, et dans quels combats.
+- [ ] `/cs mode a`, `/cs mode c`, `/cs mode auto` : le mode change tout de suite ; le bouton « Changer de mode » de l'onglet Rotation aussi.
+- [ ] Classe sans rotation écrite (autre que Chasseur et Paladin) : « Rotation pas encore écrite… », les conseils « à savoir » restent.
+- [ ] Changement de situation : entrer en groupe (sans tank ou sans soigneur) : un message dit quel rôle manque ; l'onglet Talents montre le bloc « Ton groupe » avec les rôles ; entrer en donjon : la situation passe à « Donjon » ; en sortir : « Seul ». Le bouton « Situation » en haut à droite montre les autres situations sans bouger.
+- [ ] Équipement : l'ordre des statistiques de ta spécialisation ; `/run print(Conseiller_OrdreStats()[1])` répond une clé de statistique.
+- [ ] Métiers : trois propositions pour ta classe, et « À faire maintenant » avec tes métiers (compétence, palier suivant).
+- [ ] Race : tes capacités de race, actives et passives.
+- [ ] Réglages « Conseiller » dans la fenêtre commune : interrupteurs, mode, épaisseur du contour, boutons « Ouvrir le Conseiller » et « Exporter mon arbre de talents ».
 
 ## Confort (nouveau)
 

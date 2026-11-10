@@ -3,7 +3,7 @@
 ## Notes: Pêche au double clic droit avec le son réglé, récolte d'une touche, repérage remis tout seul, liste de courses pour l'artisanat.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.9.0
+## Version: 0.9.1
 ## IconTexture: Interface\Icons\Trade_Fishing
 ## SavedVariables: MetiersAutoDB
 ## AddonCompartmentFunc: MetiersAuto_OuvrirReglages

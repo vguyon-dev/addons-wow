@@ -3,7 +3,7 @@
 ## Notes: Relevé des prix de l'hôtel des ventes, prix dans les bulles d'objets, liste de courses en un clic, prix conseillé à la mise en vente.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.5.0
+## Version: 0.5.1
 ## IconTexture: Interface\Icons\INV_Misc_Coin_02
 ## SavedVariables: EncheresDB
 ## AddonCompartmentFunc: Encheres_OuvrirReglages

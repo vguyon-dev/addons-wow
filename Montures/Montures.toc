@@ -3,7 +3,7 @@
 ## Notes: Une touche pour la bonne monture selon l'endroit : volante, aquatique ou terrestre, au hasard parmi tes favorites.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.3.0
+## Version: 0.3.1
 ## IconTexture: Interface\Icons\Ability_Mount_RidingHorse
 ## SavedVariables: MonturesDB
 ## AddonCompartmentFunc: Montures_OuvrirReglages

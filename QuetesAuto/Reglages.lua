@@ -194,6 +194,11 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-10", titre = "Nouvel addon : Conseiller", lignes = {
+    "Conseiller lit ta classe, ta spécialisation, ta race, ton niveau et ta situation (seul, en groupe, donjon ou raid) et te conseille. Ouvre-le avec /conseil ou /cs.",
+    "Talents : la spécialisation conseillée et pourquoi, et ce qu'il manque à ton groupe (tank ou soigneur). Rotation : un contour bleu sur ta barre d'action marque le prochain sort à lancer (Chasseur et Paladin pour commencer).",
+    "Équipement : l'ordre des statistiques de ta spécialisation. Métiers : trois propositions pour ta classe et ce qu'il te reste à faire. Race : tes capacités de race utiles.",
+  } },
   { date = "2026-11-10", titre = "Huit améliorations d'un coup", lignes = {
     "Tous les addons ont le même visuel sombre et doré : fond sombre, bordure dorée, titre doré.",
     "Marchand auto peut vendre en plus l'équipement lié que ta classe ne peut pas porter. Jamais un objet épique, jamais un objet de ta liste à garder. Option coupée au départ.",
@@ -206,7 +211,7 @@ ns.NOUVEAUTES = {
     "Réglages propres à chaque personnage : en haut de la page de chaque addon, un interrupteur « Réglages propres à ce personnage ». Activé, ce personnage a ses réglages (copiés depuis les réglages actuels) et les autres ne changent pas. Coupé, il retrouve ceux du compte.",
   } },
   { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
-    "Les réglages des 17 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
+    "Les réglages des 18 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
     "À gauche, la liste des addons avec un point vert (activé) ou rouge (coupé). Un clic droit active ou coupe un addon.",
     "À droite, les réglages de l'addon choisi, rangés en onglets, avec des interrupteurs et des curseurs.",
     "En haut, une recherche trouve un réglage dans tous les addons, même sans les accents.",
@@ -1100,7 +1105,7 @@ local function leHub()
     hub.marquerVu()
   end)
 
-  -- Un seul message par connexion, même avec 17 addons (le drapeau est dans le hub commun).
+  -- Un seul message par connexion, même avec 18 addons (le drapeau est dans le hub commun).
   function hub.annoncerNouveautes()
     if hub.messageNouveau then return end
     hub.messageNouveau = true
