@@ -1,13 +1,13 @@
 -- ============================================================================
 -- Conseiller : un conseiller qui s'adapte à ton personnage et à ta situation.
 --
---   /conseil  (ou /cs)       la fenêtre : Talents, Rotation, Équipement, Métiers, Race
+--   /conseil  (ou /cs)       la fenêtre : Talents, Rotation, Compétences, Équipement, Métiers, Race
 --   /cs export               écrit l'arbre de talents et le grimoire dans la sauvegarde
 --                            (ConseillerDB.export) : fais ensuite /reload pour que le fichier soit écrit
 --   /cs mode auto|a|c        le mode de la rotation (auto, contour sur la barre, liste seule)
 --   /cs etat                 ce que Conseiller a compris (classe, spécialisation et points par groupe de talents,
---                            build utilisé, prochain talent, état du contour vert, sorts, mode, et les
---                            talents du build qu'il n'a pas reconnus dans l'arbre)
+--                            build utilisé, prochain talent, état du contour vert, sorts, mode, liste retenue chez le
+--                            maître de classe, marques, et les talents du build qu'il n'a pas reconnus dans l'arbre)
 --
 -- Ce qu'il lit : classe, spécialisation, race, niveau, et ta situation (seul, en groupe, donjon,
 -- raid) avec les rôles de ton groupe. Rien n'est lancé à ta place : la rotation entoure en
@@ -30,6 +30,9 @@ local DEFAUTS = {
   alerteUrgence = false, -- contour rouge sur le sort de soin ou de défense quand ta vie est basse
   tailleContour = 3,     -- épaisseur du contour, en pixels
   contourTalent = true,  -- entourer le prochain talent conseillé dans la fenêtre des talents du jeu
+  rappelNiveau = true,   -- à la montée de niveau : les sorts indispensables du maître de classe
+  marquesMaitre = true,  -- une marque dorée ou argentée sur les sorts utiles dans la fenêtre du maître de classe
+  rappelBarre = true,    -- un message quand un sort de ta rotation n'est sur aucune barre
   conseilsGroupe = true, -- prévenir quand il manque un rôle au groupe
   minimap = false,
   angleMinimap = 200,
@@ -528,6 +531,13 @@ function ns.construireEtat()
     }
   end
   e.metiers = lireMetiers()
+  -- Onglet Compétences : la liste retenue chez le maître, le classement, et deux lectures du jeu faites à la demande.
+  e.sorts = ns.sorts
+  e.aMaitre = ns.aMaitre(classe)
+  e.maitre = ConseillerPerso and ConseillerPerso.maitre or nil
+  e.ctxMaitre = ns.contexteMaitre(classe, e.speRotation, ns.sorts)
+  e.rangsGrimoire = ns.rangsGrimoire
+  e.surBarre = ns.surLaBarre
   return e
 end
 
@@ -836,6 +846,209 @@ local function majContourTalent()
 end
 
 -- ---------------------------------------------------------------------------
+-- Compétences : le maître de classe, la barre d'action, les rappels
+-- ---------------------------------------------------------------------------
+-- Le jeu ne donne la liste des sorts du maître de classe que fenêtre du maître ouverte (GetNumTrainerServices,
+-- GetTrainerServiceInfo, GetTrainerServiceCost, événements TRAINER_SHOW et TRAINER_UPDATE ; la fenêtre est
+-- ClassTrainerFrame, avec une liste défilante ScrollBox dont chaque ligne est un bouton : GetID() = numéro du service).
+-- Conseiller retient cette liste par personnage (ConseillerPerso.maitre) à chaque visite. Il ne l'écrit jamais dans un
+-- cadre du jeu, n'achète rien et ne pose aucun sort sur une barre.
+
+-- Le jeu a-t-il un maître de classe ? (Forever : oui ; Retail : les sorts s'apprennent tout seuls.)
+function ns.aMaitre(classe)
+  if type(GetNumTrainerServices) ~= "function" or type(GetTrainerServiceInfo) ~= "function" then return false end
+  if ConseillerPerso and ConseillerPerso.maitre then return true end
+  return ns.infoGroupes(classe) ~= nil
+end
+
+-- Les rangs du grimoire (nil quand le jeu ne donne pas le grimoire).
+function ns.rangsGrimoire()
+  local ok, liste = pcall(ns.apiJeu.grimoire)
+  if not ok or type(liste) ~= "table" then return nil end
+  return ns.indexRangsGrimoire(liste)
+end
+
+-- Le sort est-il sur une barre d'action ? true / false, ou nil quand on ne peut pas le savoir (pas de barre lisible).
+function ns.surLaBarre(cle)
+  local s = ns.sorts[cle]
+  if not s then return nil end
+  if #boutonsDuSort(cle) > 0 then return true end
+  local lu = false
+  if ns.apiJeu.slotsDuSort then
+    local ok, l = pcall(ns.apiJeu.slotsDuSort, s.id)
+    if ok and type(l) == "table" and not ns.estSecret(l) then
+      lu = true
+      if #l > 0 then return true end
+    end
+  end
+  if lu or #listeBoutons() > 0 then return false end
+  return nil
+end
+
+-- Le contexte du classement (rotation, urgences, entretien, sorts à ignorer) de ta spécialisation, gardé tant que
+-- la classe, la spécialisation et les sorts résolus ne changent pas.
+local cacheCtx = {}
+local function contexteDuMaitre()
+  local classe = classeJoueur()
+  local _, spe = listeDeRotation()
+  if cacheCtx.ctx and cacheCtx.classe == classe and cacheCtx.spe == spe and cacheCtx.sorts == ns.sorts then
+    return cacheCtx.ctx
+  end
+  local ctx = ns.contexteMaitre(classe, spe, ns.sorts)
+  cacheCtx = { classe = classe, spe = spe, sorts = ns.sorts, ctx = ctx }
+  return ctx
+end
+
+-- À chaque visite chez le maître de classe : retenir sa liste (nom, rang, niveau requis, prix, état). Ni un maître
+-- de métier ni un maître de familier ; une liste vide n'écrase pas la précédente.
+local function retenirMaitre()
+  if not ConseillerPerso then return end
+  if not (GetNumTrainerServices and GetTrainerServiceInfo) then return end
+  if C_Trainer and C_Trainer.GetTrainerType and Enum and Enum.TrainerType then
+    local ok, t = pcall(C_Trainer.GetTrainerType)
+    if ok and t ~= nil and not ns.estSecret(t) and t ~= Enum.TrainerType.General then return end
+  end
+  if IsTradeskillTrainer then
+    local ok, metier = pcall(IsTradeskillTrainer)
+    if ok and metier == true then return end
+  end
+  local okN, n = pcall(GetNumTrainerServices)
+  if not okN or type(n) ~= "number" or ns.estSecret(n) then return end
+  local services = {}
+  for i = 1, n do
+    local ok, nom, typeService, _, niveau, sous = pcall(GetTrainerServiceInfo, i)
+    if ok then
+      local prix, estMetier
+      if GetTrainerServiceCost then
+        local okC, p, m = pcall(GetTrainerServiceCost, i)
+        if okC then prix, estMetier = p, m end
+      end
+      local s = ns.serviceMaitre(nom, typeService, niveau, sous, prix, estMetier)
+      if s then services[#services + 1] = s end
+    end
+  end
+  if #services == 0 then return end
+  ConseillerPerso.maitre = { services = services, niveau = UnitLevel("player"),
+    date = date and date("%d/%m/%Y") or nil }
+  if ns.majFenetre then ns.majFenetre() end
+end
+ns.retenirMaitre = retenirMaitre
+
+-- Les marques dans la fenêtre du maître : un petit carré doré (indispensable) ou argenté (utile) à nous, posé par-dessus
+-- le coin de l'icône de la ligne. On LIT la fenêtre du jeu (la liste défilante, le numéro de chaque ligne) et on ancre
+-- notre cadre sur la ligne : aucun champ ni aucun attribut d'un cadre du jeu n'est écrit, aucune fonction n'est remplacée.
+-- Elles sont replacées dix fois par seconde tant que la fenêtre est ouverte (la liste recycle ses lignes quand on défile).
+local COULEURS_MARQUES = { indispensable = { 1, 0.82, 0 }, utile = { 0.82, 0.84, 0.90 } }
+local marquesMaitre = {}
+-- Ce que les marques ont constaté la dernière fois (lu par /cs etat) : "ok", "reglageCoupe", "pasDeFenetre",
+-- "listeIntrouvable", "erreur".
+ns.diagMarques = "pasDeFenetre"
+
+local function nouvelleMarque()
+  local f = CreateFrame("Frame", nil, UIParent)
+  f:SetFrameStrata("HIGH")
+  f:EnableMouse(false)
+  f:SetSize(14, 14)
+  local fond = f:CreateTexture(nil, "BACKGROUND")
+  fond:SetAllPoints()
+  fond:SetColorTexture(0, 0, 0, 0.85)
+  local coeur = f:CreateTexture(nil, "ARTWORK")
+  coeur:SetPoint("TOPLEFT", 2, -2)
+  coeur:SetPoint("BOTTOMRIGHT", -2, 2)
+  f.coeur = coeur
+  f:Hide()
+  function f:placer(cible, classement)
+    local c = COULEURS_MARQUES[classement] or COULEURS_MARQUES.utile
+    self.cible, self.classement = cible, classement
+    self.coeur:SetColorTexture(c[1], c[2], c[3], 1)
+    self:ClearAllPoints()
+    self:SetPoint("TOPLEFT", cible, "TOPLEFT", 2, -2)
+    local niveau = cible.GetFrameLevel and cible:GetFrameLevel()
+    self:SetFrameLevel((type(niveau) == "number" and niveau or 1) + 5)
+    self:Show()
+  end
+  return f
+end
+
+local function cacherMarques()
+  for _, m in ipairs(marquesMaitre) do m:Hide() end
+end
+
+local function majMarquesMaitre()
+  if not (db and db.actif and db.marquesMaitre) then ns.diagMarques = "reglageCoupe"; cacherMarques() return end
+  local cadre = _G.ClassTrainerFrame
+  if not (cadre and cadre.IsVisible and cadre:IsVisible()) then ns.diagMarques = "pasDeFenetre"; cacherMarques() return end
+  local boite = cadre.ScrollBox
+  if not (boite and boite.ForEachFrame and GetTrainerServiceInfo) then ns.diagMarques = "listeIntrouvable"; cacherMarques() return end
+  local ctx = contexteDuMaitre()
+  local n = 0
+  local ok = pcall(boite.ForEachFrame, boite, function(bouton)
+    if type(bouton) ~= "table" or not bouton.GetID then return end
+    if bouton.IsVisible and not bouton:IsVisible() then return end
+    -- Une ligne de catégorie n'est pas un sort.
+    if bouton.buttonContext ~= nil and bouton.buttonContext ~= "ButtonContext_TrainerUISkill" then return end
+    local okI, nom, typeService, _, niveau, sous = pcall(GetTrainerServiceInfo, bouton:GetID())
+    if not okI then return end
+    local s = ns.serviceMaitre(nom, typeService, niveau, sous, nil, false)
+    if not s or s.etat == "appris" then return end
+    local classement = ns.classerService(s, ctx).classement
+    if classement ~= "indispensable" and classement ~= "utile" then return end
+    n = n + 1
+    local m = marquesMaitre[n]
+    if not m then m = nouvelleMarque(); marquesMaitre[n] = m end
+    if m.cible ~= bouton or m.classement ~= classement or not m:IsShown() then m:placer(bouton, classement) end
+  end)
+  for i = n + 1, #marquesMaitre do marquesMaitre[i]:Hide() end
+  if ok then ns.diagMarques = "ok" else ns.diagMarques = "erreur"; cacherMarques() end
+end
+ns.majMarquesMaitre = majMarquesMaitre
+
+-- Rappel : un sort de ta rotation que tu connais et qui n'est sur aucune barre. Un message par sort et par session,
+-- hors combat, avec un anti-rebond (les barres changent des dizaines de fois au chargement).
+local rappelsBarreDits = {}
+local barreEnAttente = false
+
+local function verifierBarre()
+  barreEnAttente = false
+  if not (db and db.actif and db.rappelBarre) then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  local classe = classeJoueur()
+  local _, spe = listeDeRotation()
+  if not (classe and spe) then return end
+  local absents = ns.sortsAbsentsDeLaBarre(classe, spe, ns.sorts, ns.surLaBarre, rappelsBarreDits)
+  for i, a in ipairs(absents) do
+    if i > 3 then break end -- pas plus de trois messages d'un coup : les autres viendront à la vérification suivante
+    rappelsBarreDits[a.cle] = true
+    ns.reglages.dire(ns.texteSortAbsent(a.nom))
+  end
+end
+ns.verifierBarre = verifierBarre
+
+local function demanderVerifBarre(delai)
+  if barreEnAttente or not (db and db.actif and db.rappelBarre) then return end
+  if not (C_Timer and C_Timer.After) then return end
+  barreEnAttente = true
+  C_Timer.After(delai or 3, function()
+    local ok, err = pcall(verifierBarre)
+    if not ok then barreEnAttente = false; ns.derniereErreur = tostring(err) end
+  end)
+end
+
+-- Rappel : à la montée de niveau, les sorts indispensables du maître de classe (voir ns.texteRappelNiveau).
+local function rappelNiveau(niveau)
+  if not (db and db.actif and db.rappelNiveau) then return end
+  local classe = classeJoueur()
+  if not ns.aMaitre(classe) then return end
+  if type(niveau) ~= "number" or ns.estSecret(niveau) then niveau = UnitLevel("player") end
+  local perso = ConseillerPerso and ConseillerPerso.maitre
+  local texte = ns.texteRappelNiveau(niveau, perso and perso.services, contexteDuMaitre(), ns.rangsGrimoire())
+  if texte then ns.reglages.dire(texte) end
+end
+ns.rappelNiveau = rappelNiveau
+
+ns.contexteDuMaitre = contexteDuMaitre
+
+-- ---------------------------------------------------------------------------
 -- Pour les autres addons
 -- ---------------------------------------------------------------------------
 
@@ -883,12 +1096,19 @@ ns.reglages = ns.creerReglages({
     { titre = "Talents" },
     { cle = "contourTalent", libelle = "Entourer le prochain talent dans la fenêtre des talents",
       aide = "Un contour vert sur le talent conseillé, quand un build est écrit pour ta spécialisation." },
+    { titre = "Compétences" },
+    { cle = "rappelNiveau", libelle = "Rappeler le maître de classe à la montée de niveau",
+      aide = "Un message dans le chat quand des sorts indispensables deviennent accessibles chez ton maître de classe (la liste est retenue à chaque visite)." },
+    { cle = "marquesMaitre", libelle = "Marquer les sorts utiles dans la fenêtre du maître de classe",
+      aide = "Un petit carré doré sur les sorts indispensables à ta rotation, argenté sur les sorts utiles. Rien n'est acheté à ta place." },
+    { cle = "rappelBarre", libelle = "Prévenir quand un sort de la rotation n'est sur aucune barre",
+      aide = "Un message dans le chat, une fois par sort et par session, hors combat. Conseiller ne pose rien sur ta barre." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
   },
   boutons = {
-    { texte = "Ouvrir le Conseiller", aide = "La fenêtre avec les cinq onglets.", action = function()
+    { texte = "Ouvrir le Conseiller", aide = "La fenêtre avec les six onglets.", action = function()
       if ns.fenetre then ns.fenetre.montrer() end
     end },
     { texte = "Exporter mon arbre de talents", aide = "Écrit l'arbre et le grimoire dans la sauvegarde ; fais /reload ensuite.", action = function()
@@ -902,13 +1122,17 @@ ns.reglages = ns.creerReglages({
   texteHub = "Ouvrir le Conseiller",
   auChargement = function(d)
     db = d
+    ConseillerPerso = ConseillerPerso or {} -- sauvegarde propre à ce personnage (liste du maître de classe)
     placerListe()
     pcall(resoudre)
     pcall(majGroupe)
+    demanderVerifBarre(8)
   end,
   surChangement = function()
     if db and not (db.actif and db.rotation) then cacherContours(); cacherUrgence(); cadreListe:Hide() end
     if db and not db.alerteUrgence then cacherUrgence() end
+    if db and not (db.actif and db.marquesMaitre) then cacherMarques() end
+    if db and db.actif and db.rappelBarre then demanderVerifBarre(3) end
     ns.talentsSale = true
   end,
 })
@@ -924,7 +1148,7 @@ local EVENEMENTS_SPE = { PLAYER_SPECIALIZATION_CHANGED = true, ACTIVE_TALENT_GRO
 local EVENEMENTS_TALENTS = { TRAIT_CONFIG_UPDATED = true, TRAIT_NODE_CHANGED = true, PLAYER_TALENT_UPDATE = true,
   ACTIVE_COMBAT_CONFIG_CHANGED = true, TRAIT_TREE_CURRENCY_INFO_UPDATED = true }
 local AUTRES = { "PLAYER_TARGET_CHANGED", "SPELLS_CHANGED", "PLAYER_REGEN_ENABLED",
-  "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED" }
+  "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "TRAINER_SHOW", "TRAINER_UPDATE" }
 
 local ecouteur = CreateFrame("Frame")
 local function inscrire(liste)
@@ -933,8 +1157,20 @@ end
 inscrire(EVENEMENTS_GROUPE); inscrire(EVENEMENTS_BARRES); inscrire(EVENEMENTS_SPE); inscrire(EVENEMENTS_TALENTS)
 for _, ev in ipairs(AUTRES) do pcall(ecouteur.RegisterEvent, ecouteur, ev) end
 
-ecouteur:SetScript("OnEvent", function(_, ev)
+ecouteur:SetScript("OnEvent", function(_, ev, arg1)
   if not db then return end
+  -- Le maître de classe : retenir sa liste à chaque visite et à chaque changement de sa liste.
+  if ev == "TRAINER_SHOW" or ev == "TRAINER_UPDATE" then
+    local ok, err = pcall(retenirMaitre)
+    if not ok then ns.derniereErreur = tostring(err) end
+    return
+  end
+  if ev == "PLAYER_LEVEL_UP" then
+    local ok, err = pcall(rappelNiveau, arg1)
+    if not ok then ns.derniereErreur = tostring(err) end
+  end
+  -- Un sort sorti des barres ou appris : on revérifie la barre, une fois que ça s'est calmé.
+  if ev == "SPELLS_CHANGED" or ev == "ACTIONBAR_SLOT_CHANGED" or ev == "PLAYER_REGEN_ENABLED" then demanderVerifBarre(3) end
   if EVENEMENTS_TALENTS[ev] or EVENEMENTS_SPE[ev] or ev == "PLAYER_LEVEL_UP" or ev == "PLAYER_ENTERING_WORLD" then ns.speSale = true end
   if ev == "SPELLS_CHANGED" or EVENEMENTS_SPE[ev] or ev == "PLAYER_ENTERING_WORLD" then pcall(resoudre) end
   if EVENEMENTS_GROUPE[ev] or EVENEMENTS_SPE[ev] then pcall(majGroupe) end
@@ -948,9 +1184,10 @@ ecouteur:SetScript("OnEvent", function(_, ev)
 end)
 
 -- Mise à jour limitée : la rotation 10 fois par seconde (un temps de recharge qui finit ne
--- donne pas d'événement), le contour des talents 2 fois par seconde.
+-- donne pas d'événement), le contour des talents 2 fois par seconde, les marques de la fenêtre du maître 10 fois
+-- par seconde (rien à faire tant que cette fenêtre est fermée).
 local pilote = CreateFrame("Frame")
-local ecoule, ecouleTalents = 0, 0
+local ecoule, ecouleTalents, ecouleMarques = 0, 0, 0
 pilote:SetScript("OnUpdate", function(_, dt)
   if type(dt) ~= "number" then return end
   ecoule = ecoule + dt
@@ -963,6 +1200,12 @@ pilote:SetScript("OnUpdate", function(_, dt)
   if ecouleTalents >= 0.5 then
     ecouleTalents = 0
     local ok, err = pcall(majContourTalent)
+    if not ok then ns.derniereErreur = tostring(err) end
+  end
+  ecouleMarques = ecouleMarques + dt
+  if ecouleMarques >= 0.1 then
+    ecouleMarques = 0
+    local ok, err = pcall(majMarquesMaitre)
     if not ok then ns.derniereErreur = tostring(err) end
   end
 end)
@@ -981,6 +1224,14 @@ local TEXTES_CONTOUR = {
   rienAEntourer = "contour vert : aucun talent à entourer pour l'instant.",
   boutonIntrouvable = "bouton du talent introuvable dans la fenêtre.",
   boutonCache = "le bouton du talent est caché dans la fenêtre (autre onglet ou zone défilée).",
+}
+
+local TEXTES_MARQUES = {
+  ok = "posées (ou rien à marquer dans la liste).",
+  reglageCoupe = "coupées dans les réglages.",
+  pasDeFenetre = "la fenêtre du maître est fermée.",
+  listeIntrouvable = "la liste défilante de la fenêtre du maître n'a pas été trouvée.",
+  erreur = "la lecture de la liste a échoué.",
 }
 
 local function etatEnTexte()
@@ -1023,6 +1274,23 @@ local function etatEnTexte()
   if t and (t.nbNonReconnus or 0) > 0 then
     dire(string.format("talents du build non reconnus (%d) : %s. Fais /cs export puis /reload pour qu'on corrige leurs noms.",
       t.nbNonReconnus, table.concat(t.nonReconnus, ", ")))
+  end
+  -- Le maître de classe : ce qui a été retenu à la dernière visite, et les marques.
+  if ns.aMaitre(e.classe) then
+    local m = ConseillerPerso and ConseillerPerso.maitre
+    if m and m.services then
+      local utiles = 0
+      for _, s in ipairs(m.services) do
+        if s.etat ~= "appris" and ns.classerService(s, e.ctxMaitre).classement ~= "attendre" then utiles = utiles + 1 end
+      end
+      dire(string.format("maître de classe : liste retenue%s, %d services dont %d indispensables ou utiles.",
+        m.date and (" le " .. m.date) or "", #m.services, utiles))
+    else
+      dire("maître de classe : pas encore de liste retenue (va voir ton maître de classe une fois).")
+    end
+    dire("marques dans la fenêtre du maître : " .. (TEXTES_MARQUES[ns.diagMarques] or TEXTES_MARQUES.pasDeFenetre))
+  else
+    dire("maître de classe : ce jeu n'en a pas (les sorts s'apprennent tout seuls).")
   end
   if ns.derniereErreur then dire("dernière erreur : " .. ns.derniereErreur) end
 end

@@ -1,5 +1,5 @@
 -- ============================================================================
--- Fenetre.lua : la fenêtre de Conseiller (/conseil), cinq onglets.
+-- Fenetre.lua : la fenêtre de Conseiller (/conseil), six onglets.
 -- Les textes viennent de Logique.lua (ns.vueTalents, ns.vueRotation…) : ici, seulement le cadre.
 -- ============================================================================
 
@@ -43,7 +43,7 @@ boutonSituation:SetPoint("TOPRIGHT", -14, -36)
 
 local ongletCourant = 1
 local boutonsOnglets = {}
-local largeurOnglet = (LARGEUR - 28 - 4 * 4) / 5
+local largeurOnglet = (LARGEUR - 28 - 4 * (#ns.ONGLETS - 1)) / #ns.ONGLETS
 for i, o in ipairs(ns.ONGLETS) do
   local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
   b:SetSize(largeurOnglet, 26)

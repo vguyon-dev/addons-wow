@@ -1029,7 +1029,7 @@ for i = 1, #ns.ONGLETS do
   local bonTexte, t = pcall(ns.ONGLETS[i][3], ns.construireEtat())
   fenetreOk = fenetreOk and bonTexte and type(t) == "string" and #t > 20
 end
-verifie("fenêtre : les 5 onglets s'affichent", true, fenetreOk and #ns.ONGLETS == 5)
+verifie("fenêtre : les 6 onglets s'affichent", true, fenetreOk and #ns.ONGLETS == 6)
 
 -- Commandes
 verifie("commande /cs mode c", nil, (function() SlashCmdList.CONSEILLER("mode c") return nil end)())
@@ -1039,6 +1039,499 @@ verifie("commande /cs mode auto", 1, ConseillerDB.modeRotation)
 verifie("réglage alerteUrgence : coupé par défaut", false, ConseillerDB.alerteUrgence)
 verifie("commandes déclarées", "/cs", SLASH_CONSEILLER2)
 
+
+-- ================================================================ Compétences : maître de classe, barre d'action, rappels
+-- (0.3.0) Le classement des sorts du maître de classe est pur ; l'enregistrement de sa liste, les marques dans sa
+-- fenêtre et les rappels sont simulés avec une fausse API (GetNumTrainerServices, ClassTrainerFrame, C_Timer…).
+do
+  local cle = ns.cleTalent
+
+  -- Noms et rangs
+  verifie("nom sans rang : « (Rang 2) »", "Frappe sacrée", ns.nomSansRang("Frappe sacrée (Rang 2)"))
+  verifie("nom sans rang : « , Rang 3 »", "Frappe sacrée", ns.nomSansRang("Frappe sacrée, Rang 3"))
+  verifie("nom sans rang : « (Rank 4) »", "Holy Strike", ns.nomSansRang("Holy Strike (Rank 4)"))
+  verifie("nom sans rang : aucun rang", "Jugement", ns.nomSansRang("Jugement"))
+  verifie("nom sans rang : pas un texte", "", ns.nomSansRang(nil))
+  verifie("nom sans rang : valeur secrète", "", ns.nomSansRang(SECRET))
+  verifie("rang du texte : « Rang 3 »", 3, ns.rangDuTexte("Rang 3"))
+  verifie("rang du texte : un nombre seul", 2, ns.rangDuTexte(" 2 "))
+  verifie("rang du texte : vide", nil, ns.rangDuTexte(""))
+
+  -- Enregistrement d'une ligne du maître
+  local s = ns.serviceMaitre("Frappe sacrée", "available", 10, "Rang 2", 2000, false)
+  verifie("service : nom, rang, niveau, prix, état", "Frappe sacrée|2|10|2000|disponible",
+    s and (s.nom .. "|" .. s.rang .. "|" .. s.niveau .. "|" .. s.prix .. "|" .. s.etat))
+  verifie("service : « unavailable » devient « pasEncore »", "pasEncore", ns.serviceMaitre("A", "unavailable", 5, "", 1, false).etat)
+  verifie("service : « used » devient « appris »", "appris", ns.serviceMaitre("A", "used", 5, "", 1, false).etat)
+  verifie("service : un type inconnu devient « pasEncore »", "pasEncore", ns.serviceMaitre("A", "bizarre", 5, "", 1, false).etat)
+  verifie("service : sous-texte vide, pas de rang", nil, ns.serviceMaitre("A", "available", 5, "", 1, false).rang)
+  verifie("service : niveau absent, 1", 1, ns.serviceMaitre("A", "available", nil, "", 1, false).niveau)
+  verifie("service : prix secret, 0", 0, ns.serviceMaitre("A", "available", 5, "", SECRET, false).prix)
+  verifie("service : un métier est ignoré", nil, ns.serviceMaitre("Forge", "available", 5, "", 1, true))
+  verifie("service : nom absent ignoré", nil, ns.serviceMaitre(nil, "available", 5, "", 1, false))
+  verifie("service : nom secret ignoré", nil, ns.serviceMaitre(SECRET, "available", 5, "", 1, false))
+  verifie("service : le rang peut être dans le nom", 3, ns.serviceMaitre("Frappe sacrée (Rang 3)", "available", 5, "", 1, false).rang)
+
+  -- Le grimoire et le filtre « déjà appris »
+  local rg = ns.indexRangsGrimoire({ { nom = "Imposition des mains", sousTexte = "Rang 2" }, { nom = "Jugement", sousTexte = "" },
+    { nom = "Imposition des mains", sousTexte = "Rang 1" } })
+  verifie("grimoire : le rang le plus haut est gardé", 2, rg[cle("Imposition des mains")])
+  verifie("grimoire : sans rang écrit, 0", 0, rg[cle("Jugement")])
+  verifie("connu : rang égal", true, ns.serviceConnu({ nom = "Imposition des mains", rang = 2 }, rg))
+  verifie("connu : rang plus bas", true, ns.serviceConnu({ nom = "Imposition des mains", rang = 1 }, rg))
+  verifie("connu : rang plus haut pas encore appris", false, ns.serviceConnu({ nom = "Imposition des mains", rang = 3 }, rg))
+  verifie("connu : sans rang écrit dans le service", true, ns.serviceConnu({ nom = "Imposition des mains" }, rg))
+  verifie("connu : grimoire sans rang, premier rang seulement", true, ns.serviceConnu({ nom = "Jugement", rang = 1 }, rg))
+  verifie("connu : grimoire sans rang, rang 2 reste à apprendre", false, ns.serviceConnu({ nom = "Jugement", rang = 2 }, rg))
+  verifie("connu : sort absent du grimoire", false, ns.serviceConnu({ nom = "Exorcisme", rang = 1 }, rg))
+  verifie("connu : pas de grimoire lisible", false, ns.serviceConnu({ nom = "Exorcisme", rang = 1 }, nil))
+
+  -- Texte raccourci
+  verifie("raccourci : parenthèse retirée", "Sceau d'autorité, s'il n'est pas actif",
+    ns.raccourcirTexte("Sceau d'autorité (de piété avant le niveau 20), s'il n'est pas actif"))
+  local long = ns.raccourcirTexte(string.rep("mot ", 40))
+  verifie("raccourci : un texte long est coupé avec « … »", true, long ~= nil and #long <= 74 and long:sub(-3) == "…")
+  verifie("raccourci : rien", nil, ns.raccourcirTexte(nil))
+
+  -- Classement (paladin Vindicte, aucun sort encore appris : les noms viennent des données)
+  local ctx = ns.contexteMaitre("PALADIN", "vindicte", {})
+  local function classer(nom, rang) return ns.classerService({ nom = nom, rang = rang }, ctx) end
+  verifie("classement : un sort de la rotation est indispensable", "indispensable", classer("Frappe sacrée").classement)
+  verifie("classement : le nom avec son rang compte aussi", "indispensable", classer("Frappe sacrée (Rang 2)").classement)
+  verifie("classement : sans accents ni majuscules", "indispensable", classer("FRAPPE SACREE").classement)
+  verifie("classement : le nom anglais compte aussi", "indispensable", classer("Holy Strike").classement)
+  verifie("classement : un autre nom de la rotation (Jugement)", "indispensable", classer("Jugement").classement)
+  verifie("classement : la raison est le texte de la rotation raccourci", "Frappe sacrée, dès qu'elle est prête", classer("Frappe sacrée").raison)
+  verifie("classement : une urgence est utile", "utile", classer("Imposition des mains").classement)
+  verifie("classement : la raison d'une urgence", "Imposition des mains si tu es à moins de 15 % de vie", classer("Imposition des mains").raison)
+  verifie("classement : un sort d'entretien est utile", "utile", classer("Bénédiction des rois").classement)
+  verifie("classement : la raison de l'entretien", "toutes tes caractéristiques en plus", classer("Bénédiction des rois").raison)
+  verifie("classement : un sort à ignorer peut attendre", "attendre", classer("Perception des morts-vivants").classement)
+  verifie("classement : la raison écrite pour un sort à ignorer", "elle ne sert qu'à repérer des morts-vivants", classer("Perception des morts-vivants").raison)
+  verifie("classement : tout le reste peut attendre", "attendre", classer("Sort inconnu au bataillon").classement)
+  verifie("classement : raison générale", "ne sert pas à ta rotation", classer("Sort inconnu au bataillon").raison)
+  verifie("classement : sans contexte, tout peut attendre", "attendre", ns.classerService({ nom = "Frappe sacrée" }, nil).classement)
+  -- Les mêmes sorts ne sont pas indispensables à un autre paladin
+  local ctxSacre = ns.contexteMaitre("PALADIN", "sacre", {})
+  verifie("classement : le soin du paladin Sacré est utile", "utile", ns.classerService({ nom = "Lumière sacrée" }, ctxSacre).classement)
+  verifie("classement : Frappe sacrée n'est pas dans la rotation du Sacré", "attendre", ns.classerService({ nom = "Frappe sacrée" }, ctxSacre).classement)
+  -- Le nom que le jeu donne au sort connu compte aussi
+  local ctxJeu = ns.contexteMaitre("PALADIN", "vindicte", { JUGEMENT = { nom = "Jugement de lumière" } })
+  verifie("classement : le nom du jeu dans le grimoire compte", "indispensable", ns.classerService({ nom = "Jugement de lumière" }, ctxJeu).classement)
+
+  -- La liste du maître : filtrage par niveau et par grimoire, tri, total
+  local services = {
+    { nom = "Perception des morts-vivants", niveau = 4, prix = 300, etat = "disponible" },
+    { nom = "Frappe sacrée", rang = 2, niveau = 10, prix = 2000, etat = "disponible" },
+    { nom = "Frappe sacrée", rang = 3, niveau = 20, prix = 5000, etat = "pasEncore" },
+    { nom = "Bénédiction des rois", niveau = 8, prix = 1000, etat = "disponible" },
+    { nom = "Jugement", niveau = 4, prix = 100, etat = "appris" },
+    { nom = "Imposition des mains", rang = 2, niveau = 10, prix = 1800, etat = "disponible" },
+  }
+  local l = ns.listeMaitre(services, 12, rg, ctx)
+  local noms = {}
+  for _, it in ipairs(l.items) do noms[#noms + 1] = it.nom .. (it.rang and (" " .. it.rang) or "") .. ":" .. it.classement:sub(1, 1) end
+  verifie("liste : filtrée (appris, grimoire, niveau) et triée", "Frappe sacrée 2:i|Bénédiction des rois:u|Perception des morts-vivants:a", table.concat(noms, "|"))
+  verifie("liste : un sort qui demande un niveau plus haut est compté à part", 1, l.plusTard)
+  verifie("liste : nombre d'indispensables", 1, l.nbIndispensables)
+  verifie("liste : total des indispensables", 2000, l.totalIndispensables)
+  l = ns.listeMaitre(services, 12, nil, ctx)
+  verifie("liste : sans grimoire lisible, seul l'état noté chez le maître filtre", 4, #l.items)
+  l = ns.listeMaitre(services, 25, rg, ctx)
+  verifie("liste : au niveau 25, le rang 3 est accessible (le total suit)", 7000, l.totalIndispensables)
+  verifie("liste : rien de plus tard", 0, l.plusTard)
+  l = ns.listeMaitre({}, 12, rg, ctx)
+  verifie("liste : vide", 0, #l.items)
+  l = ns.listeMaitre(nil, 12, rg, ctx)
+  verifie("liste : absente", 0, #l.items)
+
+  -- Prix
+  verifie("prix : cuivre, argent, or", "1 po 23 pa 45 pc", ns.prixEnTexte(12345))
+  verifie("prix : 38 pa", "38 pa", ns.prixEnTexte(3800))
+  verifie("prix : gratuit", "gratuit", ns.prixEnTexte(0))
+  verifie("prix : valeur secrète", "?", ns.prixEnTexte(SECRET))
+  verifie("prix : sans la fonction du jeu, le texte", "38 pa", ns.formaterPrix(3800))
+  C_CurrencyInfo = { GetCoinTextureString = function(c) return "PIECES(" .. c .. ")" end }
+  verifie("prix : la fonction du jeu (C_CurrencyInfo) passe d'abord", "PIECES(3800)", ns.formaterPrix(3800))
+  C_CurrencyInfo = nil
+  GetCoinTextureString = function(c) return "ANCIEN(" .. c .. ")" end
+  verifie("prix : sinon GetCoinTextureString", "ANCIEN(3800)", ns.formaterPrix(3800))
+  GetCoinTextureString = function() error("boum") end
+  verifie("prix : la fonction du jeu qui échoue, repli sur le texte", "38 pa", ns.formaterPrix(3800))
+  GetCoinTextureString = nil
+
+  -- Rappel de niveau
+  local fmt = ns.prixEnTexte
+  verifie("rappel niveau : sans liste, niveau pair", "Niveau 18 : pense à passer chez ton maître de classe.",
+    ns.texteRappelNiveau(18, nil, ctx, rg, fmt))
+  verifie("rappel niveau : sans liste, niveau impair", nil, ns.texteRappelNiveau(17, nil, ctx, rg, fmt))
+  local liste18 = {
+    { nom = "Frappe sacrée", rang = 2, niveau = 16, prix = 2000, etat = "pasEncore" },
+    { nom = "Jugement", niveau = 18, prix = 1800, etat = "pasEncore" },
+    { nom = "Perception des morts-vivants", niveau = 18, prix = 300, etat = "pasEncore" },
+  }
+  verifie("rappel niveau : avec liste, pluriel et prix (l'exemple du joueur)",
+    "Niveau 18 : 2 sorts indispensables chez ton maître de classe (38 pa).", ns.texteRappelNiveau(18, liste18, ctx, nil, fmt))
+  verifie("rappel niveau : avec liste, singulier", "Niveau 18 : 1 sort indispensable chez ton maître de classe (18 pa).",
+    ns.texteRappelNiveau(18, { liste18[2] }, ctx, nil, fmt))
+  verifie("rappel niveau : rien de nouveau à ce niveau, rien à dire", nil, ns.texteRappelNiveau(19, liste18, ctx, nil, fmt))
+  verifie("rappel niveau : aucun indispensable, rien à dire", nil, ns.texteRappelNiveau(18, { liste18[3] }, ctx, nil, fmt))
+  verifie("rappel niveau : un sort déjà appris n'est pas compté", "Niveau 18 : 1 sort indispensable chez ton maître de classe (18 pa).",
+    ns.texteRappelNiveau(18, liste18, ctx, ns.indexRangsGrimoire({ { nom = "Frappe sacrée", sousTexte = "Rang 2" } }), fmt))
+  verifie("rappel niveau : niveau secret", nil, ns.texteRappelNiveau(SECRET, nil, ctx, rg, fmt))
+
+  -- La barre
+  local connus = { JUGEMENT = { nom = "Jugement" }, FRAPPE_SACREE = { nom = "Frappe sacrée" }, IMPOSITION = { nom = "Imposition des mains" },
+    BENEDICTION_ROIS = { nom = "Bénédiction des rois" } }
+  local barre = ns.listeBarre("PALADIN", "vindicte", connus, function(c) return c == "JUGEMENT" end)
+  local lignes = {}
+  for _, b in ipairs(barre) do lignes[#lignes + 1] = b.cle .. ":" .. b.genre:sub(1, 1) .. ":" .. tostring(b.surBarre) end
+  verifie("barre : rotation, urgences, entretien, seulement les sorts connus",
+    "JUGEMENT:r:true|FRAPPE_SACREE:r:false|IMPOSITION:u:false|BENEDICTION_ROIS:e:false", table.concat(lignes, "|"))
+  barre = ns.listeBarre("PALADIN", "vindicte", connus, function() error("illisible") end)
+  verifie("barre : une lecture qui échoue donne « inconnu »", nil, barre[1].surBarre)
+  verifie("barre : pas de sorts connus, liste vide", 0, #ns.listeBarre("PALADIN", "vindicte", {}, function() return false end))
+  local absents = ns.sortsAbsentsDeLaBarre("PALADIN", "vindicte", connus, function(c) return c == "JUGEMENT" end, {})
+  verifie("absent de la barre : seul le sort de la rotation connu et absent", "FRAPPE_SACREE", absents[1] and absents[1].cle)
+  verifie("absent de la barre : un seul", 1, #absents)
+  verifie("absent de la barre : une urgence n'est jamais signalée", 0, #ns.sortsAbsentsDeLaBarre("PALADIN", "vindicte",
+    { IMPOSITION = connus.IMPOSITION }, function() return false end, {}))
+  verifie("absent de la barre : déjà signalé, plus de message", 0, #ns.sortsAbsentsDeLaBarre("PALADIN", "vindicte", connus,
+    function(c) return c == "JUGEMENT" end, { FRAPPE_SACREE = true }))
+  verifie("absent de la barre : barre illisible, rien", 0, #ns.sortsAbsentsDeLaBarre("PALADIN", "vindicte", connus, function() return nil end, {}))
+  -- Un sort de repli (Sceau de piété quand on a le Sceau de fureur) n'est pas signalé
+  local sceaux = { SCEAU_FUREUR = { nom = "Sceau de fureur" }, SCEAU_PIETE = { nom = "Sceau de piété" } }
+  local ab = ns.sortsAbsentsDeLaBarre("PALADIN", "protection", sceaux, function() return false end, {})
+  local nomsAb = {}
+  for _, a in ipairs(ab) do nomsAb[#nomsAb + 1] = a.cle end
+  verifie("absent de la barre : le sort de repli n'est pas signalé", "SCEAU_FUREUR", table.concat(nomsAb, ","))
+  ab = ns.sortsAbsentsDeLaBarre("PALADIN", "protection", { SCEAU_PIETE = sceaux.SCEAU_PIETE }, function() return false end, {})
+  verifie("absent de la barre : sans l'autre sceau, il est signalé", "SCEAU_PIETE", ab[1] and ab[1].cle)
+  verifie("absent de la barre : le texte du message", "Frappe sacrée fait partie de ta rotation mais n'est sur aucune barre.",
+    ns.texteSortAbsent("Frappe sacrée"))
+
+  -- Les sorts dont on peut se passer : connus ou proposés par le maître
+  local ig = ns.sortsAIgnorer("PALADIN", "vindicte", { PERCEPTION_MV = { nom = "Perception des morts-vivants" } },
+    { { nom = "Bénédiction de liberté", niveau = 8, etat = "disponible" }, { nom = "Exorcisme", niveau = 8, etat = "disponible" } }, nil)
+  local nomsIg = {}
+  for _, x in ipairs(ig) do nomsIg[#nomsIg + 1] = x.cle .. ":" .. tostring(x.connu) end
+  verifie("à ignorer : le sort connu et le sort proposé", "PERCEPTION_MV:true,BENEDICTION_LIBERTE:false", table.concat(nomsIg, ","))
+  verifie("à ignorer : un sort proposé mais déjà appris est absent", 0, #ns.sortsAIgnorer("PALADIN", "vindicte", {},
+    { { nom = "Bénédiction de liberté", etat = "appris" } }, nil))
+  verifie("à ignorer : ni connu ni proposé, rien", 0, #ns.sortsAIgnorer("PALADIN", "vindicte", {}, nil, nil))
+
+  -- Les données : chaque spécialisation des 9 classes a un entretien et une liste « à ignorer » bien formés
+  local donneesBien, tirets = true, true
+  local function mal(msg) donneesBien = false; io.write("   données Compétences : " .. msg .. "\n") end
+  for _, cl in ipairs(TOUTES) do
+    for _, spe in ipairs(D.CLASSES[cl].ordre) do
+      local ent = D.ENTRETIEN[cl] and D.ENTRETIEN[cl][spe]
+      local ign = D.IGNORER[cl] and D.IGNORER[cl][spe]
+      if type(ent) ~= "table" or #ent < 1 or #ent > 6 then mal(cl .. "/" .. spe .. " : entretien absent ou trop long") end
+      if type(ign) ~= "table" or #ign < 2 or #ign > 4 then mal(cl .. "/" .. spe .. " : à ignorer, 2 à 4 entrées attendues") end
+      local dansRotation = {}
+      for _, e in ipairs(D.ROTATIONS[cl][spe] or {}) do dansRotation[e.sort] = true end
+      local vus = {}
+      for _, e in ipairs(ent or {}) do
+        if not D.SORTS[cl][e.sort] then mal(cl .. "/" .. spe .. " : entretien, sort inconnu " .. tostring(e.sort)) end
+        if type(e.texte) ~= "string" or e.texte == "" then mal(cl .. "/" .. spe .. " : entretien sans texte") end
+        if vus[e.sort] then mal(cl .. "/" .. spe .. " : entretien en double " .. tostring(e.sort)) end
+        vus[e.sort] = true
+        if dansRotation[e.sort] then mal(cl .. "/" .. spe .. " : " .. tostring(e.sort) .. " est déjà dans la rotation") end
+        if (tostring(e.texte):find("—", 1, true) or tostring(e.texte):find("–", 1, true)) or tostring(e.texte):find("Valentin") then tirets = false end
+      end
+      for _, e in ipairs(ign or {}) do
+        if not D.SORTS[cl][e.sort] then mal(cl .. "/" .. spe .. " : à ignorer, sort inconnu " .. tostring(e.sort)) end
+        if type(e.raison) ~= "string" or e.raison == "" then mal(cl .. "/" .. spe .. " : à ignorer sans raison") end
+        if vus[e.sort] or dansRotation[e.sort] then mal(cl .. "/" .. spe .. " : " .. tostring(e.sort) .. " ne peut pas être à ignorer et utile") end
+        vus[e.sort] = true
+        if (tostring(e.raison):find("—", 1, true) or tostring(e.raison):find("–", 1, true)) or tostring(e.raison):find("Valentin") then tirets = false end
+      end
+    end
+  end
+  verifie("données : entretien et « à ignorer » bien formés pour les 9 classes", true, donneesBien)
+  verifie("données : pas de tiret cadratin ni de prénom dans ces textes", true, tirets)
+
+  -- L'onglet, pour chaque spécialisation des 9 classes, sans erreur, avec ses trois blocs
+  local ongletBien, ongletTirets = true, true
+  for _, cl in ipairs(TOUTES) do
+    for _, spe in ipairs(D.CLASSES[cl].ordre) do
+      local e = { classe = cl, niveau = 20, speRotation = spe, aMaitre = true, sorts = {}, ctxMaitre = ns.contexteMaitre(cl, spe, {}),
+        rangsGrimoire = function() return {} end, surBarre = function() return nil end }
+      local okV, t = pcall(ns.vueCompetences, e)
+      if not (okV and type(t) == "string" and contient(t, "À apprendre chez ton maître de classe") and contient(t, "À mettre sur ta barre")
+        and contient(t, "Tu peux t'en passer") and contient(t, "Va voir ton maître de classe une fois : je retiendrai sa liste.")) then
+        ongletBien = false; io.write("   onglet Compétences " .. cl .. "/" .. spe .. " : " .. tostring(t) .. "\n")
+      end
+      if okV and (t:find("—", 1, true) or t:find("–", 1, true)) then ongletTirets = false end
+    end
+  end
+  verifie("onglet Compétences : les 9 classes, avant la première visite", true, ongletBien)
+  verifie("onglet Compétences : pas de tiret cadratin", true, ongletTirets)
+  verifie("onglet Compétences : sans maître de classe (Retail)", true, contient(ns.vueCompetences({ classe = "PALADIN", niveau = 20,
+    speRotation = "vindicte", aMaitre = false, sorts = {} }), "il n'y a pas de maître de classe : tes sorts s'apprennent tout seuls"))
+  local tVue = ns.vueCompetences({ classe = "PALADIN", niveau = 12, speRotation = "vindicte", aMaitre = true, sorts = connus,
+    maitre = { services = services, date = "10/11/2026", niveau = 11 }, ctxMaitre = ctx, rangsGrimoire = function() return rg end,
+    surBarre = function(c) return c == "JUGEMENT" and true or false end })
+  verifie("onglet Compétences : badge Indispensable et raison", true, contient(tVue, "[Indispensable]") and contient(tVue, "Frappe sacrée, rang 2"))
+  verifie("onglet Compétences : badges Utile et Peut attendre", true, contient(tVue, "[Utile]") and contient(tVue, "[Peut attendre]"))
+  verifie("onglet Compétences : le total des indispensables", true, contient(tVue, "Total des indispensables : 20 pa"))
+  verifie("onglet Compétences : un sort plus haut en niveau est compté à part", true, contient(tVue, "1 autre sort demande un niveau plus haut."))
+  verifie("onglet Compétences : date de la liste retenue", true, contient(tVue, "Liste retenue le 10/11/2026, au niveau 11"))
+  verifie("onglet Compétences : sur la barre / pas sur la barre", true, contient(tVue, "[Sur ta barre]") and contient(tVue, "[Pas sur ta barre]"))
+  verifie("onglet Compétences : bloc « tu peux t'en passer » (sort proposé par le maître)", true, contient(tVue, "Perception des morts-vivants" ) and contient(tVue, "elle ne sert qu'à repérer des morts-vivants"))
+  verifie("onglet Compétences : un sort appris ou connu n'est plus dans la liste du maître", false, contient(tVue, "Imposition des mains, rang 2"))
+
+  -- ------------------------------------------------------------ de bout en bout : le maître, les marques, les rappels
+  -- Le personnage de la suite : un chasseur de niveau 12, spécialisation Maîtrise des bêtes (rotation : Tir automatique,
+  -- Marque du chasseur, Tir des arcanes…).
+  jeu.classe, jeu.spe, jeu.nomSpe, jeu.nbSpes, jeu.niveau = "HUNTER", 1, "Maîtrise des bêtes", nil, 12
+  jeu.noms = { [75] = "Tir automatique", [14325] = "Marque du chasseur" }
+  jeu.sortsConnus = { [75] = true, [14325] = true }
+  ns.speSale = true
+  evt("SPELLS_CHANGED")
+  local dits
+  local function ecouter(fn)
+    dits = {}
+    local avant = print
+    print = function(t) dits[#dits + 1] = t end
+    local okF, err = pcall(fn)
+    print = avant
+    if not okF then error(err, 0) end
+    return table.concat(dits, "\n")
+  end
+  verifie("compétences : la sauvegarde par personnage existe", "table", type(ConseillerPerso))
+  verifie("compétences : options par défaut activées", true, ConseillerDB.rappelNiveau and ConseillerDB.marquesMaitre and ConseillerDB.rappelBarre)
+
+  -- Le jeu n'a pas de maître de classe (aucune liste retenue, pas de groupes de talents) : l'onglet le dit
+  GetNumTrainerServices = function() return 0 end
+  GetTrainerServiceInfo = function() return nil end
+  verifie("compétences : sans liste ni groupes de talents, pas de maître", false, ns.aMaitre("HUNTER"))
+  verifie("compétences : onglet sans maître de classe", true, contient(ns.vueCompetences(ns.construireEtat()), "il n'y a pas de maître de classe"))
+  verifie("compétences : sans maître, pas de rappel de niveau", "", ecouter(function() evt("PLAYER_LEVEL_UP", 14) end))
+
+  -- Une visite chez le maître
+  local typeMaitre, ligneMaitre = 0, nil
+  Enum = { TrainerType = { General = 0, Tradeskills = 2, Pet = 3 } }
+  C_Trainer = { GetTrainerType = function() return typeMaitre end }
+  local lignesMaitre = {
+    -- nom, type, niveau requis, sous-texte, prix, estMétier
+    { "Tir des arcanes", "available", 12, "Rang 2", 1400, false },
+    { "Appel du familier", "available", 10, "", 1000, false },
+    { "Aspect du singe", "available", 4, "", 100, false },
+    { "Aspect du faucon", "used", 4, "Rang 1", 0, false },
+    { "Visée", "unavailable", 20, "Rang 1", 5000, false },
+    { "Forge", "available", 1, "", 10, true },
+  }
+  GetNumTrainerServices = function() return #lignesMaitre end
+  GetTrainerServiceInfo = function(i)
+    local l = lignesMaitre[i]
+    if not l then return nil end
+    return l[1], l[2], "Interface\\Icons\\Truc", l[3], l[4]
+  end
+  GetTrainerServiceCost = function(i) local l = lignesMaitre[i]; return l and l[5], l and l[6] end
+  ConseillerPerso.maitre = {}
+  verifie("compétences : une liste vide notée, le jeu a un maître", true, ns.aMaitre("HUNTER"))
+  verifie("compétences : avant la première visite", true, contient(ns.vueCompetences(ns.construireEtat()),
+    "Va voir ton maître de classe une fois : je retiendrai sa liste."))
+  ConseillerPerso.maitre = nil
+  typeMaitre = 3 -- un maître de familiers
+  evt("TRAINER_SHOW")
+  verifie("maître : un maître de familiers n'est pas retenu", nil, ConseillerPerso.maitre)
+  typeMaitre = 2 -- un maître de métiers
+  evt("TRAINER_SHOW")
+  verifie("maître : un maître de métiers n'est pas retenu", nil, ConseillerPerso.maitre)
+  typeMaitre = 0
+  IsTradeskillTrainer = function() return true end
+  evt("TRAINER_SHOW")
+  verifie("maître : IsTradeskillTrainer vrai, pas retenu", nil, ConseillerPerso.maitre)
+  IsTradeskillTrainer = nil
+  evt("TRAINER_SHOW")
+  local m = ConseillerPerso.maitre
+  verifie("maître : la liste est retenue (le métier est écarté)", 5, m and #m.services)
+  verifie("maître : premier service", "Tir des arcanes|2|12|1400|disponible",
+    m and (m.services[1].nom .. "|" .. m.services[1].rang .. "|" .. m.services[1].niveau .. "|" .. m.services[1].prix .. "|" .. m.services[1].etat))
+  verifie("maître : un service déjà appris est noté", "appris", m and m.services[4].etat)
+  verifie("maître : un service pas encore accessible", "pasEncore", m and m.services[5].etat)
+  verifie("maître : niveau et date notés", true, m and m.niveau == 12 and type(m.date) == "string")
+  -- La liste change pendant la visite (un achat) : TRAINER_UPDATE la met à jour
+  lignesMaitre[1] = { "Tir des arcanes", "used", 12, "Rang 2", 0, false }
+  evt("TRAINER_UPDATE")
+  verifie("maître : TRAINER_UPDATE met la liste à jour", "appris", ConseillerPerso.maitre.services[1].etat)
+  lignesMaitre[1] = { "Tir des arcanes", "available", 12, "Rang 2", 1400, false }
+  -- Une liste vide n'écrase pas la précédente ; un nom secret est sauté
+  local sauveLignes = lignesMaitre
+  lignesMaitre = {}
+  evt("TRAINER_SHOW")
+  verifie("maître : une liste vide n'écrase pas la précédente", 5, #ConseillerPerso.maitre.services)
+  lignesMaitre = { { SECRET, "available", 1, "", 1, false }, sauveLignes[1] }
+  evt("TRAINER_SHOW")
+  verifie("maître : un nom secret est sauté", 1, #ConseillerPerso.maitre.services)
+  lignesMaitre = sauveLignes
+  evt("TRAINER_SHOW")
+  verifie("maître : retour à la liste complète", 5, #ConseillerPerso.maitre.services)
+  -- Pas d'erreur quand le jeu ne donne pas les fonctions
+  local sauveInfo = GetTrainerServiceInfo
+  GetTrainerServiceInfo = function() error("boum") end
+  ns.derniereErreur = nil
+  evt("TRAINER_SHOW")
+  verifie("maître : une API qui échoue ne casse rien", nil, ns.derniereErreur)
+  verifie("maître : et la liste retenue reste", 5, #ConseillerPerso.maitre.services)
+  GetTrainerServiceInfo = sauveInfo
+
+  -- L'onglet après la visite
+  local function sans(t) return (t:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+  local tAp = sans(ns.vueCompetences(ns.construireEtat()))
+  verifie("onglet après visite : Tir des arcanes indispensable", true, contient(tAp, "[Indispensable] Tir des arcanes, rang 2"))
+  verifie("onglet après visite : Appel du familier utile", true, contient(tAp, "[Utile] Appel du familier"))
+  verifie("onglet après visite : Aspect du singe peut attendre, avec sa raison", true,
+    contient(tAp, "[Peut attendre] Aspect du singe") and contient(tAp, "il ne sert que si l'on te frappe de près sans arrêt"))
+  verifie("onglet après visite : le sort déjà appris n'apparaît pas dans la liste", false, contient(tAp, "Aspect du faucon, rang"))
+  verifie("onglet après visite : le sort de niveau 20 est compté à part", true, contient(tAp, "1 autre sort demande un niveau plus haut."))
+  verifie("onglet après visite : plus de « va voir ton maître »", false, contient(tAp, "Va voir ton maître"))
+  verifie("onglet après visite : le total en pièces", true, contient(tAp, "Total des indispensables : 14 pa"))
+  -- Un sort appris depuis disparaît (il entre dans le grimoire)
+  local grimoireAvant = C_SpellBook.GetSpellBookItemInfo
+  C_SpellBook.GetSpellBookItemInfo = function(i)
+    if i == 1 then return { spellID = 75, name = "Tir automatique", subName = "" } end
+    return { spellID = 14287, name = "Tir des arcanes", subName = "Rang 2" }
+  end
+  verifie("onglet : un sort appris depuis disparaît de la liste", false, contient(sans(ns.vueCompetences(ns.construireEtat())), "[Indispensable] Tir des arcanes"))
+  C_SpellBook.GetSpellBookItemInfo = grimoireAvant
+
+  -- /cs etat dit ce qui a été retenu
+  local dit = ecouter(function() SlashCmdList.CONSEILLER("etat") end)
+  verifie("/cs etat : liste retenue chez le maître", true, contient(dit, "maître de classe : liste retenue") and contient(dit, "5 services dont 3 indispensables ou utiles"))
+  verifie("/cs etat : marques", true, contient(dit, "marques dans la fenêtre du maître : la fenêtre du maître est fermée."))
+
+  -- Rappel de niveau de bout en bout
+  verifie("rappel niveau : l'événement donne le message", true, contient(ecouter(function() evt("PLAYER_LEVEL_UP", 12) end),
+    "Niveau 12 : 1 sort indispensable chez ton maître de classe"))
+  verifie("rappel niveau : rien de nouveau au niveau 13", "", ecouter(function() evt("PLAYER_LEVEL_UP", 13) end))
+  ConseillerDB.rappelNiveau = false
+  verifie("rappel niveau : option coupée, aucun message", "", ecouter(function() evt("PLAYER_LEVEL_UP", 12) end))
+  ConseillerDB.rappelNiveau = true
+  local retenue = ConseillerPerso.maitre
+  ConseillerPerso.maitre = {}
+  verifie("rappel niveau : liste notée sans services, niveau pair", true, contient(ecouter(function() evt("PLAYER_LEVEL_UP", 14) end),
+    "Niveau 14 : pense à passer chez ton maître de classe."))
+  verifie("rappel niveau : liste notée sans services, niveau impair", "", ecouter(function() evt("PLAYER_LEVEL_UP", 15) end))
+  ConseillerPerso.maitre = retenue
+
+  -- Les marques dans la fenêtre du maître
+  local ecritures = {}
+  local function lectureSeule(donnees)
+    return setmetatable({}, { __index = donnees, __newindex = function(_, k) ecritures[#ecritures + 1] = tostring(k) end })
+  end
+  local function bouton(id, visible, contexte)
+    return lectureSeule({ GetID = function() return id end, IsVisible = function() return visible ~= false end,
+      GetFrameLevel = function() return 3 end, buttonContext = contexte or "ButtonContext_TrainerUISkill" })
+  end
+  local lignesVisibles = { bouton(1), bouton(2), bouton(3), bouton(4), bouton(5), bouton(0, true, "ButtonContext_TrainerUICategory"), bouton(2, false) }
+  local fenetreMaitre = lectureSeule({ IsVisible = function() return true end,
+    ScrollBox = lectureSeule({ ForEachFrame = function(self, fn) for _, b in ipairs(lignesVisibles) do fn(b) end end }) })
+  local function marquesPosees()
+    local res = {}
+    for _, f in ipairs(cadres) do
+      local c = rawget(f, "classement")
+      if c and f:IsShown() then res[#res + 1] = c:sub(1, 1) .. "@" .. tostring(rawget(f, "cible") and rawget(f, "cible"):GetID()) end
+    end
+    table.sort(res)
+    return table.concat(res, ",")
+  end
+  verifie("marques : fenêtre du maître absente", "pasDeFenetre", (function() ns.majMarquesMaitre(); return ns.diagMarques end)())
+  verifie("marques : aucune posée sans fenêtre", "", marquesPosees())
+  ClassTrainerFrame = fenetreMaitre
+  ns.majMarquesMaitre()
+  verifie("marques : doré sur les indispensables, argenté sur l'utile, rien sur le reste", "i@1,i@5,u@2", marquesPosees())
+  verifie("marques : diagnostic", "ok", ns.diagMarques)
+  verifie("marques : aucune écriture dans les cadres du jeu", 0, #ecritures)
+  -- La liste défile : les lignes recyclées changent de sort, les marques suivent
+  lignesVisibles = { bouton(2), bouton(3) }
+  ns.majMarquesMaitre()
+  verifie("marques : après défilement, seule la marque utile reste", "u@2", marquesPosees())
+  -- Dix fois par seconde par la mise à jour du jeu
+  lignesVisibles = { bouton(1) }
+  for _, f in ipairs(cadres) do local fn = f._scripts.OnUpdate; if fn then pcall(fn, f, 0.2) end end
+  verifie("marques : posées par la mise à jour régulière", "i@1", marquesPosees())
+  -- Une liste qui échoue : pas d'erreur, plus de marque
+  ClassTrainerFrame = { IsVisible = function() return true end }
+  verifie("marques : structure inattendue, aucune erreur", true, pcall(ns.majMarquesMaitre))
+  verifie("marques : structure inattendue, plus de marque", "", marquesPosees())
+  verifie("marques : structure inattendue, diagnostic", "listeIntrouvable", ns.diagMarques)
+  verifie("marques : toujours aucune écriture dans les cadres du jeu", 0, #ecritures)
+  ClassTrainerFrame = { IsVisible = function() return true end, ScrollBox = { ForEachFrame = function() error("boum") end } }
+  verifie("marques : une liste qui lève une erreur, aucune erreur", true, pcall(ns.majMarquesMaitre))
+  verifie("marques : une liste qui lève une erreur, diagnostic", "erreur", ns.diagMarques)
+  ClassTrainerFrame = lectureSeule({ IsVisible = function() return true end,
+    ScrollBox = lectureSeule({ ForEachFrame = function(self, fn) for _, b in ipairs(lignesVisibles) do fn(b) end end }) })
+  ns.majMarquesMaitre()
+  verifie("marques : de retour", "i@1", marquesPosees())
+  ConseillerDB.marquesMaitre = false
+  ns.majMarquesMaitre()
+  verifie("marques : option coupée, plus de marque", "", marquesPosees())
+  verifie("marques : option coupée, diagnostic", "reglageCoupe", ns.diagMarques)
+  ConseillerDB.marquesMaitre = true
+  ClassTrainerFrame = nil
+
+  -- Rappel : un sort de la rotation qui n'est sur aucune barre
+  local minuteries = {}
+  C_Timer = { After = function(delai, fn) minuteries[#minuteries + 1] = { delai, fn } end }
+  local slots = { [14325] = { 3 } } -- Marque du chasseur est sur la barre, Tir automatique non
+  C_ActionBar = { FindSpellActionButtons = function(id) return slots[id] or {} end }
+  local function deroule() local l = minuteries; minuteries = {}; for _, t in ipairs(l) do t[2]() end end
+  jeu.enCombat = false
+  verifie("rappel barre : plusieurs événements de barre, une seule minuterie (anti-rebond)", 1, (function()
+    evt("ACTIONBAR_SLOT_CHANGED"); evt("ACTIONBAR_SLOT_CHANGED"); evt("SPELLS_CHANGED"); return #minuteries
+  end)())
+  verifie("rappel barre : la minuterie dure quelques secondes", true, minuteries[1] and minuteries[1][1] >= 2)
+  local premier = ecouter(deroule)
+  verifie("rappel barre : le message dit le sort absent", true, contient(premier,
+    "Tir automatique fait partie de ta rotation mais n'est sur aucune barre."))
+  verifie("rappel barre : le sort qui est sur la barre n'est jamais signalé", false, contient(premier, "Marque du chasseur fait partie"))
+  evt("SPELLS_CHANGED")
+  verifie("rappel barre : une seule fois par sort et par session", "", ecouter(deroule))
+  verifie("onglet : sur ta barre / pas sur ta barre", true, (function()
+    local t = ns.vueCompetences(ns.construireEtat())
+    return contient(t, "[Pas sur ta barre]") and contient(t, "[Sur ta barre]")
+  end)())
+  -- Hors combat seulement
+  slots[75] = nil
+  jeu.noms[3045] = "Tir rapide"
+  jeu.sortsConnus[3045] = true
+  evt("SPELLS_CHANGED"); deroule()
+  jeu.enCombat = true
+  jeu.noms[19574] = "Courroux bestial"
+  jeu.sortsConnus[19574] = true
+  evt("SPELLS_CHANGED")
+  verifie("rappel barre : en combat, aucun message", "", ecouter(deroule))
+  jeu.enCombat = false
+  evt("PLAYER_REGEN_ENABLED")
+  verifie("rappel barre : à la fin du combat, le message vient", true, contient(ecouter(deroule), "Courroux bestial fait partie de ta rotation"))
+  -- Option coupée
+  ConseillerDB.rappelBarre = false
+  jeu.noms[34026] = "Ordre de tuer"
+  jeu.sortsConnus[34026] = true
+  evt("SPELLS_CHANGED")
+  verifie("rappel barre : option coupée, ni minuterie ni message", "", ecouter(function() deroule() end))
+  ConseillerDB.rappelBarre = true
+  -- Barre illisible (aucune API de barre, aucun bouton) : on ne dit rien
+  C_ActionBar = nil
+  jeu.noms[19577] = "Intimidation"
+  jeu.sortsConnus[19577] = true
+  evt("SPELLS_CHANGED")
+  verifie("rappel barre : barre illisible, aucun message", "", ecouter(deroule))
+  verifie("rappel barre : barre illisible, le sort est « inconnu » dans l'onglet", true, contient(ns.vueCompetences(ns.construireEtat()), "[barre illisible]"))
+
+  -- Retour à l'état d'avant
+  C_Timer, C_ActionBar, Enum, C_Trainer = nil, nil, nil, nil
+  GetNumTrainerServices, GetTrainerServiceInfo, GetTrainerServiceCost, IsTradeskillTrainer = nil, nil, nil, nil
+  ConseillerPerso.maitre = nil
+  jeu.noms = { [75] = "Tir automatique", [14325] = "Marque du chasseur" }
+  jeu.sortsConnus = { [75] = true, [14325] = true }
+  ns.speSale = true
+  evt("SPELLS_CHANGED")
+end
 
 -- ================================================================ Forever : l'export réel d'un paladin niveau 16
 -- Un seul arbre (1100) partagé en trois groupes : la spécialisation est le groupe où l'on a le plus de points.

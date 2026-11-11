@@ -900,10 +900,370 @@ function ns.vueRace(e)
   return table.concat(L, "\n")
 end
 
--- Les cinq onglets, dans l'ordre : { clé, nom, fonction du texte }.
+-- ============================================================ compétences : maître de classe, barre d'action
+--
+-- Un « service » du maître de classe : { nom (sans le rang), rang (nombre ou nil), niveau (requis), prix (en cuivre),
+-- etat = "disponible" | "pasEncore" | "appris" }. La liste n'est donnée par le jeu que fenêtre du maître ouverte :
+-- Conseiller la retient par personnage (ConseillerPerso.maitre) et s'en sert ensuite hors de la fenêtre.
+-- Le classement d'un sort est pur (il ne touche pas au jeu) : c'est ce que les tests vérifient.
+
+-- Le nom d'un sort sans son rang : « Frappe sacrée (Rang 2) » et « Frappe sacrée, Rang 2 » donnent « Frappe sacrée ».
+function ns.nomSansRang(nom)
+  if type(nom) ~= "string" or secret(nom) then return "" end
+  local n = nom:gsub("%s*%b()%s*$", "")
+  n = n:gsub("%s*,?%s*[Rr]ang%s*%d+%s*$", "")
+  n = n:gsub("%s*,?%s*[Rr]ank%s*%d+%s*$", "")
+  return (n:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- Le rang écrit dans un texte (« Rang 3 », « (Rank 3) ») : un nombre, ou nil.
+local function rangDuTexte(t)
+  if type(t) ~= "string" or secret(t) then return nil end
+  return tonumber(t:match("[Rr]ang%s*(%d+)") or t:match("[Rr]ank%s*(%d+)") or t:match("^%s*(%d+)%s*$"))
+end
+ns.rangDuTexte = rangDuTexte
+
+local ETATS_MAITRE = { available = "disponible", unavailable = "pasEncore", used = "appris" }
+
+-- Ce que renvoie GetTrainerServiceInfo (nom, type, niveau requis, sous-texte) et GetTrainerServiceCost (prix),
+-- rangé dans un service. nil quand la ligne est inutilisable (pas de nom, nom caché) ou vient d'un métier.
+function ns.serviceMaitre(nom, typeService, niveauRequis, sousTexte, prix, estMetier)
+  if type(nom) ~= "string" or secret(nom) or nom == "" then return nil end
+  if estMetier == true then return nil end
+  if secret(typeService) then typeService = nil end
+  if secret(niveauRequis) or type(niveauRequis) ~= "number" then niveauRequis = 1 end
+  if secret(prix) or type(prix) ~= "number" or prix < 0 then prix = 0 end
+  return {
+    nom = ns.nomSansRang(nom),
+    rang = rangDuTexte(sousTexte) or rangDuTexte(nom),
+    niveau = niveauRequis, prix = prix,
+    etat = ETATS_MAITRE[typeService] or "pasEncore",
+  }
+end
+
+-- Les rangs du grimoire : { [nom simplifié sans rang] = rang le plus haut (0 quand le jeu ne dit pas le rang) }.
+function ns.indexRangsGrimoire(liste)
+  local t = {}
+  for _, s in ipairs(liste or {}) do
+    if type(s) == "table" and type(s.nom) == "string" and not secret(s.nom) then
+      local k = cleTalent(ns.nomSansRang(s.nom))
+      if k ~= "" then
+        local rang = rangDuTexte(s.sousTexte) or rangDuTexte(s.nom) or 0
+        if t[k] == nil or rang > t[k] then t[k] = rang end
+      end
+    end
+  end
+  return t
+end
+
+-- Le personnage connaît-il déjà ce service (même nom, rang égal ou plus haut dans le grimoire) ?
+function ns.serviceConnu(service, rangs)
+  if type(service) ~= "table" or type(rangs) ~= "table" then return false end
+  local connu = rangs[cleTalent(ns.nomSansRang(service.nom))]
+  if connu == nil then return false end
+  if service.rang == nil then return true end
+  if connu == 0 then return service.rang <= 1 end -- le jeu ne dit pas le rang du grimoire : on ne cache que le premier
+  return connu >= service.rang
+end
+
+-- Une phrase de rotation ou d'urgence raccourcie pour servir de raison : sans parenthèse, 70 signes au plus.
+function ns.raccourcirTexte(t)
+  if type(t) ~= "string" or t == "" then return nil end
+  t = t:gsub("%s*%b()", "")
+  t = t:gsub("^%s+", ""):gsub("%s+$", "")
+  if #t > 70 then
+    local coupe = t:sub(1, 70):match("^(.*)%s+%S*$") or t:sub(1, 70)
+    t = coupe .. "…"
+  end
+  return t ~= "" and t or nil
+end
+
+-- Les noms sous lesquels le maître peut proposer un sort de la classe : son nom français, son nom anglais, et le nom
+-- que le jeu lui donne dans le grimoire du personnage.
+local function nomsDuSort(classe, cle, sorts)
+  local noms = {}
+  local def = D.SORTS[classe] and D.SORTS[classe][cle]
+  if def then noms[#noms + 1] = def.nom; noms[#noms + 1] = def.nomEN end
+  local s = sorts and sorts[cle]
+  if type(s) == "table" and type(s.nom) == "string" and not secret(s.nom) then noms[#noms + 1] = s.nom end
+  return noms
+end
+
+-- Ce qui sert au classement : pour la spécialisation, les sorts de la rotation, des urgences, de l'entretien, et ceux
+-- dont on peut se passer, chacun rangé par nom simplifié. sorts : le résultat de resoudreSorts (peut être vide).
+function ns.contexteMaitre(classe, spe, sorts)
+  local ctx = { rotation = {}, urgence = {}, entretien = {}, ignorer = {} }
+  local function poser(dest, cle, valeur)
+    for _, nom in ipairs(nomsDuSort(classe, cle, sorts)) do
+      local k = cleTalent(nom)
+      if k ~= "" and dest[k] == nil then dest[k] = valeur end
+    end
+  end
+  local liste = D.ROTATIONS[classe] and spe and D.ROTATIONS[classe][spe]
+  for _, e in ipairs(liste or {}) do
+    poser(e.urgence and ctx.urgence or ctx.rotation, e.sort, { cle = e.sort, texte = e.texte })
+  end
+  local entretien = D.ENTRETIEN and D.ENTRETIEN[classe] and spe and D.ENTRETIEN[classe][spe]
+  for _, e in ipairs(entretien or {}) do poser(ctx.entretien, e.sort, { cle = e.sort, texte = e.texte }) end
+  local ignorer = D.IGNORER and D.IGNORER[classe] and spe and D.IGNORER[classe][spe]
+  for _, e in ipairs(ignorer or {}) do poser(ctx.ignorer, e.sort, { cle = e.sort, raison = e.raison }) end
+  return ctx
+end
+
+-- Le classement d'un service : { classement = "indispensable" | "utile" | "attendre", raison }.
+-- Indispensable : un sort de la rotation. Utile : une urgence ou un sort d'entretien. Le reste peut attendre
+-- (avec la raison écrite pour les sorts « dont on peut se passer », sinon une raison générale).
+function ns.classerService(service, ctx)
+  local k = type(service) == "table" and cleTalent(ns.nomSansRang(service.nom)) or ""
+  ctx = ctx or {}
+  local r = ctx.rotation and ctx.rotation[k]
+  if r then return { classement = "indispensable", raison = ns.raccourcirTexte(r.texte) or "fait partie de ta rotation" } end
+  local u = ctx.urgence and ctx.urgence[k]
+  if u then return { classement = "utile", raison = ns.raccourcirTexte(u.texte) or "te protège en cas de danger" } end
+  local en = ctx.entretien and ctx.entretien[k]
+  if en then return { classement = "utile", raison = en.texte or "un sort d'entretien de ta classe" } end
+  local ig = ctx.ignorer and ctx.ignorer[k]
+  if ig then return { classement = "attendre", raison = ig.raison or "tu peux t'en passer" } end
+  return { classement = "attendre", raison = "ne sert pas à ta rotation" }
+end
+
+local ORDRE_CLASSEMENT = { indispensable = 1, utile = 2, attendre = 3 }
+
+-- La liste à montrer : les services du maître que le personnage ne connaît pas et qu'il peut déjà apprendre à son
+-- niveau, classés (indispensables d'abord, puis par niveau requis). Rend
+--   { items = { { nom, rang, niveau, prix, classement, raison } }, nbIndispensables, totalIndispensables (cuivre),
+--     plusTard (services qui demandent un niveau plus haut) }.
+-- rangs : ns.indexRangsGrimoire du grimoire actuel (nil : on ne filtre que sur l'état noté chez le maître).
+function ns.listeMaitre(services, niveau, rangs, ctx)
+  local res = { items = {}, nbIndispensables = 0, totalIndispensables = 0, plusTard = 0 }
+  niveau = type(niveau) == "number" and niveau or 1
+  for _, s in ipairs(services or {}) do
+    if type(s) == "table" and s.etat ~= "appris" and not ns.serviceConnu(s, rangs) then
+      if (s.niveau or 1) > niveau then
+        res.plusTard = res.plusTard + 1
+      else
+        local c = ns.classerService(s, ctx)
+        res.items[#res.items + 1] = { nom = s.nom, rang = s.rang, niveau = s.niveau or 1, prix = s.prix or 0,
+          classement = c.classement, raison = c.raison }
+        if c.classement == "indispensable" then
+          res.nbIndispensables = res.nbIndispensables + 1
+          res.totalIndispensables = res.totalIndispensables + (s.prix or 0)
+        end
+      end
+    end
+  end
+  table.sort(res.items, function(a, b)
+    local oa, ob = ORDRE_CLASSEMENT[a.classement], ORDRE_CLASSEMENT[b.classement]
+    if oa ~= ob then return oa < ob end
+    if a.niveau ~= b.niveau then return a.niveau < b.niveau end
+    if a.nom ~= b.nom then return tostring(a.nom) < tostring(b.nom) end
+    return (a.rang or 0) < (b.rang or 0)
+  end)
+  return res
+end
+
+-- Un prix en cuivre écrit « 1 po 38 pa 5 pc » (le repli quand le jeu ne sait pas faire les pièces).
+function ns.prixEnTexte(cuivre)
+  if type(cuivre) ~= "number" or secret(cuivre) then return "?" end
+  cuivre = math.floor(cuivre)
+  if cuivre <= 0 then return "gratuit" end
+  local or_, arg, cu = math.floor(cuivre / 10000), math.floor((cuivre % 10000) / 100), cuivre % 100
+  local morceaux = {}
+  if or_ > 0 then morceaux[#morceaux + 1] = or_ .. " po" end
+  if arg > 0 then morceaux[#morceaux + 1] = arg .. " pa" end
+  if cu > 0 then morceaux[#morceaux + 1] = cu .. " pc" end
+  return table.concat(morceaux, " ")
+end
+
+-- Le prix avec les pièces du jeu (C_CurrencyInfo.GetCoinTextureString, puis GetCoinTextureString), sinon le texte.
+function ns.formaterPrix(cuivre)
+  if type(cuivre) ~= "number" or secret(cuivre) then return "?" end
+  local f = (C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString) or GetCoinTextureString
+  if f and cuivre > 0 then
+    local ok, t = pcall(f, cuivre)
+    if ok and type(t) == "string" and t ~= "" and not secret(t) then return t end
+  end
+  return ns.prixEnTexte(cuivre)
+end
+
+-- Rappel à la montée de niveau. Avec la liste retenue chez le maître : un message quand un sort indispensable devient
+-- accessible à ce niveau (le compte et le prix valent pour tous ceux qu'on n'a pas encore appris). Sans liste retenue :
+-- un message à chaque niveau pair. nil quand il n'y a rien à dire.
+function ns.texteRappelNiveau(niveau, services, ctx, rangs, fmtPrix)
+  if type(niveau) ~= "number" or secret(niveau) then return nil end
+  if type(services) ~= "table" then
+    if niveau % 2 == 0 then return string.format("Niveau %d : pense à passer chez ton maître de classe.", niveau) end
+    return nil
+  end
+  local l = ns.listeMaitre(services, niveau, rangs, ctx)
+  if l.nbIndispensables == 0 then return nil end
+  local nouveau = false
+  for _, it in ipairs(l.items) do
+    if it.classement == "indispensable" and it.niveau == niveau then nouveau = true; break end
+  end
+  if not nouveau then return nil end
+  local prix = (fmtPrix or ns.formaterPrix)(l.totalIndispensables)
+  return string.format("Niveau %d : %d %s chez ton maître de classe%s.", niveau, l.nbIndispensables,
+    l.nbIndispensables > 1 and "sorts indispensables" or "sort indispensable",
+    l.totalIndispensables > 0 and (" (" .. prix .. ")") or "")
+end
+
+-- « À mettre sur ta barre » : les sorts de la rotation de la spécialisation, ses urgences et son entretien que le
+-- personnage connaît, chacun avec { cle, nom, genre = "rotation" | "urgence" | "entretien", surBarre = true | false | nil }.
+-- surBarre(cle) dit si le sort est sur une barre d'action (nil : le jeu ne le dit pas).
+function ns.listeBarre(classe, spe, sorts, surBarre)
+  local res, vus = {}, {}
+  local function ajouter(cle, genre)
+    local s = sorts and sorts[cle]
+    if not s or vus[cle] then return end
+    vus[cle] = true
+    local ok, sur = pcall(surBarre or function() return nil end, cle)
+    if not ok then sur = nil end
+    res[#res + 1] = { cle = cle, nom = s.nom, genre = genre, surBarre = sur }
+  end
+  local liste = D.ROTATIONS[classe] and spe and D.ROTATIONS[classe][spe] or {}
+  for _, e in ipairs(liste) do if not e.urgence then ajouter(e.sort, "rotation") end end
+  for _, e in ipairs(liste) do if e.urgence then ajouter(e.sort, "urgence") end end
+  local entretien = D.ENTRETIEN and D.ENTRETIEN[classe] and spe and D.ENTRETIEN[classe][spe] or {}
+  for _, e in ipairs(entretien) do ajouter(e.sort, "entretien") end
+  return res
+end
+
+-- Les sorts de la rotation que le personnage connaît et qui ne sont sur aucune barre, pour le rappel du chat.
+-- Un sort de repli (« buffAbsent » d'un autre sort que tu connais : Sceau de piété quand tu as le Sceau de fureur) ne
+-- compte pas. dejaDits : { [clé] = true } des sorts déjà signalés. Rend { { cle, nom } }.
+function ns.sortsAbsentsDeLaBarre(classe, spe, sorts, surBarre, dejaDits)
+  local res, vus = {}, {}
+  local liste = D.ROTATIONS[classe] and spe and D.ROTATIONS[classe][spe] or {}
+  for _, e in ipairs(liste) do
+    local s = sorts and sorts[e.sort]
+    if s and not e.urgence and not vus[e.sort] and not (dejaDits and dejaDits[e.sort]) then
+      vus[e.sort] = true
+      local repli = false
+      for _, c in ipairs(e.si or {}) do
+        if type(c) == "table" and (c[1] == "buffAbsent" or c[1] == "debuffAbsent") and type(c[2]) == "string"
+          and c[2] ~= e.sort and sorts[c[2]] then repli = true end
+      end
+      if not repli then
+        local ok, sur = pcall(surBarre, e.sort)
+        if ok and sur == false then res[#res + 1] = { cle = e.sort, nom = s.nom } end
+      end
+    end
+  end
+  return res
+end
+
+function ns.texteSortAbsent(nom)
+  return string.format("%s fait partie de ta rotation mais n'est sur aucune barre.", tostring(nom))
+end
+
+-- « Tu peux t'en passer » : les sorts de la liste IGNORER de la spécialisation que le personnage connaît ou que
+-- le maître lui propose (pas encore appris). Rend { { cle, nom, raison, connu } }.
+function ns.sortsAIgnorer(classe, spe, sorts, services, rangs)
+  local res = {}
+  local liste = D.IGNORER and D.IGNORER[classe] and spe and D.IGNORER[classe][spe] or {}
+  for _, e in ipairs(liste) do
+    local def = D.SORTS[classe] and D.SORTS[classe][e.sort]
+    local s = sorts and sorts[e.sort]
+    local propose = false
+    if not s and def then
+      local voulus = {}
+      for _, nom in ipairs(nomsDuSort(classe, e.sort, sorts)) do voulus[cleTalent(nom)] = true end
+      for _, sv in ipairs(services or {}) do
+        if type(sv) == "table" and sv.etat ~= "appris" and not ns.serviceConnu(sv, rangs)
+          and voulus[cleTalent(ns.nomSansRang(sv.nom))] then propose = true end
+      end
+    end
+    if s or propose then
+      res[#res + 1] = { cle = e.sort, nom = (s and s.nom) or (def and def.nom) or e.sort, raison = e.raison, connu = s ~= nil }
+    end
+  end
+  return res
+end
+
+local ARGENT = "|cffc8c8d2"
+local BADGES_MAITRE = {
+  indispensable = OR .. "[Indispensable]" .. FIN,
+  utile = ARGENT .. "[Utile]" .. FIN,
+  attendre = GRIS .. "[Peut attendre]" .. FIN,
+}
+
+-- L'onglet Compétences. e : l'état (construireEtat) avec en plus aMaitre (le jeu a un maître de classe), maitre
+-- (la liste retenue ou nil), ctxMaitre, sorts, rangsGrimoire() et surBarre(cle).
+function ns.vueCompetences(e)
+  local c = D.CLASSES[e.classe]
+  local spe = e.speRotation
+  local nomSpe = (c and spe and c.specs[spe] and c.specs[spe].nom) or e.speNom or "ta classe"
+  local L = {}
+  L[#L + 1] = titre("À apprendre chez ton maître de classe")
+  local rangs
+  if e.rangsGrimoire then
+    local ok, r = pcall(e.rangsGrimoire)
+    if ok then rangs = r end
+  end
+  if not e.aMaitre then
+    L[#L + 1] = "Dans ton jeu, il n'y a pas de maître de classe : tes sorts s'apprennent tout seuls en montant de niveau."
+  elseif not (e.maitre and type(e.maitre.services) == "table") then
+    L[#L + 1] = "Va voir ton maître de classe une fois : je retiendrai sa liste."
+  else
+    L[#L + 1] = GRIS .. "Selon ta classe, ta spécialisation (" .. nomSpe .. ") et ton niveau. Les sorts déjà connus n'apparaissent pas." .. FIN
+    local l = ns.listeMaitre(e.maitre.services, e.niveau, rangs, e.ctxMaitre)
+    if #l.items == 0 then
+      L[#L + 1] = VERT .. "Rien à apprendre chez ton maître pour l'instant." .. FIN
+    else
+      for _, it in ipairs(l.items) do
+        L[#L + 1] = string.format("%s %s%s %s· niveau %d, %s%s", BADGES_MAITRE[it.classement], it.nom,
+          it.rang and (", rang " .. it.rang) or "", GRIS, it.niveau, ns.formaterPrix(it.prix), FIN)
+        L[#L + 1] = GRIS .. "     " .. it.raison .. FIN
+      end
+      if l.nbIndispensables > 0 then
+        L[#L + 1] = ""
+        L[#L + 1] = string.format("Total des indispensables : %s. Si l'or manque, prends d'abord les « Indispensable ».",
+          ns.formaterPrix(l.totalIndispensables))
+      end
+    end
+    if l.plusTard > 0 then
+      L[#L + 1] = GRIS .. (l.plusTard == 1 and "1 autre sort demande un niveau plus haut." or (l.plusTard .. " autres sorts demandent un niveau plus haut.")) .. FIN
+    end
+    L[#L + 1] = GRIS .. "Liste retenue" .. (e.maitre.date and (" le " .. e.maitre.date) or "")
+      .. (e.maitre.niveau and (", au niveau " .. e.maitre.niveau) or "") .. ". Repasse chez ton maître pour la mettre à jour." .. FIN
+  end
+
+  L[#L + 1] = ""
+  L[#L + 1] = titre("À mettre sur ta barre")
+  local barre = ns.listeBarre(e.classe, spe, e.sorts, e.surBarre)
+  if #barre == 0 then
+    L[#L + 1] = "Aucun des sorts de ta rotation n'est dans ton grimoire pour l'instant."
+  else
+    local GENRES = { rotation = "rotation", urgence = "en cas de danger", entretien = "entretien" }
+    for _, b in ipairs(barre) do
+      local etat
+      if b.surBarre == true then etat = VERT .. "[Sur ta barre]" .. FIN
+      elseif b.surBarre == false then etat = ROUGE .. "[Pas sur ta barre]" .. FIN
+      else etat = GRIS .. "[barre illisible]" .. FIN end
+      L[#L + 1] = string.format("%s %s %s· %s%s", etat, b.nom, GRIS, GENRES[b.genre] or b.genre, FIN)
+    end
+    L[#L + 1] = GRIS .. "Conseiller ne pose rien sur ta barre : glisse le sort depuis ton grimoire." .. FIN
+  end
+
+  L[#L + 1] = ""
+  L[#L + 1] = titre("Tu peux t'en passer")
+  local ignores = ns.sortsAIgnorer(e.classe, spe, e.sorts, e.maitre and e.maitre.services, rangs)
+  if #ignores == 0 then
+    L[#L + 1] = "Rien à signaler pour l'instant."
+  else
+    for _, ig in ipairs(ignores) do
+      L[#L + 1] = string.format("%s%s", ig.nom, GRIS .. " : " .. ig.raison .. FIN)
+    end
+  end
+  return table.concat(L, "\n")
+end
+
+-- Les six onglets, dans l'ordre : { clé, nom, fonction du texte }.
 ns.ONGLETS = {
   { "talents", "Talents", ns.vueTalents },
   { "rotation", "Rotation", ns.vueRotation },
+  { "competences", "Compétences", ns.vueCompetences },
   { "equipement", "Équipement", ns.vueEquipement },
   { "metiers", "Métiers", ns.vueMetiers },
   { "race", "Race", ns.vueRace },

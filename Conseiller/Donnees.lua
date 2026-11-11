@@ -489,6 +489,13 @@ D.SORTS = {
     INTIMIDATION = S("Intimidation", "Intimidation", 19577),
     APPEL_FAUCON = S("Appel du faucon", "Summon Hawk"),
     DISSUASION = S("Dissuasion", "Deterrence", 19263),
+    -- Sorts d'entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    APPEL_FAMILIER = S("Appel du familier", "Call Pet"),
+    SOIN_FAMILIER = S("Guérison du familier", "Mend Pet"),
+    NOURRIR = S("Nourrir le familier", "Feed Pet"),
+    ASPECT_SINGE = S("Aspect du singe", "Aspect of the Monkey"),
+    ASPECT_GUEPARD = S("Aspect du guépard", "Aspect of the Cheetah"),
+    OEIL_AIGLE = S("Œil d'aigle", "Eagle Eye"),
   },
   PALADIN = {
     -- Les rangs du Sceau de piété sont gardés en dernier : avant le niveau 20, il remplace le Sceau d'autorité.
@@ -514,6 +521,13 @@ D.SORTS = {
     BENEDICTION_PUISSANCE = S("Bénédiction de puissance", "Blessing of Might", 25291, 19838, 19837, 19836, 19835, 19834, 19740),
     ECLAIR_LUMINEUX = S("Éclair lumineux", "Flash of Light", 19943, 19942, 19941, 19940, 19939, 19750),
     LUMIERE_SACREE = S("Lumière sacrée", "Holy Light", 25292, 10329, 10328, 3472, 1042, 1026, 647, 639, 635),
+    -- Entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    BENEDICTION_ROIS = S("Bénédiction des rois", "Blessing of Kings"),
+    BENEDICTION_SAGESSE = S("Bénédiction de sagesse", "Blessing of Wisdom"),
+    BENEDICTION_SANCTUAIRE = S("Bénédiction de sanctuaire", "Blessing of Sanctuary"),
+    BENEDICTION_LIBERTE = S("Bénédiction de liberté", "Blessing of Freedom"),
+    AURA_DEVOTION = S("Aura de dévotion", "Devotion Aura"),
+    PERCEPTION_MV = S("Perception des morts-vivants", "Sense Undead"),
   },
   WARRIOR = {
     CRI_GUERRE = S("Cri de guerre", "Battle Shout", 11551, 11550, 11549, 6192, 5242, 6673),
@@ -537,6 +551,17 @@ D.SORTS = {
     MUR = S("Mur protecteur", "Shield Wall", 871),
     DERNIER_REMPART = S("Dernier rempart", "Last Stand", 12975),
     CRI_INTIMIDATION = S("Cri d'intimidation", "Intimidating Shout", 5246),
+    -- Entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    POSTURE_COMBAT = S("Posture de combat", "Battle Stance"),
+    POSTURE_DEFENSIVE = S("Posture défensive", "Defensive Stance"),
+    POSTURE_BERSERKER = S("Posture berserker", "Berserker Stance"),
+    CHARGE = S("Charge", "Charge"),
+    INTERCEPTION = S("Interception", "Intercept"),
+    RAGE_BERSERKER = S("Rage berserker", "Berserker Rage"),
+    PROVOCATION = S("Provocation", "Taunt"),
+    COUP_BOUCLIER = S("Coup de bouclier", "Shield Bash"),
+    RAILLERIE = S("Raillerie", "Mocking Blow"),
+    REPRESAILLES = S("Représailles", "Retaliation"),
   },
   ROGUE = {
     DEBONDAGE = S("Débondage", "Slice and Dice", 6774, 5171),
@@ -552,6 +577,13 @@ D.SORTS = {
     FRAPPE_FANTOME = S("Frappe fantomatique", "Ghostly Strike", 14278),
     ESQUIVE = S("Esquive", "Evasion", 5277),
     DISPARITION = S("Disparition", "Vanish", 1857, 1856),
+    -- Entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    FURTIVITE = S("Furtivité", "Stealth"),
+    COUP_DE_PIED = S("Coup de pied", "Kick"),
+    SPRINT = S("Sprint", "Sprint"),
+    CROCHETAGE = S("Crochetage", "Pick Lock"),
+    VOL_A_LA_TIRE = S("Vol à la tire", "Pick Pocket"),
+    AVEUGLEMENT = S("Aveuglement", "Blind"),
   },
   PRIEST = {
     FORTITUDE = S("Mot de pouvoir : Endurance", "Power Word: Fortitude", 10938, 10937, 2791, 1245, 1244, 1243),
@@ -572,6 +604,9 @@ D.SORTS = {
     PRIERE_GUERISON = S("Prière de guérison", "Prayer of Mending", 33076),
     NOVA_SACREE = S("Nova sacrée", "Holy Nova", 15431, 15430, 15237),
     OUBLI = S("Oubli", "Fade", 10942, 10941, 9592, 9579, 9578, 586),
+    -- Entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    DISSIPATION = S("Dissipation de la magie", "Dispel Magic"),
+    LEVITATION = S("Lévitation", "Levitate"),
   },
   SHAMAN = {
     BOUCLIER_FOUDRE = S("Bouclier de foudre", "Lightning Shield", 10432, 10431, 8134, 945, 905, 325, 324),
@@ -587,6 +622,15 @@ D.SORTS = {
     VAGUE = S("Vague de soins", "Healing Wave", 25357, 10396, 10395, 8005, 959, 939, 913, 547, 332, 331),
     VAGUE_MINEURE = S("Vague de soins mineure", "Lesser Healing Wave", 10468, 10467, 10466, 8010, 8008, 8004),
     REMOUS = S("Remous", "Riptide", 61295),
+    -- Totems, soins et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    TOTEM_FORCE = S("Totem de force de la Terre", "Strength of Earth Totem"),
+    TOTEM_PEAU = S("Totem de peau de pierre", "Stoneskin Totem"),
+    TOTEM_FEU = S("Totem incendiaire", "Searing Totem"),
+    TOTEM_AIR = S("Totem de grâce de l'air", "Grace of Air Totem"),
+    TOTEM_SOINS = S("Totem de guérison", "Healing Stream Totem"),
+    VISION_LOINTAINE = S("Vision lointaine", "Far Sight"),
+    RESPIRATION_EAU = S("Respiration aquatique", "Water Breathing"),
+    MARCHE_EAU = S("Marche sur l'eau", "Water Walking"),
   },
   MAGE = {
     -- Les trois armures dans une seule clé : celle que tu as apprise de plus haut niveau est conseillée,
@@ -606,6 +650,11 @@ D.SORTS = {
     BARRIERE_GLACE = S("Barrière de glace", "Ice Barrier", 13033, 13032, 13031, 11426),
     CONTRESORT = S("Contresort", "Counterspell", 2139),
     METAMORPHOSE = S("Métamorphose", "Polymorph", 12826, 12825, 12824, 118),
+    -- Entretien et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    CONJ_EAU = S("Invocation d'eau", "Conjure Water"),
+    CONJ_NOURRITURE = S("Invocation de nourriture", "Conjure Food"),
+    DETECTION_MAGIE = S("Détection de la magie", "Detect Magic"),
+    CHUTE_RALENTIE = S("Chute ralentie", "Slow Fall"),
   },
   WARLOCK = {
     -- Peau de démon, Armure démoniaque : une seule clé, la plus haute que tu connais est conseillée.
@@ -622,6 +671,13 @@ D.SORTS = {
     INCINERATION = S("Incinération", "Incinerate", 29722),
     DOULEUR_BRULANTE = S("Douleur brûlante", "Searing Pain", 17923, 17922, 17921, 17920, 17919, 5676),
     MAL_ELEMENTS = S("Malédiction des éléments", "Curse of the Elements", 11722, 11721, 1490),
+    -- Démons, pierres et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    INVOC_DIABLOTIN = S("Invocation d'un diablotin", "Summon Imp"),
+    INVOC_MARCHEVIDE = S("Invocation d'un marcheur du Vide", "Summon Voidwalker"),
+    PIERRE_DE_SOIN = S("Création d'une pierre de soins", "Create Healthstone"),
+    RESPIRATION_INFINIE = S("Respiration interminable", "Unending Breath"),
+    OEIL_KILROGG = S("Œil de Kilrogg", "Eye of Kilrogg"),
+    DETECTION_INVISIBLE = S("Détection de l'invisibilité", "Detect Invisibility"),
   },
   DRUID = {
     MARQUE_FAUVE = S("Marque du fauve", "Mark of the Wild", 9885, 9884, 8907, 5234, 6756, 5232, 1126),
@@ -646,6 +702,11 @@ D.SORTS = {
     PROMPT_RETABLISSEMENT = S("Prompt rétablissement", "Swiftmend", 18562),
     ECORCE = S("Écorce", "Barkskin", 22812),
     SARMENTS = S("Sarments", "Nature's Grasp", 17329, 16813, 16812, 16811, 16810, 16689),
+    -- Formes et sorts dont on peut se passer (onglet Compétences) : sans identifiant, retrouvés par leur nom.
+    FORME_FELIN = S("Forme de félin", "Cat Form"),
+    FORME_OURS = S("Forme d'ours", "Bear Form"),
+    FORME_AQUATIQUE = S("Forme aquatique", "Aquatic Form"),
+    FORME_VOYAGE = S("Forme de voyage", "Travel Form"),
   },
 }
 
@@ -987,6 +1048,230 @@ D.ROTATIONS = {
     restauration = {
       E("ECLAT_LUNAIRE", "Éclat lunaire sur la cible, s'il n'y est pas", DEBUFF, PRET),
       E("COLERE", "Colère le reste du temps", PRET),
+    },
+  },
+}
+
+-- ============================================================ entretien et sorts dont on peut se passer
+-- Pour l'onglet Compétences et les marques dans la fenêtre du maître de classe.
+-- ENTRETIEN[classe][spécialisation] : les sorts qui ne sont pas dans la rotation ni dans les urgences mais qu'il
+-- faut avoir sous la main (bénédictions, auras, sceaux, aspects, formes, totems, familier, soins des
+-- spécialisations de soins). Chaque entrée : N(clé du sort dans SORTS, la phrase qui dit pourquoi).
+-- IGNORER[classe][spécialisation] : des sorts dont on peut se passer pour cette spécialisation, avec la raison
+-- (I(clé du sort, raison)). Toutes les clés sont celles de SORTS de la même classe.
+local function N(sort, texte) return { sort = sort, texte = texte } end
+local function I(sort, raison) return { sort = sort, raison = raison } end
+
+local ENTRETIEN_CHASSEUR = {
+  N("APPEL_FAMILIER", "ton familier tient les monstres et fait une part de tes dégâts"),
+  N("SOIN_FAMILIER", "un familier en vie tient tout le reste"),
+  N("NOURRIR", "un familier qui a faim fait moins de dégâts"),
+}
+local IGNORER_CHASSEUR = {
+  I("ASPECT_SINGE", "il ne sert que si l'on te frappe de près sans arrêt"),
+  I("ASPECT_GUEPARD", "il ne sert qu'à courir : ton familier et tes pièges suffisent"),
+  I("OEIL_AIGLE", "de l'exploration, pas du combat"),
+}
+local IGNORER_PALADIN = {
+  I("PERCEPTION_MV", "elle ne sert qu'à repérer des morts-vivants"),
+  I("BENEDICTION_LIBERTE", "elle ne sert que contre des ralentissements : à prendre le jour où tu en as besoin"),
+}
+local IGNORER_GUERRIER = {
+  I("RAILLERIE", "elle sert surtout contre des joueurs"),
+  I("REPRESAILLES", "elle ne sert que contre des monstres qui frappent sans arrêt de près"),
+}
+local ENTRETIEN_VOLEUR = {
+  N("FURTIVITE", "pour ouvrir le combat par derrière et passer les monstres"),
+  N("COUP_DE_PIED", "il interrompt un sort ennemi"),
+  N("SPRINT", "pour rattraper un monstre qui fuit ou t'échapper"),
+}
+local IGNORER_VOLEUR = {
+  I("CROCHETAGE", "il ouvre des coffres, il ne tue rien"),
+  I("VOL_A_LA_TIRE", "un peu d'argent de poche, pas de quoi tuer plus vite"),
+  I("AVEUGLEMENT", "un contrôle de groupe : tu t'en sers surtout en donjon"),
+}
+local ENTRETIEN_MAGE = {
+  N("CONJ_EAU", "ton mana revient en buvant : emporte de l'eau"),
+  N("CONJ_NOURRITURE", "tu manges entre deux combats pour garder ta vie"),
+  N("CONTRESORT", "il coupe un sort ennemi"),
+}
+local IGNORER_MAGE = {
+  I("DETECTION_MAGIE", "elle ne sert qu'à lire les effets d'une cible"),
+  I("CHUTE_RALENTIE", "elle ne sert que pour une grande chute"),
+}
+local ENTRETIEN_DEMONISTE = {
+  N("INVOC_DIABLOTIN", "un démon avec toi pour tenir les monstres"),
+  N("PIERRE_DE_SOIN", "une pierre de soins pour les combats durs"),
+}
+local IGNORER_DEMONISTE = {
+  I("RESPIRATION_INFINIE", "elle ne sert que sous l'eau"),
+  I("OEIL_KILROGG", "de l'exploration, pas du combat"),
+  I("DETECTION_INVISIBLE", "elle ne sert que contre des monstres invisibles"),
+}
+
+D.ENTRETIEN = {
+  HUNTER = { bete = ENTRETIEN_CHASSEUR, precision = ENTRETIEN_CHASSEUR, survie = ENTRETIEN_CHASSEUR },
+  PALADIN = {
+    vindicte = {
+      N("BENEDICTION_ROIS", "toutes tes caractéristiques en plus"),
+      N("BENEDICTION_SAGESSE", "plus de mana pour tenir plus longtemps"),
+      N("AURA_DEVOTION", "plus d'armure pour toi et ton groupe"),
+    },
+    protection = {
+      N("BENEDICTION_SANCTUAIRE", "tu prends moins de dégâts et tu en renvoies"),
+      N("BENEDICTION_ROIS", "toutes tes caractéristiques en plus"),
+      N("AURA_DEVOTION", "plus d'armure pour toi et ton groupe"),
+    },
+    sacre = {
+      N("LUMIERE_SACREE", "ton gros soin"),
+      N("ECLAIR_LUMINEUX", "ton soin rapide"),
+      N("BENEDICTION_SAGESSE", "plus de mana pour soigner plus longtemps"),
+      N("BENEDICTION_ROIS", "toutes tes caractéristiques en plus"),
+      N("AURA_DEVOTION", "plus d'armure pour ton groupe"),
+    },
+  },
+  WARRIOR = {
+    armes = {
+      N("POSTURE_COMBAT", "la posture de tes attaques"),
+      N("CHARGE", "pour ouvrir le combat et gagner de la rage"),
+    },
+    fureur = {
+      N("POSTURE_BERSERKER", "la posture de tes attaques de fureur"),
+      N("INTERCEPTION", "pour rejoindre un monstre qui s'éloigne"),
+      N("RAGE_BERSERKER", "tu gagnes de la rage et tu te libères de la peur"),
+    },
+    protection = {
+      N("POSTURE_DEFENSIVE", "la posture du tank : moins de dégâts reçus"),
+      N("PROVOCATION", "elle reprend un monstre qui est parti sur un allié"),
+      N("COUP_BOUCLIER", "il interrompt un sort ennemi"),
+    },
+  },
+  ROGUE = { assassinat = ENTRETIEN_VOLEUR, combat = ENTRETIEN_VOLEUR, finesse = ENTRETIEN_VOLEUR },
+  PRIEST = {
+    ombre = {
+      N("DISSIPATION", "elle retire un effet magique d'une cible ou d'un allié"),
+      N("OUBLI", "il te rend moins visible quand les monstres se tournent vers toi"),
+    },
+    sacre = {
+      N("FORTITUDE", "plus d'endurance pour tout le monde"),
+      N("FEU_INTERIEUR", "plus d'armure pour toi"),
+      N("RENOVATION", "un soin qui coule dans le temps"),
+      N("SOINS_RAPIDES", "ton soin d'urgence"),
+      N("SOINS_SUPERIEURS", "ton gros soin"),
+    },
+    discipline = {
+      N("FORTITUDE", "plus d'endurance pour tout le monde"),
+      N("FEU_INTERIEUR", "plus d'armure pour toi"),
+      N("BOUCLIER", "il absorbe des dégâts sur un allié"),
+      N("SOINS_RAPIDES", "ton soin d'urgence"),
+    },
+  },
+  SHAMAN = {
+    amelioration = {
+      N("TOTEM_FORCE", "plus de force pour ton groupe"),
+      N("TOTEM_FEU", "il brûle les monstres autour de lui"),
+      N("TOTEM_AIR", "plus d'agilité pour ton groupe"),
+    },
+    elementaire = {
+      N("TOTEM_FEU", "il brûle les monstres autour de lui"),
+      N("TOTEM_PEAU", "plus d'armure pour ton groupe"),
+      N("VAGUE_MINEURE", "ton soin rapide entre deux combats"),
+    },
+    restauration = {
+      N("VAGUE", "ton soin principal"),
+      N("SALVE", "il soigne plusieurs alliés d'un coup"),
+      N("VAGUE_MINEURE", "ton soin rapide"),
+      N("TOTEM_SOINS", "il soigne tout le groupe peu à peu"),
+      N("BOUCLIER_EAU", "il te rend du mana"),
+    },
+  },
+  MAGE = { arcanes = ENTRETIEN_MAGE, feu = ENTRETIEN_MAGE, givre = ENTRETIEN_MAGE },
+  WARLOCK = {
+    affliction = ENTRETIEN_DEMONISTE,
+    demonologie = {
+      N("INVOC_MARCHEVIDE", "ton démon le plus solide : il tient les monstres"),
+      N("PIERRE_DE_SOIN", "une pierre de soins pour les combats durs"),
+    },
+    destruction = ENTRETIEN_DEMONISTE,
+  },
+  DRUID = {
+    equilibre = {
+      N("RAJEUNISSEMENT", "un soin qui coule dans le temps"),
+      N("RETABLISSEMENT", "un soin entre deux combats"),
+      N("FORME_VOYAGE", "tu cours plus vite entre deux zones"),
+    },
+    farouche = {
+      N("FORME_FELIN", "ta forme de combat à points de combo"),
+      N("FORME_OURS", "ta forme pour tenir les monstres"),
+      N("RAJEUNISSEMENT", "un soin hors forme, entre deux combats"),
+    },
+    gardien = {
+      N("FORME_OURS", "ta forme de tank"),
+      N("RAJEUNISSEMENT", "un soin hors forme, entre deux combats"),
+      N("TOUCHER_GUERISON", "ton soin hors forme"),
+    },
+    restauration = {
+      N("RAJEUNISSEMENT", "un soin qui coule dans le temps"),
+      N("RETABLISSEMENT", "un soin qui dure et qui soigne tout de suite"),
+      N("TOUCHER_GUERISON", "ton gros soin"),
+      N("PROMPT_RETABLISSEMENT", "il termine un soin dans le temps d'un coup"),
+    },
+  },
+}
+
+D.IGNORER = {
+  HUNTER = { bete = IGNORER_CHASSEUR, precision = IGNORER_CHASSEUR, survie = IGNORER_CHASSEUR },
+  PALADIN = { vindicte = IGNORER_PALADIN, protection = IGNORER_PALADIN, sacre = IGNORER_PALADIN },
+  WARRIOR = { armes = IGNORER_GUERRIER, fureur = IGNORER_GUERRIER, protection = IGNORER_GUERRIER },
+  ROGUE = { assassinat = IGNORER_VOLEUR, combat = IGNORER_VOLEUR, finesse = IGNORER_VOLEUR },
+  PRIEST = {
+    ombre = {
+      I("LEVITATION", "elle ne sert qu'à traverser l'eau ou une chute"),
+      I("SOINS_INFERIEURS", "en Ombre tu n'es pas là pour soigner : un seul soin d'appoint suffit"),
+    },
+    sacre = {
+      I("LEVITATION", "elle ne sert qu'à traverser l'eau ou une chute"),
+      I("PESTE", "un sort d'ombre pour les dégâts, pas pour soigner"),
+    },
+    discipline = {
+      I("LEVITATION", "elle ne sert qu'à traverser l'eau ou une chute"),
+      I("PESTE", "un sort d'ombre pour les dégâts, pas pour soigner"),
+    },
+  },
+  SHAMAN = {
+    amelioration = {
+      I("VISION_LOINTAINE", "de l'exploration, pas du combat"),
+      I("RESPIRATION_EAU", "elle ne sert que sous l'eau"),
+      I("MARCHE_EAU", "elle ne sert qu'à traverser l'eau"),
+    },
+    elementaire = {
+      I("VISION_LOINTAINE", "de l'exploration, pas du combat"),
+      I("RESPIRATION_EAU", "elle ne sert que sous l'eau"),
+      I("MARCHE_EAU", "elle ne sert qu'à traverser l'eau"),
+    },
+    restauration = {
+      I("VISION_LOINTAINE", "de l'exploration, pas du combat"),
+      I("RESPIRATION_EAU", "elle ne sert que sous l'eau"),
+    },
+  },
+  MAGE = { arcanes = IGNORER_MAGE, feu = IGNORER_MAGE, givre = IGNORER_MAGE },
+  WARLOCK = { affliction = IGNORER_DEMONISTE, demonologie = IGNORER_DEMONISTE, destruction = IGNORER_DEMONISTE },
+  DRUID = {
+    equilibre = {
+      I("FORME_AQUATIQUE", "elle ne sert que sous l'eau"),
+      I("MUTILER", "il est réservé à la forme d'ours"),
+    },
+    farouche = {
+      I("FORME_AQUATIQUE", "elle ne sert que sous l'eau"),
+      I("SARMENTS", "un petit contrôle qui dure peu : tes formes font mieux"),
+    },
+    gardien = {
+      I("FORME_AQUATIQUE", "elle ne sert que sous l'eau"),
+      I("SARMENTS", "un petit contrôle qui dure peu : tes formes font mieux"),
+    },
+    restauration = {
+      I("FORME_AQUATIQUE", "elle ne sert que sous l'eau"),
+      I("MUTILER", "il est réservé à la forme d'ours"),
     },
   },
 }
