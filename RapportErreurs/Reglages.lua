@@ -194,6 +194,12 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-11", titre = "Deux nouveaux addons : Dialogues de quête et Tenues", lignes = {
+    "Dialogues de quête : quand tu parles à un PNJ, un bandeau en bas de l'écran remplace la fenêtre du jeu, avec le portrait du PNJ et son texte par morceaux. Espace avance ou accepte, les chiffres choisissent une réponse ou une récompense, Échap ferme. Réglages : /dial.",
+    "Si le bandeau a un souci, la fenêtre du jeu reprend la main toute seule. Le bouton « Fenêtre du jeu » te la rend quand tu veux. Pense à désactiver Immersion si tu l'utilises.",
+    "Tenues : enregistre ce que tu portes sous un nom (combat, pêche, ville), puis change de tenue d'un clic ou d'une touche. Ouvre la fenêtre avec /tenue. En combat, la tenue est mise à la fin du combat.",
+    "Métiers auto met ta tenue « Pêche » quand tu actives le mode pêche, et remet la précédente quand tu le coupes.",
+  } },
   { date = "2026-11-10", titre = "Nouvel addon : Suivi des quêtes", lignes = {
     "Suivi des quêtes remplace le suivi des objectifs du jeu par un panneau rangé en sections : À rendre (tout en haut), Principal, Général, Donjons et groupe, Classe, Métiers, JcJ, Journalières et répétables. Réglages : /sq.",
     "Chaque section se replie. Dans une section, les quêtes de ta zone passent d'abord, puis les plus proches. Clic gauche : choisir la quête (le GPS la suit). Maj + clic : ne plus la suivre.",
@@ -216,7 +222,7 @@ ns.NOUVEAUTES = {
     "Réglages propres à chaque personnage : en haut de la page de chaque addon, un interrupteur « Réglages propres à ce personnage ». Activé, ce personnage a ses réglages (copiés depuis les réglages actuels) et les autres ne changent pas. Coupé, il retrouve ceux du compte.",
   } },
   { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
-    "Les réglages des 19 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
+    "Les réglages des 21 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
     "À gauche, la liste des addons avec un point vert (activé) ou rouge (coupé). Un clic droit active ou coupe un addon.",
     "À droite, les réglages de l'addon choisi, rangés en onglets, avec des interrupteurs et des curseurs.",
     "En haut, une recherche trouve un réglage dans tous les addons, même sans les accents.",
@@ -1110,7 +1116,7 @@ local function leHub()
     hub.marquerVu()
   end)
 
-  -- Un seul message par connexion, même avec 19 addons (le drapeau est dans le hub commun).
+  -- Un seul message par connexion, même avec 21 addons (le drapeau est dans le hub commun).
   function hub.annoncerNouveautes()
     if hub.messageNouveau then return end
     hub.messageNouveau = true

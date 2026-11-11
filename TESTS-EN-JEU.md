@@ -278,6 +278,41 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 - [ ] Mode d'édition de l'interface (Échap > Mode édition) : le suivi du jeu se voit, puis disparaît à la sortie.
 - [ ] Sur Retail : mêmes vérifications, et les quêtes de campagne vont dans « Principal ».
 
+## Dialogues de quête (nouveau)
+
+À faire en premier : désactiver Immersion (Échap > AddOns), `/reload`, puis `/dial test` : le bandeau doit s'afficher en bas, sans erreur dans BugSack.
+
+- [ ] Parler à un PNJ qui donne une quête : bandeau en bas, portrait, texte par morceaux (« 1 / 3 »), Espace tourne la page, puis « Accepter ». La quête est bien prise.
+- [ ] La fenêtre du jeu ne se voit pas, et cliquer dans le décor en haut à gauche de l'écran ne lance rien.
+- [ ] À la fin de l'échange, ouvrir un autre PNJ avec « Fenêtre du jeu » : la fenêtre du jeu revient à la bonne taille et au bon endroit.
+- [ ] PNJ à plusieurs réponses : elles sont numérotées, les touches 1 à 9 les choisissent, « ? » sur une quête à rendre, « ! » sur une quête à prendre.
+- [ ] Rendre une quête à plusieurs récompenses : le bouton est grisé tant que rien n'est choisi ; choisir par clic ou par chiffre, puis « Terminer la quête ». La bonne récompense arrive dans le sac.
+- [ ] « Mieux pour toi » apparaît en vert sous une récompense meilleure que ce que tu portes (avec Sacs rangés).
+- [ ] « Refuser » et Échap ferment l'échange sans erreur.
+- [ ] Garder Espace enfoncé : une seule page tourne par appui. Bandeau fermé, Espace fait sauter comme d'habitude.
+- [ ] Se déplacer avec le bandeau ouvert : les touches de déplacement marchent.
+- [ ] Entrer en combat avec le bandeau ouvert : les touches ne sont plus prises (Espace saute), la souris marche ; après le combat tout revient.
+- [ ] Avec Quêtes auto actif : une quête acceptée ou rendue toute seule ne fait rien clignoter.
+- [ ] Quête qui demande une confirmation (JcJ, ou qui coûte de l'or) : la fenêtre du jeu reprend la main avec un message.
+- [ ] Réglages : texte d'un coup (décocher « par morceaux »), taille du texte, largeur du bandeau, touches coupées. Sans `/reload`.
+- [ ] `/dial jeu` : la fenêtre du jeu est gardée ; refaire `/dial jeu` : le bandeau revient.
+
+## Tenues (nouveau)
+
+- [ ] `/tenue` ouvre la fenêtre. Taper « Combat », laisser toutes les cases cochées, « Enregistrer ce que je porte » : la tenue apparaît, « (portée) », bordure verte.
+- [ ] Mettre la canne à pêche (et un chapeau de pêche si tu en as), enregistrer « Pêche » en ne cochant que ces emplacements.
+- [ ] « Mettre » sur Combat : l'arme revient, le reste ne bouge pas. « Mettre » sur Pêche : seule la canne change.
+- [ ] `/tenue retour` remet ce qui était porté avant.
+- [ ] `/tenue peche` (sans accent) et `/tenue com` (début du nom) marchent.
+- [ ] En combat, « Mettre » : message « à la fin du combat », puis la tenue se met toute seule après.
+- [ ] Vendre ou mettre en banque une pièce d'une tenue : son icône devient rouge, et « Mettre » dit ce qu'il manque.
+- [ ] Deux anneaux ou deux bijoux dans une tenue : chacun va à son emplacement, sans échange inutile.
+- [ ] Arme à deux mains dans une tenue, une main + main gauche dans l'autre : passer de l'une à l'autre dans les deux sens.
+- [ ] « Mettre à jour » puis « Sûr ? » remplace le contenu de la tenue ; la croix puis « Sûr ? » la supprime.
+- [ ] Réglages > Tenues > Touches : choisir une touche pour « Tenue 1 », elle met la première tenue de la liste.
+- [ ] Mode pêche de Métiers auto : l'activer met la tenue « Pêche », le couper remet la précédente. Si une pêche est en cours, la ligne n'est pas coupée.
+- [ ] Sur Retail : mêmes vérifications.
+
 ## Plus anciens, jamais confirmés
 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).

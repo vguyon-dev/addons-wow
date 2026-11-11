@@ -241,10 +241,14 @@ local function changerModePeche(actif)
     lancer:SetAttribute("spell", sort)
     derniereActivite = GetTime()
     if db.pecheSon then sonPeche() end
+    -- Addon Tenues (facultatif) : met la tenue Pêche avec le mode pêche.
+    if Tenues_ModePeche then pcall(Tenues_ModePeche, true) end
     ns.reglages.dire("mode pêche |cff00ff00activé|r : double clic droit pour lancer, clic droit sur le bouchon pour ferrer.")
   else
     sonNormal()
     if not InCombatLockdown() then ClearOverrideBindings(lancer) end
+    -- Addon Tenues (facultatif) : remet la tenue d'avant la pêche.
+    if Tenues_ModePeche then pcall(Tenues_ModePeche, false) end
     ns.reglages.dire("mode pêche |cffff4040terminé|r, son remis comme avant.")
   end
   -- La fenêtre de réglages, si elle est ouverte, montre le bon état du bouton.

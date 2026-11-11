@@ -1,0 +1,19 @@
+<!-- Raccourcis : Échap > Options > Raccourcis > Tenues (ou « Choisir la touche » dans les réglages, onglet Touches).
+     La touche n met la n-ième tenue de la liste. -->
+<Bindings>
+  <Binding name="TENUES_TENUE1" header="TENUES" category="ADDONS">
+    Tenues_Touche(1)
+  </Binding>
+  <Binding name="TENUES_TENUE2" category="ADDONS">
+    Tenues_Touche(2)
+  </Binding>
+  <Binding name="TENUES_TENUE3" category="ADDONS">
+    Tenues_Touche(3)
+  </Binding>
+  <Binding name="TENUES_TENUE4" category="ADDONS">
+    Tenues_Touche(4)
+  </Binding>
+  <Binding name="TENUES_TENUE5" category="ADDONS">
+    Tenues_Touche(5)
+  </Binding>
+</Bindings>
