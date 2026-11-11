@@ -233,17 +233,29 @@ function ns.texteEnvoi(partis, prevus)
   return partis .. " balise(s) envoyée(s) au groupe."
 end
 
+-- Les deux nombres d'une position donnée par le jeu. D'ordinaire c'est un objet qui a GetXY ;
+-- sur Forever, la position de l'épingle de la carte est une simple table { x, y } sans GetXY
+-- (« GPS.lua:516: attempt to call a nil value », vu en jeu le 11/11). On lit donc les deux formes.
+function ns.xyDe(pos)
+  if type(pos) ~= "table" then return nil end
+  if type(pos.GetXY) == "function" then return pos:GetXY() end
+  return pos.x, pos.y
+end
+
 if not CreateFrame or not C_Map then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
 -- Positions dans le monde
 -- ---------------------------------------------------------------------------
 
+local xyDe = ns.xyDe
+
 local function versMonde(carte, x, y)
   if not (C_Map.GetWorldPosFromMapPos and CreateVector2D) then return nil end
   local ok, continent, pos = pcall(C_Map.GetWorldPosFromMapPos, carte, CreateVector2D(x, y))
   if not ok or not continent or not pos then return nil end
-  local wx, wy = pos:GetXY()
+  local wx, wy = xyDe(pos)
+  if not wx or not wy then return nil end
   return { continent = continent, x = wx, y = wy }
 end
 
@@ -253,7 +265,7 @@ local function ici()
   if not carte or estSecret(carte) then return nil end
   local ok, pos = pcall(C_Map.GetPlayerMapPosition, carte, "player")
   if not ok or not pos then return nil end
-  local x, y = pos:GetXY()
+  local x, y = xyDe(pos)
   if not x or estSecret(x) or estSecret(y) or (x == 0 and y == 0) then return nil end
   return versMonde(carte, x, y), carte, x, y
 end
@@ -512,8 +524,8 @@ local function cibleAuto(carteIci)
   -- Une épingle que tu as posée toi-même sur la carte du jeu.
   if db.suivreEpingle and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
     local p = C_Map.GetUserWaypoint()
-    if p and p.position then
-      local x, y = p.position:GetXY()
+    local x, y = xyDe(p and p.position)
+    if x and y and p.uiMapID then
       auto = { titre = "Épingle de la carte", carte = p.uiMapID, x = x, y = y, auto = true }
     end
   end

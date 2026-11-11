@@ -8,7 +8,7 @@
 -- son titre (coloré selon la difficulté), la distance si le jeu la donne, puis ses objectifs.
 --
 --   Clic : choisir la quête (le GPS la suit alors)
---   Clic sur la quête déjà choisie : ouvrir sa fiche dans le journal
+--   Survol : la description de la quête (l'addon n'ouvre jamais le journal du jeu, voir plus bas)
 --   Maj + clic : ne plus suivre         Clic droit : menu (ranger la quête ailleurs…)
 --   /sq : les réglages    /sq genre : ce que le jeu dit de chaque quête suivie
 --   /sq centre : remet le panneau à sa place    /sq aide : la liste des commandes
@@ -695,15 +695,27 @@ end
 
 -- ----- les actions sur une quête
 
-local function ouvrirJournal(id)
-  -- Jamais en combat : ouvrir la carte depuis un addon y est refusé par le jeu
-  -- (« action bloquée … SetPassThroughButtons », vu en jeu le 10/11).
-  if enCombat() then dire("le journal s'ouvrira après le combat (le jeu le refuse aux addons en combat).") return end
-  if QuestMapFrame_OpenToQuestDetails then
-    sur(QuestMapFrame_OpenToQuestDetails, id)
-  elseif QuestUtil and QuestUtil.OpenQuestDetails then
-    sur(QuestUtil.OpenQuestDetails, id)
+-- On n'ouvre JAMAIS le journal ni la carte du jeu depuis l'addon. Jusqu'à la 0.1.4, un clic sur
+-- la quête choisie appelait QuestMapFrame_OpenToQuestDetails. Cette fonction du jeu écrit dans
+-- les cadres de la carte (la quête affichée, la carte montrée) : écrites par un addon, ces
+-- valeurs restent « marquées » jusqu'au /reload. Ensuite, chaque fois que le joueur ouvrait sa
+-- carte EN COMBAT avec sa touche, le jeu refusait de poser les marques de quêtes et levait
+-- « action bloquée … SetPassThroughButtons » au nom de Suivi des quêtes (des dizaines de fois,
+-- vu en jeu le 10/11, chez deux joueurs). Refuser l'appel en combat ne suffisait pas : le clic
+-- fait AVANT le combat suffisait à marquer la carte. À la place, la bulle de la quête montre sa
+-- description, lue par une fonction qui ne touche à aucun cadre du jeu.
+local cacheDescription = {}
+local function descriptionDe(id, index)
+  if not id then return nil end
+  if cacheDescription[id] then return cacheDescription[id] end
+  if not (index and GetQuestLogQuestText) then return nil end
+  local description = sur(GetQuestLogQuestText, index)
+  -- Un résultat vide n'est pas gardé : les données peuvent ne pas être encore chargées.
+  if type(description) == "string" and description ~= "" then
+    cacheDescription[id] = description
+    return description
   end
+  return nil
 end
 
 local function choisirQuete(id)
@@ -730,7 +742,6 @@ local function menuQuete(ligne)
     entrees[#entrees + 1] = { texte = NOMS_GENRES[g], coche = manuel == g, action = function() db.genres[id] = g; demander() end }
   end
   entrees[#entrees + 1] = { texte = "Ne plus suivre", action = function() nePlusSuivre(id) end }
-  entrees[#entrees + 1] = { texte = "Ouvrir dans le journal", action = function() ouvrirJournal(id) end }
   afficherMenu(entrees)
 end
 
@@ -744,7 +755,10 @@ local function infobulleQuete(self)
   if self.genreNom then
     GameTooltip:AddLine("Rangée dans : " .. self.genreNom .. (self.manuel and " (ton choix)" or ""), 0.8, 0.8, 0.8)
   end
-  GameTooltip:AddLine("Clic : choisir la quête\nClic sur la quête choisie : ouvrir le journal\nMaj + clic : ne plus suivre\nClic droit : menu", 1, 1, 1)
+  local description = descriptionDe(self.numero, self.index)
+  if description then GameTooltip:AddLine(description, 0.9, 0.9, 0.9, true) end
+  GameTooltip:AddLine("Clic : choisir la quête (le GPS la suit)\nMaj + clic : ne plus suivre\nClic droit : menu", 1, 1, 1)
+  GameTooltip:AddLine("Abandonner ou partager : dans le journal du jeu.", 0.6, 0.6, 0.6)
   GameTooltip:Show()
 end
 
@@ -781,7 +795,8 @@ local function creerLigneQuete()
     if not id then return end
     if bouton == "RightButton" then return menuQuete(self) end
     if IsShiftKeyDown and IsShiftKeyDown() then return nePlusSuivre(id) end
-    if choisie() == id then return ouvrirJournal(id) end
+    -- Déjà choisie : rien de plus à faire (voir plus haut pourquoi on n'ouvre plus le journal).
+    if choisie() == id then return end
     choisirQuete(id)
   end)
   b:SetScript("OnEnter", infobulleQuete)
@@ -819,6 +834,7 @@ end
 
 local function remplirLigneQuete(b, q, largeur, choisieId)
   b.numero, b.titreBrut, b.manuel = q.numero, q.titre, q.manuel
+  b.index = q.index   -- sa place dans le journal : sert à lire sa description pour la bulle
   b.genreNom = NOMS_GENRES[q.genre]
   local niveauJoueur = sur(UnitLevel, "player")
   -- Le jeu colore le titre d'après sa propre difficulté : on la lit d'abord, nos seuils servent de repli.
@@ -1289,7 +1305,7 @@ ns.reglages = ns.creerReglages({
       rafraichirSur()
     end },
   },
-  astuce = "Clic sur une quête : la choisir (le GPS la suit). Clic sur la quête choisie : ouvrir le journal. Maj + clic : ne plus suivre. Clic droit : la ranger ailleurs. /sq genre montre ce que le jeu dit de chaque quête.",
+  astuce = "Clic sur une quête : la choisir (le GPS la suit). Survol : sa description. Maj + clic : ne plus suivre. Clic droit : la ranger ailleurs. /sq genre montre ce que le jeu dit de chaque quête.",
   auChargement = function(d)
     db = d
     db.genres = type(db.genres) == "table" and db.genres or {}

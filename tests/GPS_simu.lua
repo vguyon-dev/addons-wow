@@ -138,5 +138,14 @@ verifie("texte envoi : tout parti", "3 balise(s) envoyée(s) au groupe.", ns.tex
 verifie("texte envoi : une partie", "2 balise(s) sur 3 envoyée(s) au groupe.", ns.texteEnvoi(2, 3))
 verifie("texte envoi : rien", "aucune balise n'a pu être envoyée au groupe.", ns.texteEnvoi(0, 3))
 
+-- Une position du jeu : un objet avec GetXY, ou une simple table { x, y } (épingle de la carte sur Forever).
+do
+  local x, y = ns.xyDe({ GetXY = function() return 0.25, 0.75 end })
+  verifie("position avec GetXY", "0.25 0.75", tostring(x) .. " " .. tostring(y))
+  x, y = ns.xyDe({ x = 0.61406, y = 0.694763 })
+  verifie("position en simple table (Forever)", "0.61406 0.694763", tostring(x) .. " " .. tostring(y))
+  verifie("position absente", nil, (ns.xyDe(nil)))
+end
+
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)

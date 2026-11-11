@@ -608,7 +608,18 @@ avancer()
 verifie("la quête choisie a son fond doré", true, ligneDe(100).fond._shown)
 verifie("une autre quête n'a pas de fond doré", false, ligneDe(101).fond._shown)
 l100._scripts.OnClick(l100, "LeftButton")
-verifie("clic sur la quête choisie : ouvre le journal", 100, appelsJeu.journal[#appelsJeu.journal])
+verifie("clic sur la quête choisie : n'ouvre jamais le journal du jeu (il marquerait la carte)", 0, #appelsJeu.journal)
+do
+  -- La bulle montre la description, lue sans toucher aux cadres du jeu.
+  local lignesBulle = {}
+  GameTooltip.AddLine = function(_, t) lignesBulle[#lignesBulle + 1] = t end
+  l100._scripts.OnEnter(l100)
+  local vue = false
+  for _, t in ipairs(lignesBulle) do if t == "description" then vue = true end end
+  verifie("bulle : la description de la quête", true, vue)
+  verifie("bulle : ne parle plus d'ouvrir le journal", nil, table.concat(lignesBulle, " "):find("ouvrir le journal", 1, true))
+  GameTooltip.AddLine = nil
+end
 verifie("clic sur la quête choisie : ne rechoisit pas", 1, #appelsJeu.suivi)
 IsShiftKeyDown = function() return true end
 l101._scripts.OnClick(l101, "LeftButton")
@@ -624,7 +635,8 @@ verifie("menu : affiché", true, menu._shown)
 verifie("menu : en-tête = titre de la quête", "Épreuve du paladin", ligneMenuTexte("Épreuve du paladin").texte._text)
 verifie("menu : Automatique est coché", true, ligneMenuTexte("Automatique").texte._text:find("> ", 1, true) ~= nil)
 verifie("menu : entrées proposées", true, ligneMenuTexte("Principal") and ligneMenuTexte("Général") and ligneMenuTexte("Donjons et groupe")
-  and ligneMenuTexte("Classe") and ligneMenuTexte("Métiers") and ligneMenuTexte("Ne plus suivre") and ligneMenuTexte("Ouvrir dans le journal") and true)
+  and ligneMenuTexte("Classe") and ligneMenuTexte("Métiers") and ligneMenuTexte("Ne plus suivre") and true)
+verifie("menu : plus d'entrée « Ouvrir dans le journal »", nil, ligneMenuTexte("Ouvrir dans le journal"))
 local choix = ligneMenuTexte("Principal")
 choix._scripts.OnClick(choix)
 verifie("menu : choix manuel gardé par numéro", "principal", SuiviQuetesDB.genres[103])
@@ -645,9 +657,6 @@ l103 = ligneDe(103)
 l103._scripts.OnClick(l103, "RightButton")
 ligneMenuTexte("Ne plus suivre")._scripts.OnClick(ligneMenuTexte("Ne plus suivre"))
 verifie("menu : ne plus suivre", 103, appelsJeu.retire[#appelsJeu.retire])
-l103._scripts.OnClick(l103, "RightButton")
-ligneMenuTexte("Ouvrir dans le journal")._scripts.OnClick(ligneMenuTexte("Ouvrir dans le journal"))
-verifie("menu : ouvrir dans le journal", 103, appelsJeu.journal[#appelsJeu.journal])
 l103._scripts.OnClick(l103, "RightButton")
 local rideau
 for _, f in ipairs(toutes) do if f._type == "Button" and f._scripts.OnClick and f._parent == UIParent and not rawget(f, "numero") and f._shown then rideau = f end end

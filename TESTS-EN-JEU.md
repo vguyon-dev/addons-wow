@@ -129,6 +129,7 @@ Composants par extension (0.14.0, Retail seulement, rien de testé en jeu) :
 - [ ] Réglages : la liste des balises (la suivie marquée d'un « > »), la croix, « Balise ici », « Tout effacer ».
 - [ ] `/reload` : les balises sont toujours là.
 - [ ] Livres de bibliothèque : « Balise vers le livre le plus proche » passe par le GPS.
+- [ ] Erreur corrigée en 0.6.2 : sans balise, poser une épingle à la main sur la carte du jeu (Ctrl + clic) : la flèche la suit (« Épingle de la carte »), sans erreur « GPS.lua:516: attempt to call a nil value » dans BugSack.
 - [ ] Sans aucune balise : la flèche montre l'objectif de la quête suivie (celle cliquée dans le suivi des objectifs), avec son titre.
 - [ ] Plusieurs quêtes suivies : cliquer une quête dans le suivi des objectifs la sélectionne, et la flèche suit celle-là (comme TomTom).
 - [ ] Quête finie : la flèche montre le PNJ à qui la rendre (« Rendre : … »).
@@ -261,7 +262,9 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 - [ ] Les sections sont dans l'ordre : À rendre, Principal, Général, Donjons et groupe, Classe, Métiers. Une section vide n'apparaît pas.
 - [ ] Une quête finie passe dans « À rendre » avec un « ? » ; décocher « À rendre en haut » la remet dans son genre.
 - [ ] Cliquer le nom d'une section la replie ; après `/reload`, elle est toujours repliée.
-- [ ] Clic gauche sur une quête : fond doré, et la flèche du GPS la suit. Un second clic ouvre sa fiche dans le journal.
+- [ ] Clic gauche sur une quête : fond doré, et la flèche du GPS la suit. Un second clic ne fait rien (0.1.5 : l'addon n'ouvre plus le journal du jeu).
+- [ ] Survol d'une quête : la bulle montre sa description, puis les clics possibles. Le menu du clic droit n'a plus « Ouvrir dans le journal ».
+- [ ] Erreur corrigée en 0.1.5 : après un `/reload`, cliquer des quêtes du panneau, entrer en combat, ouvrir la carte (M) : plus aucune « action bloquée … SetPassThroughButtons » au nom de SuiviQuetes dans BugSack.
 - [ ] Maj + clic : la quête n'est plus suivie et quitte le panneau.
 - [ ] Clic droit : menu « Ranger dans » ; choisir « Principal » déplace la quête, « Automatique » la remet. Le choix tient après `/reload`.
 - [ ] Une quête sans objectif chiffré (« Livraison pour Foudrepique ») affiche son texte court, y compris juste après la connexion.
