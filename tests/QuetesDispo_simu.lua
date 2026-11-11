@@ -35,7 +35,7 @@ verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.2.0", true, toc:find("## Version: 0.2.0", 1, true) ~= nil)
+verifie("toc : version 0.2.1", true, toc:find("## Version: 0.2.1", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -1229,7 +1229,7 @@ installer(true)
 UnitLevel = nil
 demarrer()
 ouvrirCarte(37); avancer()
--- Depuis la 0.2.0, « trop haut niveau » est coché au départ : au niveau 1, les quêtes de plus de 4 niveaux au-dessus sont cachées.
+-- Depuis la 0.2.1, « trop haut niveau » est coché au départ : au niveau 1, les quêtes de plus de 4 niveaux au-dessus sont cachées.
 verifie("sans UnitLevel : niveau 1 par défaut, la quête de niveau 8 absente", "1 | 12 | 4,6 | 9,10", resume())
 
 installer(true)

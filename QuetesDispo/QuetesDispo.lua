@@ -935,7 +935,7 @@ ns.reglages = ns.creerReglages({
     { cle = "jcj", libelle = "Montrer les quêtes JcJ",
       aide = "Les quêtes de champ de bataille et de combat entre joueurs." },
     { cle = "saisonnieres", libelle = "Montrer les quêtes saisonnières",
-      aide = "Les quêtes d'événement (fêtes, saisons)." },
+      aide = "Les quêtes d'événement (fêtes, saisons). Attention : hors de la fête, le personnage qui les donne n'est pas là, et le « ! » ne mène à rien." },
     { cle = "bientot", libelle = "Montrer aussi les quêtes bientôt disponibles",
       aide = "Les quêtes qui demandent jusqu'à 3 niveaux de plus que toi, en gris clair." },
     { cle = "tropHaut", libelle = "Cacher les quêtes trop haut niveau",

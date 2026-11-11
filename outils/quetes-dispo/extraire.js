@@ -32,8 +32,12 @@ const COLONNES_UTILES = {
   ],
   creature_questrelation: ["id", "quest"],
   gameobject_questrelation: ["id", "quest"],
-  creature: ["id", "map", "position_x", "position_y"],
-  gameobject: ["id", "map", "position_x", "position_y"],
+  creature: ["guid", "id", "map", "position_x", "position_y"],
+  gameobject: ["guid", "id", "map", "position_x", "position_y"],
+  // Les fêtes et événements : qui n'apparaît que pendant un événement, et quelles quêtes en dépendent.
+  game_event_creature: ["guid", "event"],
+  game_event_gameobject: ["guid", "event"],
+  game_event_quest: ["quest", "event"],
   creature_template: ["Entry", "Name"],
   gameobject_template: ["entry", "name"],
 };
@@ -279,10 +283,13 @@ function titreEcarte(titre) {
   return TITRES_ECARTES.some((re) => re.test(titre));
 }
 
+// Quêtes liées à un événement d'après les tables game_event_* (remplie dans la fonction principale).
+const quetesEvenement = new Set();
+
 function drapeauxDe(q) {
   let d = DRAPEAU_PAR_TYPE[q.Type] || 0;
   if ((q.SpecialFlags & 1) !== 0) d |= DRAPEAU_REPETABLE;
-  if (CATEGORIES_SAISONNIERES.has(q.ZoneOrSort)) d |= DRAPEAU_EVENEMENT;
+  if (CATEGORIES_SAISONNIERES.has(q.ZoneOrSort) || quetesEvenement.has(q.entry)) d |= DRAPEAU_EVENEMENT;
   return d;
 }
 
@@ -339,20 +346,40 @@ function construire(base) {
   ajouterRelations(base.creature_questrelation, 1);
   ajouterRelations(base.gameobject_questrelation, 2);
 
+  // Un personnage ou un objet lié à un événement (numéro d'événement > 0) n'est là que pendant la fête.
+  // Hors fête, un « ! » à cet endroit ne mènerait à rien (retour de jeu du 11/11) : ces apparitions sont
+  // mises à part. Un donneur qui n'a QUE des apparitions d'événement garde ses points, mais toutes ses
+  // quêtes sont marquées saisonnières (cachées tant que l'option n'est pas cochée).
+  const guidsEvenement = { 1: new Set(), 2: new Set() };
+  for (const e of base.game_event_creature || []) if (e.event > 0) guidsEvenement[1].add(e.guid);
+  for (const e of base.game_event_gameobject || []) if (e.event > 0) guidsEvenement[2].add(e.guid);
+  for (const e of base.game_event_quest || []) if (e.event > 0) quetesEvenement.add(e.quest);
+
   // Apparitions des donneurs, par continent.
   const apparitions = new Map(); // "genre:id" -> Map(continent -> [{x,y}])
+  const apparitionsEvenement = new Map();
   function ajouterApparitions(liste, genre) {
     for (const s of liste) {
       const cle = genre + ":" + s.id;
       if (!donneurs.has(cle)) continue;
-      if (!apparitions.has(cle)) apparitions.set(cle, new Map());
-      const parCont = apparitions.get(cle);
+      const cible = guidsEvenement[genre].has(s.guid) ? apparitionsEvenement : apparitions;
+      if (!cible.has(cle)) cible.set(cle, new Map());
+      const parCont = cible.get(cle);
       if (!parCont.has(s.map)) parCont.set(s.map, []);
       parCont.get(s.map).push({ x: s.position_x, y: s.position_y });
     }
   }
   ajouterApparitions(base.creature, 1);
   ajouterApparitions(base.gameobject, 2);
+  let donneursEvenement = 0;
+  for (const [cle, parCont] of apparitionsEvenement) {
+    if (apparitions.has(cle)) continue; // il existe aussi hors fête : on ne garde que ses points permanents
+    apparitions.set(cle, parCont);
+    donneursEvenement++;
+    for (const n of donneurs.get(cle)) quetesEvenement.add(n);
+  }
+  console.log("Donneurs présents seulement pendant un événement : " + donneursEvenement +
+    " ; quêtes marquées saisonnières par les événements : " + quetesEvenement.size);
 
   // Points de départ.
   const departs = [];
