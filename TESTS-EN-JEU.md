@@ -313,6 +313,21 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 - [ ] Mode pêche de Métiers auto : l'activer met la tenue « Pêche », le couper remet la précédente. Si une pêche est en cours, la ligne n'est pas coupée.
 - [ ] Sur Retail : mêmes vérifications.
 
+## Quêtes disponibles (nouveau, essai en Forêt d'Elwynn)
+
+But de l'essai : savoir si la base de WoW Classic colle à Forever. À faire en Forêt d'Elwynn.
+
+- [ ] `/reload`, aucune erreur dans BugSack, puis `/qd etat` : il doit dire « villes reconnues : 6 sur 6 » (au moins 1). S'il dit 0, les « ! » peuvent être mal placés : me le dire.
+- [ ] Ouvrir la carte de la Forêt d'Elwynn : des « ! » jaunes apparaissent, sans gel du jeu.
+- [ ] **Le test principal** : aller voir trois ou quatre « ! ». Y a-t-il bien un personnage qui propose la quête annoncée ? Noter ceux qui sont faux (rien sur place, ou autre quête).
+- [ ] À l'inverse : un personnage avec un « ! » en jeu qui n'a pas de « ! » sur notre carte (quête propre à Forever ?). Noter son nom.
+- [ ] Survol d'un « ! » : titres en français, niveau, couleur de difficulté, marques (Donjon, Groupe, Répétable, Réputation requise).
+- [ ] Clic gauche : la flèche du GPS mène à l'endroit. Clic droit : le « ! » disparaît ; « Remontrer les quêtes cachées à la main » le remet.
+- [ ] Prendre une quête : son « ! » disparaît. La rendre : la suivante de la chaîne apparaît.
+- [ ] Filtres : cocher « bas niveau » ajoute des « ! », « répétables » aussi ; sans `/reload`.
+- [ ] Carte d'un continent : rien, sauf si l'option est cochée (et alors sans gel).
+- [ ] Après l'essai : `/reload` puis « regarde », je lirai le relevé enregistré.
+
 ## Plus anciens, jamais confirmés
 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).

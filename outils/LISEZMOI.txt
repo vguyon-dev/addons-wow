@@ -46,6 +46,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /familier Familier du chasseur (faim, mort, oubli : bouton Nourrir, Ressusciter, Appeler)
   /montures Montures (une touche pour la bonne monture)
   /courrier Courrier (récupérer tout le courrier, l'or seulement ou les cochés)
+  /qd      Quêtes disponibles (les « ! » des quêtes à prendre sur la carte ; /qd etat dit ce qu'il voit ; Forever seulement)
   /dial    Dialogues de quête (bandeau en bas à la place de la fenêtre du jeu ; /dial jeu la rend)
   /tenue   Tenues (fenêtre des tenues ; /tenue <nom> la met, /tenue retour remet la précédente)
   /sq      Suivi des quêtes (panneau rangé par genre ; /sq genre pour voir ce que dit le jeu)
