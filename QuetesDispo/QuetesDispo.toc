@@ -3,7 +3,7 @@
 ## Notes: Un « ! » jaune sur la carte du monde à chaque endroit où une quête est à prendre pour ton personnage (niveau, race, classe, quêtes à rendre avant, métier), pour ne plus fouiller chaque zone. Pour WoW Forever. Données tirées de la base libre CMaNGOS classic-db.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.1
+## Version: 0.2.0
 ## IconTexture: Interface\GossipFrame\AvailableQuestIcon
 ## SavedVariables: QuetesDispoDB
 ## AddonCompartmentFunc: QuetesDispo_OuvrirReglages

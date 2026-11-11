@@ -35,7 +35,7 @@ verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.1.1", true, toc:find("## Version: 0.1.1", 1, true) ~= nil)
+verifie("toc : version 0.2.0", true, toc:find("## Version: 0.2.0", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -1229,7 +1229,8 @@ installer(true)
 UnitLevel = nil
 demarrer()
 ouvrirCarte(37); avancer()
-verifie("sans UnitLevel : niveau 1 par défaut, la quête de niveau 8 absente", "1,2 | 12 | 4,6,18 | 9,10", resume())
+-- Depuis la 0.2.0, « trop haut niveau » est coché au départ : au niveau 1, les quêtes de plus de 4 niveaux au-dessus sont cachées.
+verifie("sans UnitLevel : niveau 1 par défaut, la quête de niveau 8 absente", "1 | 12 | 4,6 | 9,10", resume())
 
 installer(true)
 C_Map.GetMapInfo = nil
@@ -1332,5 +1333,30 @@ verifie("Reglages.lua toujours identique dans QuetesAuto", true,
 
 print = io.write and function(...) io.write(table.concat({ ... }, " "), "\n") end or print
 io.write(string.format("%d vérifications OK\n", nbOK))
+-- Options « trop haut niveau » et « suite pas encore débloquée »
+do
+  local function egal(nom, attendu, obtenu)
+    if attendu ~= obtenu then print("ECHEC  " .. nom .. " : attendu " .. tostring(attendu) .. ", obtenu " .. tostring(obtenu)); os.exit(1) end
+    print("OK  " .. nom)
+  end
+  local J = { niveau = 12, masqueRace = 1, faction = "Alliance", masqueClasse = 2, rendues = function() return false end, enCours = function() return false end }
+  local haute = { numero = 900001, niveau = 20, niveauMin = 10, races = 0, classes = 0, avant = 0, groupe = 0, drapeaux = 0, metier = 0 }
+  local ok, raison = ns.disponible(haute, J, { tropHaut = true, ecartHaut = 4 })
+  egal("trop haut : niveau 20 au niveau 12 avec +4 -> cachée", false, ok)
+  egal("trop haut : la raison", "tropHaut", raison)
+  egal("trop haut : option décochée -> montrée", true, (ns.disponible(haute, J, { tropHaut = false })))
+  egal("trop haut : écart +8 -> montrée", true, (ns.disponible(haute, J, { tropHaut = true, ecartHaut = 8 })))
+  haute.niveau = 16
+  egal("trop haut : juste à la limite (+4) -> montrée", true, (ns.disponible(haute, J, { tropHaut = true, ecartHaut = 4 })))
+  haute.niveau = -1
+  egal("trop haut : quête sans niveau fixe -> montrée", true, (ns.disponible(haute, J, { tropHaut = true, ecartHaut = 4 })))
+  local suite = { numero = 900002, niveau = 12, niveauMin = 10, races = 0, classes = 0, avant = 900003, groupe = 0, drapeaux = 0, metier = 0 }
+  egal("suite : pas débloquée, option cochée -> cachée", false, (ns.disponible(suite, J, { suites = true })))
+  egal("suite : sans réglage -> cachée (comme avant)", false, (ns.disponible(suite, J, {})))
+  local ok2, raison2 = ns.disponible(suite, J, { suites = false })
+  egal("suite : option décochée -> montrée", true, ok2)
+  egal("suite : marquée pas encore débloquée", "verrouillee", raison2)
+end
+
 if ok then io.write("Tout est bon.\n") end
 os.exit(ok and 0 or 1)

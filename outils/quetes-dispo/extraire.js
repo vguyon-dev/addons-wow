@@ -27,7 +27,7 @@ const COLONNES_UTILES = {
   quest_template: [
     "entry", "Method", "ZoneOrSort", "MinLevel", "QuestLevel", "Type",
     "RequiredClasses", "RequiredRaces", "RequiredSkill", "RequiredSkillValue",
-    "PrevQuestId", "NextQuestId", "ExclusiveGroup", "SpecialFlags", "QuestFlags",
+    "PrevQuestId", "NextQuestId", "NextQuestInChain", "ExclusiveGroup", "SpecialFlags", "QuestFlags",
     "RequiredMinRepFaction", "Title",
   ],
   creature_questrelation: ["id", "quest"],
@@ -310,6 +310,19 @@ function construire(base) {
     if (signe === fc.PrevQuestId) continue;
     if (!autres.has(cible)) autres.set(cible, new Set());
     autres.get(cible).add(signe);
+  }
+
+  // NextQuestInChain : « la quête proposée juste après celle-ci ». Ce n'est pas un verrou dans CMaNGOS,
+  // mais en jeu la suivante d'une suite ne se prend pas avant la précédente. On l'ajoute donc aux quêtes
+  // qui ouvrent la suivante (une seule suffit toujours), pour ne pas montrer une suite pas commencée.
+  for (const q of base.quest_template) {
+    const cible = q.NextQuestInChain;
+    if (!cible || cible <= 0 || !fiches.has(q.entry)) continue;
+    const fc = fiches.get(cible);
+    if (!fc || cible === q.entry) continue;
+    if (q.entry === fc.PrevQuestId) continue;
+    if (!autres.has(cible)) autres.set(cible, new Set());
+    autres.get(cible).add(q.entry);
   }
 
   // Donneurs : genre 1 = PNJ, genre 2 = objet du décor.

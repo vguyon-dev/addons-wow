@@ -35,6 +35,9 @@ local DEFAUTS = {
   saisonnieres = false,  -- montrer les quêtes saisonnières ou d'événement
   bientot = false,       -- montrer aussi les quêtes bientôt disponibles (jusqu'à 3 niveaux au-dessus)
   metiers = true,        -- cacher les quêtes d'un métier que je n'ai pas
+  tropHaut = true,       -- cacher les quêtes d'un niveau trop au-dessus du tien
+  ecartHaut = 4,         -- « trop au-dessus » = plus de tant de niveaux d'écart
+  suites = true,         -- cacher les quêtes d'une suite pas encore débloquée
   taille = 20,           -- taille des « ! », de 12 à 32
   continent = false,     -- montrer aussi sur la carte d'un continent
   minimap = false,
@@ -92,6 +95,7 @@ ns.MASQUES_FACTION = MASQUES_FACTION
 ns.NOMS_RAISONS = {
   ignoree = "cachées à la main", rendue = "déjà rendues", enCours = "déjà dans le journal",
   classe = "d'une autre classe", race = "d'une autre race ou faction", niveau = "niveau trop bas",
+tropHaut = "d'un niveau trop au-dessus du tien",
   prerequis = "il faut rendre une autre quête avant", prerequisEnCours = "il faut avoir une autre quête en cours",
   groupe = "groupe exclusif (une autre du groupe est prise)", metier = "métier manquant", grise = "trop faciles (grises)",
   repetable = "répétables", donjon = "donjons et raids", jcj = "JcJ", saison = "saisonnières",
@@ -226,11 +230,17 @@ function ns.disponible(quete, joueur, reglages)
   end
 
   -- Niveau : trop bas, sauf une quête « bientôt disponible » (jusqu'à 3 niveaux au-dessus).
-  local bientot = false
+  local bientot, verrouillee = false, false
   local niveauJoueur = tonumber(joueur.niveau) or 1
   local niveauMin = quete.niveauMin or 0
   if niveauJoueur < niveauMin then
     if reglages.bientot and niveauMin - niveauJoueur <= 3 then bientot = true else return false, "niveau" end
+  end
+  -- Trop haut niveau (titre rouge) : cachée si l'option est cochée. Une quête sans niveau fixe passe,
+  -- et une quête « bientôt disponible » aussi (tu as demandé à la voir).
+  if reglages.tropHaut and not bientot and (quete.niveau or 0) > 0
+    and quete.niveau - niveauJoueur > (tonumber(reglages.ecartHaut) or 4) then
+    return false, "tropHaut"
   end
 
   -- Les quêtes à rendre avant, comme CMaNGOS (SatisfyQuestPreviousQuest) : une liste (PrevQuestId, puis les
@@ -251,7 +261,11 @@ function ns.disponible(quete, joueur, reglages)
         bon = true break
       end
     end
-    if not bon then return false, uneRendue and "prerequis" or "prerequisEnCours" end
+    if not bon then
+      -- Option « suites » décochée : on la montre quand même, marquée « pas encore débloquée ».
+      if reglages.suites == false then verrouillee = true
+      else return false, uneRendue and "prerequis" or "prerequisEnCours" end
+    end
   end
 
   -- Groupe exclusif : une autre quête du même groupe déjà prise ou rendue ferme celle-ci.
@@ -286,7 +300,7 @@ function ns.disponible(quete, joueur, reglages)
   if drapeau(quete.drapeaux, F_JCJ) and not reglages.jcj then return false, "jcj" end
   if drapeau(quete.drapeaux, F_SAISON) and not reglages.saisonnieres then return false, "saison" end
 
-  return true, bientot and "bientot" or nil
+  return true, (verrouillee and "verrouillee") or (bientot and "bientot") or nil
 end
 
 -- Les quêtes d'un « ! » prêtes à être écrites dans la bulle : triées par niveau puis par titre.
@@ -299,11 +313,12 @@ function ns.lignesQuetes(numeros, joueur, reglages, titreDe)
       local _, raison = ns.disponible(f, joueur, reglages)
       local titre = titreDe and titreDe(n) or ns.titreQuete(n, nil, f.titre)
       local r, g, b
-      if raison == "bientot" then r, g, b = 0.75, 0.75, 0.75
+      if raison == "bientot" or raison == "verrouillee" then r, g, b = 0.75, 0.75, 0.75
       else r, g, b = ns.couleurDifficulte(f.niveau, joueur and joueur.niveau, joueur and joueur.plageVerte) end
       lignes[#lignes + 1] = {
         numero = n, niveau = f.niveau, titre = titre, texte = ns.titreAffiche(f.niveau, titre),
-        marques = table.concat(ns.marques(f.drapeaux, f.metier, f.reputation), ", "), r = r, v = g, b = b, bientot = raison == "bientot",
+        marques = table.concat(ns.marques(f.drapeaux, f.metier, f.reputation), ", ")
+          .. (raison == "verrouillee" and " (pas encore débloquée)" or ""), r = r, v = g, b = b, bientot = raison == "bientot",
       }
     end
   end
@@ -923,6 +938,13 @@ ns.reglages = ns.creerReglages({
       aide = "Les quêtes d'événement (fêtes, saisons)." },
     { cle = "bientot", libelle = "Montrer aussi les quêtes bientôt disponibles",
       aide = "Les quêtes qui demandent jusqu'à 3 niveaux de plus que toi, en gris clair." },
+    { cle = "tropHaut", libelle = "Cacher les quêtes trop haut niveau",
+      aide = "Les quêtes dont le niveau dépasse trop le tien (titre rouge) sont cachées. Règle l'écart juste en dessous." },
+    { cle = "ecartHaut", type = "nombre", libelle = "Écart de niveau accepté", min = 0, max = 10, pas = 1, dependDe = "tropHaut",
+      format = function(v) return "+" .. v .. " niveaux" end,
+      aide = "Avec +4 au niveau 12, tu vois les quêtes jusqu'au niveau 16." },
+    { cle = "suites", libelle = "Cacher les quêtes d'une suite pas encore débloquée",
+      aide = "Une quête qui demande d'en avoir fait une autre avant est cachée tant que ce n'est pas fait. Décoché : elle est montrée en gris, avec « pas encore débloquée »." },
     { cle = "metiers", libelle = "Cacher les quêtes d'un métier que je n'ai pas",
       aide = "Une quête qui demande un métier ou un niveau de métier que tu n'as pas est cachée." },
     { titre = "Carte" },
