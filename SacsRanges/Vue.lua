@@ -119,7 +119,16 @@ function ns.hauteurVue(plan, colonnes)
   local equiper = plan.aEquiper or 0
   if equiper > 0 then y = y + 16 + equiper * (TAILLE + ECART + 4) + 6 end
   for _, n in ipairs(plan.sections or {}) do
-    if n > 0 then y = y + 16 + math.ceil(n / colonnes) * (TAILLE + ECART) + 6 end
+    if type(n) == "table" then
+      -- Une section découpée en groupes (les composants par extension) : un sous-titre de 14 par groupe.
+      local h = 0
+      for _, k in ipairs(n) do
+        if k > 0 then h = h + 14 + math.ceil(k / colonnes) * (TAILLE + ECART) end
+      end
+      if h > 0 then y = y + 16 + h + 6 end
+    elseif n > 0 then
+      y = y + 16 + math.ceil(n / colonnes) * (TAILLE + ECART) + 6
+    end
   end
   if plan.libre then y = y + 16 + TAILLE + ECART end
   return 58 + y + 30
@@ -172,6 +181,104 @@ end
 function ns.banqueAMontrer(faits)
   faits = faits or {}
   return (faits.vue and faits.option and faits.ouverte and not faits.fermeeMain and (faits.nbCases or 0) > 0) and true or false
+end
+
+-- ---------------------------------------------------------------------------
+-- Les composants par extension (Retail) : le jeu donne à chaque objet le numéro
+-- de son extension (0 = Classique … 11 = Midnight).
+-- ---------------------------------------------------------------------------
+
+ns.EXTENSIONS = { [0] = "Classique", "The Burning Crusade", "Wrath of the Lich King", "Cataclysm",
+  "Mists of Pandaria", "Warlords of Draenor", "Legion", "Battle for Azeroth", "Shadowlands",
+  "Dragonflight", "The War Within", "Midnight" }
+
+function ns.nomExtension(e)
+  return ns.EXTENSIONS[e] or ("Extension " .. tostring(e))
+end
+
+-- « Ancienne » : ni l'extension en cours ni celle d'avant (on y joue encore souvent).
+function ns.estAncienne(e, actuelle)
+  return (e or 0) <= (actuelle or 0) - 2
+end
+
+-- Découpe une liste d'objets déjà triée en groupes { cle, nom, objets, ancienne },
+-- l'extension la plus récente d'abord. regrouper : toutes les anciennes en un seul
+-- groupe (cle = "anciennes"). Rend nil quand le jeu n'a pas d'extension (Forever) :
+-- la section se dessine alors d'un bloc, comme avant.
+function ns.grouperExtensions(liste, actuelle, regrouper)
+  actuelle = tonumber(actuelle) or 0
+  if actuelle <= 0 then return nil end
+  local parCle, cles = {}, {}
+  for _, o in ipairs(liste or {}) do
+    local e = tonumber(o.extension) or 0
+    local ancienne = ns.estAncienne(e, actuelle)
+    local cle = (regrouper and ancienne) and "anciennes" or e
+    if not parCle[cle] then
+      parCle[cle] = { cle = cle, nom = cle == "anciennes" and "Anciennes extensions" or ns.nomExtension(e),
+        objets = {}, ancienne = ancienne, rang = cle == "anciennes" and -1 or e }
+      cles[#cles + 1] = parCle[cle]
+    end
+    local g = parCle[cle]
+    g.objets[#g.objets + 1] = o
+  end
+  table.sort(cles, function(a, b) return a.rang > b.rang end)
+  if parCle.anciennes then ns.trierParExtension(parCle.anciennes.objets) end
+  return cles
+end
+
+-- Dans le groupe « Anciennes extensions », les objets se suivent par extension
+-- (la plus récente d'abord), l'ordre d'arrivée (qualité puis nom) gardé à l'intérieur.
+function ns.trierParExtension(objets)
+  local rangs = {}
+  for i, o in ipairs(objets) do rangs[o] = i end
+  table.sort(objets, function(a, b)
+    local ea, eb = tonumber(a.extension) or 0, tonumber(b.extension) or 0
+    if ea ~= eb then return ea > eb end
+    return rangs[a] < rangs[b]
+  end)
+  return objets
+end
+
+-- Les composants du sac à envoyer en banque : ceux dont l'extension est cochée.
+-- choix[e] = vrai ou faux quand le joueur a tranché ; sinon, cochée si « ancienne ».
+-- Un objet verrouillé (déjà en main, en cours d'échange) est laissé.
+function ns.aDeposer(objets, choix, actuelle)
+  local l = {}
+  choix = choix or {}
+  for _, o in ipairs(objets or {}) do
+    if o.categorie == "compo" and not o.verrou then
+      local e = tonumber(o.extension) or 0
+      local coche = choix[e]
+      if coche == nil then coche = ns.estAncienne(e, actuelle) end
+      if coche then l[#l + 1] = { sac = o.sac, case = o.case, id = o.id, extension = e } end
+    end
+  end
+  return l
+end
+
+-- La phrase de fin d'un dépôt en banque.
+function ns.bilanDepot(faits, destination, lies, laisses, raison)
+  faits, lies, laisses = faits or 0, lies or 0, laisses or 0
+  local function s(n) return n > 1 and "s" or "" end
+  local texte = faits .. " pile" .. s(faits) .. " de composants déposée" .. s(faits) .. " en banque (" .. (destination or "?") .. ")"
+  if lies > 0 then texte = texte .. ", " .. lies .. " liée" .. s(lies) .. " au personnage laissée" .. s(lies) end
+  if laisses > 0 then texte = texte .. ", " .. laisses .. " laissée" .. s(laisses) .. " (verrouillée ou déplacée)" end
+  return texte .. (raison and (". Arrêt : " .. raison) or "") .. "."
+end
+
+-- Combien de composants du sac par extension : { [e] = nombre de piles }, et la liste
+-- des extensions présentes, la plus récente d'abord.
+function ns.compterExtensions(objets)
+  local parExt, liste = {}, {}
+  for _, o in ipairs(objets or {}) do
+    if o.categorie == "compo" then
+      local e = tonumber(o.extension) or 0
+      if not parExt[e] then parExt[e] = 0; liste[#liste + 1] = e end
+      parExt[e] = parExt[e] + 1
+    end
+  end
+  table.sort(liste, function(a, b) return a > b end)
+  return parExt, liste
 end
 
 -- Recherche sans accents ni majuscules : « etoffe » trouve « Étoffe de lin ».
@@ -324,8 +431,8 @@ local banque = creerVue("SacsRangesBanque", "SacsRangesBanque", "SacsRangesBanqu
 banque.fenetre:SetPoint("BOTTOMRIGHT", fenetre, "BOTTOMLEFT", -8, 0)
 
 -- La barre du sac : Ranger, Analyse, recherche.
-local function bouton(texte, largeur, aide, action)
-  local b = CreateFrame("Button", nil, fenetre, "UIPanelButtonTemplate")
+local function bouton(texte, largeur, aide, action, parent)
+  local b = CreateFrame("Button", nil, parent or fenetre, "UIPanelButtonTemplate")
   b:SetSize(largeur, 22)
   b:SetText(texte)
   b:SetScript("OnClick", action)
@@ -512,14 +619,32 @@ end
 
 -- Les sacs de la banque, d'après ce que le jeu sait répondre : les onglets de
 -- banque du personnage (Retail récent, C_Bank), sinon la banque et ses sacs
--- (Forever, Retail ancien). Les onglets de la banque de bataillon et la banque
--- de composants ne sont pas repris : le jeu les garde dans sa propre fenêtre.
-local function sacsBanqueJeu()
-  local onglets
-  if C_Bank and C_Bank.FetchPurchasedBankTabIDs and Enum and Enum.BankType and Enum.BankType.Character then
-    local ok, ids = pcall(C_Bank.FetchPurchasedBankTabIDs, Enum.BankType.Character)
-    if ok and type(ids) == "table" then onglets = ids end
+-- (Forever, Retail ancien). La banque de bataillon (partagée entre les
+-- personnages du compte, Retail) a ses propres onglets : sacsBataillon.
+local function ongletsDe(genre)
+  if C_Bank and C_Bank.FetchPurchasedBankTabIDs and Enum and Enum.BankType and Enum.BankType[genre] then
+    local ok, ids = pcall(C_Bank.FetchPurchasedBankTabIDs, Enum.BankType[genre])
+    if ok and type(ids) == "table" then return ids end
   end
+end
+
+-- Le jeu laisse-t-il voir cette banque ici ? (La banque de bataillon ouverte à
+-- distance ne montre pas celle du personnage.) Sans réponse du jeu : oui.
+local function banqueVisible(genre)
+  if C_Bank and C_Bank.CanViewBank and Enum and Enum.BankType and Enum.BankType[genre] then
+    local ok, r = pcall(C_Bank.CanViewBank, Enum.BankType[genre])
+    if ok then return r and true or false end
+  end
+  return true
+end
+
+local function sacsBataillon()
+  if not banqueVisible("Account") then return {} end
+  return ongletsDe("Account") or {}
+end
+
+local function sacsBanqueJeu()
+  local onglets = ongletsDe("Character")
   local banqueId = (Enum and Enum.BagIndex and Enum.BagIndex.Bank) or BANK_CONTAINER or -1
   return ns.sacsBanque({
     onglets = onglets, banque = banqueId, premierSac = derniersSac() + 1, nbSacs = NUM_BANKBAGSLOTS or 0,
@@ -534,7 +659,7 @@ local function lire(sacs, sansConseils)
       total = total + 1
       local icone, nombre, verrou, qualite, lien, idObjet, estLie, remboursable = infoCase(numero, case)
       if icone and lien then
-        local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, _, _, artisanat = infoObjet(lien)
+        local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, extension, _, artisanat = infoObjet(lien)
         qualite = qualite or q or 1
         local utilisable, raison, texteRaison = true, nil, nil
         if (classe == 2 or classe == 4) and ns.utilisableCase then
@@ -555,6 +680,7 @@ local function lire(sacs, sansConseils)
         objets[#objets + 1] = {
           sac = numero, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite,
           lien = lien, nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins, remboursable = remboursable,
+          extension = extension,
           raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
       else
@@ -571,6 +697,24 @@ end
 -- ---------------------------------------------------------------------------
 
 local aRefaire = false -- une réorganisation attend la fin du combat
+
+-- Le numéro de l'extension en cours (11 = Midnight). Toujours 0 hors Retail
+-- (Forever, interface 16001) : pas d'extensions, rien ne change, pas de bouton « Déposer ».
+local SUR_RETAIL = GetBuildInfo ~= nil and (tonumber((select(4, GetBuildInfo()))) or 0) >= 100000
+local function extensionActuelle()
+  if not SUR_RETAIL then return 0 end
+  local n = LE_EXPANSION_LEVEL_CURRENT
+  if n == nil and GetExpansionLevel then n = GetExpansionLevel() end
+  return tonumber(n) or 0
+end
+ns.extensionActuelle = extensionActuelle
+
+-- Les groupes par extension de la section Composants, ou nil (option décochée, Forever).
+local function groupesCompo(liste)
+  local db = ns.db or {}
+  if db.compoExtension == false or #liste == 0 then return nil end
+  return ns.grouperExtensions(liste, extensionActuelle(), db.compoRegrouper)
+end
 
 -- Pour les autres addons (Marchand auto) : les objets non gris de la section
 -- « À vendre », sans avoir besoin de la fenêtre (marche même si la vue par
@@ -597,7 +741,16 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
   local plan, hauteurMax
   if not avecConseils and UIParent and UIParent.GetHeight then
     plan = { aEquiper = #aEquiper, sections = {}, libre = premiereLibre and true or false }
-    for _, s in ipairs(ns.SECTIONS) do plan.sections[#plan.sections + 1] = #parSection[s.id] end
+    for _, s in ipairs(ns.SECTIONS) do
+      local groupes = s.id == "compo" and groupesCompo(parSection[s.id])
+      if groupes then
+        local n = {}
+        for _, g in ipairs(groupes) do n[#n + 1] = #g.objets end
+        plan.sections[#plan.sections + 1] = n
+      else
+        plan.sections[#plan.sections + 1] = #parSection[s.id]
+      end
+    end
     hauteurMax = (UIParent:GetHeight() or 0) * 0.8
   end
   v.colonnes = ns.colonnesPour(total, plan, hauteurMax)
@@ -670,23 +823,44 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
       t:SetTextColor(s.couleur[1], s.couleur[2], s.couleur[3])
       t:Show()
       y = y + 16
-      for i, o in ipairs(liste) do
-        local b = caseDe(v, o.sac, o.case)
-        if b then
-          b.utilisee = true
-          if not InCombatLockdown() then
-            local col, ligne = (i - 1) % colonnes, math.floor((i - 1) / colonnes)
-            b:ClearAllPoints()
-            b:SetPoint("TOPLEFT", contenu, "TOPLEFT", col * (TAILLE + ECART), -(y + ligne * (TAILLE + ECART)))
+      -- Une grille de cases à partir de y ; avance y de ses rangées.
+      local function grille(objetsGrille)
+        for i, o in ipairs(objetsGrille) do
+          local b = caseDe(v, o.sac, o.case)
+          if b then
+            b.utilisee = true
+            if not InCombatLockdown() then
+              local col, ligne = (i - 1) % colonnes, math.floor((i - 1) / colonnes)
+              b:ClearAllPoints()
+              b:SetPoint("TOPLEFT", contenu, "TOPLEFT", col * (TAILLE + ECART), -(y + ligne * (TAILLE + ECART)))
+            end
+            remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
+            b.raison, b.moinsQue = o.raison, o.moins
+            if o.moins then b.moins:Show() end
+            b:SetAlpha(visible(o) and 1 or 0.2)
+            b:Show()
           end
-          remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
-          b.raison, b.moinsQue = o.raison, o.moins
-          if o.moins then b.moins:Show() end
-          b:SetAlpha(visible(o) and 1 or 0.2)
-          b:Show()
         end
+        y = y + math.ceil(#objetsGrille / colonnes) * (TAILLE + ECART)
       end
-      y = y + math.ceil(#liste / colonnes) * (TAILLE + ECART) + 6
+      local groupes = s.id == "compo" and groupesCompo(liste)
+      if groupes then
+        -- Les composants par extension : un sous-titre par extension, la plus récente d'abord.
+        for _, g in ipairs(groupes) do
+          it = it + 1
+          local st = titreDe(v, it)
+          st:ClearAllPoints()
+          st:SetPoint("TOPLEFT", contenu, "TOPLEFT", 6, -(y + 1))
+          st:SetText(g.nom .. "  |cff888888" .. #g.objets .. "|r")
+          if g.ancienne then st:SetTextColor(0.62, 0.58, 0.50) else st:SetTextColor(0.92, 0.88, 0.78) end
+          st:Show()
+          y = y + 14
+          grille(g.objets)
+        end
+      else
+        grille(liste)
+      end
+      y = y + 6
     end
   end
 
@@ -735,8 +909,47 @@ local function majVue()
   dessiner(sac, sacsPersonnage(), true, "Sacs de " .. (UnitName("player") or "?"), true)
 end
 
-local function majBanque()
-  dessiner(banque, sacsBanqueJeu(), false, "Banque de " .. (UnitName("player") or "?"), false)
+-- La banque a deux onglets quand le jeu donne une banque de bataillon (Retail) :
+-- « Personnage » et « Bataillon ». banque.onglet = "perso" ou "bataillon".
+banque.onglet = "perso"
+
+-- Les sacs de l'onglet montré, et s'il y a une banque de bataillon à proposer.
+local function sacsBanqueCourants()
+  local bataillon = sacsBataillon()
+  if banque.onglet == "bataillon" and #bataillon == 0 then banque.onglet = "perso" end
+  if banque.onglet == "perso" and #bataillon > 0 and not banqueVisible("Character") then banque.onglet = "bataillon" end
+  if banque.onglet == "bataillon" then return bataillon, true end
+  return sacsBanqueJeu(), #bataillon > 0
+end
+
+local majBanque
+local bPerso = bouton("Personnage", 92, "La banque de ce personnage.",
+  function() banque.onglet = "perso"; majBanque() end, banque.fenetre)
+local bBataillon = bouton("Bataillon", 80, "La banque de bataillon, partagée entre tous tes personnages.",
+  function() banque.onglet = "bataillon"; majBanque() end, banque.fenetre)
+bPerso:SetPoint("TOPLEFT", MARGE, -30)
+bBataillon:SetPoint("LEFT", bPerso, "RIGHT", 4, 0)
+bPerso:Hide(); bBataillon:Hide()
+
+majBanque = function()
+  local sacs, aBataillon = sacsBanqueCourants()
+  if banque.aBataillon ~= aBataillon then
+    banque.aBataillon = aBataillon
+    bPerso:SetShown(aBataillon)
+    bBataillon:SetShown(aBataillon)
+    banque.recherche:ClearAllPoints()
+    if aBataillon then
+      banque.recherche:SetPoint("LEFT", bBataillon, "RIGHT", 12, 0)
+    else
+      banque.recherche:SetPoint("TOPLEFT", MARGE, -30)
+    end
+    banque.recherche:SetPoint("RIGHT", banque.fenetre, "RIGHT", -MARGE, 0)
+  end
+  -- L'onglet montré a son bouton grisé.
+  bPerso:SetEnabled(banque.onglet ~= "perso")
+  bBataillon:SetEnabled(banque.onglet ~= "bataillon")
+  dessiner(banque, sacs, false,
+    banque.onglet == "bataillon" and "Banque de bataillon" or ("Banque de " .. (UnitName("player") or "?")), false)
 end
 
 recherche:HookScript("OnTextChanged", majVue)
@@ -822,10 +1035,13 @@ end
 
 local banqueOuverte = false
 
+local majBoutonDepot
+
 local function banqueMaj()
+  if majBoutonDepot then majBoutonDepot() end
   local nbCases = 0
   if vueActive() and banqueOuverte then
-    for _, numero in ipairs(sacsBanqueJeu()) do nbCases = nbCases + (ns.nbCases and ns.nbCases(numero) or 0) end
+    for _, numero in ipairs((sacsBanqueCourants())) do nbCases = nbCases + (ns.nbCases and ns.nbCases(numero) or 0) end
   end
   local montrer = ns.banqueAMontrer({
     vue = vueActive(), option = ns.db and ns.db.banqueCategories, ouverte = banqueOuverte, nbCases = nbCases,
@@ -836,6 +1052,218 @@ local function banqueMaj()
     return
   end
   banque.fenetre:SetShown(montrer)
+end
+
+-- ---------------------------------------------------------------------------
+-- Déposer en banque les composants des anciennes extensions (Retail, banque
+-- ouverte). Le bouton « Déposer » du sac ouvre un petit panneau : une case par
+-- extension présente dans les sacs, la destination (Personnage ou Bataillon),
+-- puis l'addon déplace les piles une par une vers une case libre de la banque,
+-- comme tu le ferais à la souris. Rien en combat ; arrêt si la banque se ferme.
+-- ---------------------------------------------------------------------------
+
+local depot = { file = {}, prises = {}, lignes = {} }
+local prendreCase = (C_Container and C_Container.PickupContainerItem) or PickupContainerItem
+
+local bDeposer = bouton("Déposer", 74,
+  "Envoie en banque les composants des extensions que tu coches. La banque doit être ouverte.",
+  function() if depot.basculerPanneau then depot.basculerPanneau() end end)
+bDeposer:SetPoint("LEFT", bAnalyse, "RIGHT", 4, 0)
+bDeposer:Hide()
+
+majBoutonDepot = function()
+  local montrer = banqueOuverte and extensionActuelle() > 0 and (ns.db and ns.db.compoExtension ~= false) and true or false
+  if montrer ~= bDeposer:IsShown() then
+    bDeposer:SetShown(montrer)
+    recherche:ClearAllPoints()
+    recherche:SetPoint("LEFT", montrer and bDeposer or bAnalyse, "RIGHT", 12, 0)
+    recherche:SetPoint("RIGHT", fenetre, "RIGHT", -MARGE, 0)
+  end
+  if not montrer and depot.panneau then depot.panneau:Hide() end
+end
+
+local function dire(texte)
+  if ns.reglages and ns.reglages.dire then ns.reglages.dire(texte) end
+end
+
+local function nomDestination()
+  return banque.onglet == "bataillon" and "Bataillon" or "Personnage"
+end
+
+-- Un objet lié au personnage ne va pas en banque de bataillon : le jeu le dit.
+local function accepteBataillon(numero, case)
+  if not (C_Bank and C_Bank.IsItemAllowedInBankType and ItemLocation and Enum and Enum.BankType) then return true end
+  local ok, r = pcall(function()
+    return C_Bank.IsItemAllowedInBankType(Enum.BankType.Account, ItemLocation:CreateFromBagAndSlot(numero, case))
+  end)
+  return not ok or r ~= false
+end
+
+local function caseLibreBanque(sacs)
+  for _, numero in ipairs(sacs) do
+    for case = 1, (ns.nbCases and ns.nbCases(numero) or 0) do
+      if not depot.prises[numero * 1000 + case] and not infoCase(numero, case) then return numero, case end
+    end
+  end
+end
+
+local function finDepot(raison)
+  depot.enCours = false
+  bDeposer:SetText("Déposer")
+  local restent = (depot.total or 0) - (depot.faits or 0) - (depot.lies or 0) - (depot.laisses or 0)
+  if raison and restent > 0 then
+    raison = raison .. " (" .. restent .. " pile" .. (restent > 1 and "s restent" or " reste") .. " dans tes sacs)"
+  end
+  dire(ns.bilanDepot(depot.faits, depot.destination, depot.lies, depot.laisses, raison))
+  depot.file, depot.prises = {}, {}
+end
+
+local pasDepot
+local function unPasDepot()
+  if not depot.enCours then return end
+  if not banqueOuverte then return finDepot("la banque s'est fermée") end
+  if InCombatLockdown() then return finDepot("tu es en combat") end
+  if CursorHasItem and CursorHasItem() then return finDepot("tu tiens un objet à la souris") end
+  local o
+  while true do
+    o = table.remove(depot.file, 1)
+    if not o then return finDepot() end
+    local icone, _, verrou, _, _, id = infoCase(o.sac, o.case)
+    if not icone or id ~= o.id or verrou then
+      depot.laisses = depot.laisses + 1
+    elseif depot.versBataillon and not accepteBataillon(o.sac, o.case) then
+      depot.lies = depot.lies + 1
+    else
+      break
+    end
+  end
+  local numero, case = caseLibreBanque(depot.sacs)
+  if not numero then return finDepot("la banque est pleine") end
+  prendreCase(o.sac, o.case)
+  if CursorHasItem and not CursorHasItem() then
+    depot.laisses = depot.laisses + 1
+  else
+    prendreCase(numero, case)
+    if CursorHasItem and CursorHasItem() then
+      if ClearCursor then ClearCursor() end
+      return finDepot("le jeu a refusé un objet")
+    end
+    depot.prises[numero * 1000 + case] = true
+    depot.faits = depot.faits + 1
+  end
+  bDeposer:SetText((depot.faits + depot.laisses + depot.lies) .. "/" .. depot.total)
+  C_Timer.After(0.25, pasDepot)
+end
+-- Une erreur en cours de route ne doit pas laisser le dépôt « en cours » pour toujours.
+pasDepot = function()
+  local ok, erreur = pcall(unPasDepot)
+  if not ok then
+    if depot.enCours then finDepot("erreur de l'addon") end
+    if geterrorhandler then geterrorhandler()(erreur) end
+  end
+end
+
+local function lancerDepot()
+  if depot.enCours then return end
+  if InCombatLockdown() then return dire("pas de dépôt en combat.") end
+  if not banqueOuverte then return dire("ouvre d'abord la banque.") end
+  local objets = lire(sacsPersonnage(), true)
+  local file = ns.aDeposer(objets, ns.db and ns.db.depotExtensions, extensionActuelle())
+  if #file == 0 then return dire("rien à déposer : coche au moins une extension.") end
+  local sacs = sacsBanqueCourants()
+  depot.file, depot.prises, depot.sacs = file, {}, sacs
+  depot.total, depot.faits, depot.laisses, depot.lies = #file, 0, 0, 0
+  depot.versBataillon = banque.onglet == "bataillon"
+  depot.destination = nomDestination()
+  depot.enCours = true
+  if depot.panneau then depot.panneau:Hide() end
+  pasDepot()
+end
+
+local function creerPanneauDepot()
+  local f = CreateFrame("Frame", "SacsRangesDepot", fenetre, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  f:SetSize(250, 100)
+  f:SetPoint("BOTTOMRIGHT", fenetre, "TOPRIGHT", 0, 4)
+  f:SetFrameStrata("HIGH")
+  f:EnableMouse(true)
+  if f.SetBackdrop then
+    f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    f:SetBackdropColor(0.07, 0.06, 0.045, 0.97)
+    f:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
+  end
+  f.titre = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.titre:SetPoint("TOPLEFT", MARGE, -10)
+  f.titre:SetText("Déposer en banque")
+  local fermer = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+  fermer:SetPoint("TOPRIGHT", 2, 2)
+  f.vers = bouton("Vers : Personnage", 226,
+    "La banque qui reçoit les composants. Un objet lié au personnage ne part jamais en banque de bataillon.",
+    function()
+      banque.onglet = banque.onglet == "bataillon" and "perso" or "bataillon"
+      banqueMaj()
+      depot.majPanneau()
+    end, f)
+  f.vers:SetPoint("TOPLEFT", MARGE, -30)
+  f.lancer = bouton("Déposer", 226, "Déplace les piles cochées vers la banque, une par une.", lancerDepot, f)
+  f:Hide()
+  return f
+end
+
+local function ligneDepot(f, i)
+  if not depot.lignes[i] then
+    local c = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    c:SetSize(24, 24)
+    c.libelle = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    c.libelle:SetPoint("LEFT", c, "RIGHT", 2, 0)
+    c:SetScript("OnClick", function(self)
+      if not ns.db then return end
+      ns.db.depotExtensions = ns.db.depotExtensions or {}
+      ns.db.depotExtensions[self.extension] = self:GetChecked() and true or false
+      depot.majPanneau()
+    end)
+    depot.lignes[i] = c
+  end
+  return depot.lignes[i]
+end
+
+function depot.majPanneau()
+  local f = depot.panneau
+  if not (f and f:IsShown()) then return end
+  local objets = lire(sacsPersonnage(), true)
+  local parExt, liste = ns.compterExtensions(objets)
+  local actuelle = extensionActuelle()
+  local choix = ns.db and ns.db.depotExtensions or {}
+  local _, aBataillon = sacsBanqueCourants()
+  f.vers:SetShown(aBataillon)
+  f.vers:SetText("Vers : " .. nomDestination())
+  local y = aBataillon and 58 or 32
+  for i, e in ipairs(liste) do
+    local c = ligneDepot(f, i)
+    c.extension = e
+    local coche = choix[e]
+    if coche == nil then coche = ns.estAncienne(e, actuelle) end
+    c:SetChecked(coche)
+    c:ClearAllPoints()
+    c:SetPoint("TOPLEFT", MARGE - 2, -y)
+    c.libelle:SetText(ns.nomExtension(e) .. "  |cff888888" .. parExt[e] .. "|r")
+    c:Show(); c.libelle:Show()
+    y = y + 22
+  end
+  for i = #liste + 1, #depot.lignes do depot.lignes[i]:Hide(); depot.lignes[i].libelle:Hide() end
+  local n = #ns.aDeposer(objets, choix, actuelle)
+  f.lancer:ClearAllPoints()
+  f.lancer:SetPoint("TOPLEFT", MARGE, -(y + 6))
+  f.lancer:SetText(#liste == 0 and "Aucun composant dans tes sacs" or ("Déposer " .. n .. " pile" .. (n > 1 and "s" or "")))
+  f.lancer:SetEnabled(n > 0)
+  f:SetHeight(y + 6 + 22 + 12)
+end
+
+function depot.basculerPanneau()
+  if depot.enCours then return end
+  depot.panneau = depot.panneau or creerPanneauDepot()
+  depot.panneau:SetShown(not depot.panneau:IsShown())
+  depot.majPanneau()
 end
 
 -- Bouton des réglages : montre le sac par catégories, ou prévient qu'il est coupé.
@@ -870,7 +1298,8 @@ local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "PLAYER_MONEY", "PLAYER_REGEN_ENABLED",
   "QUEST_ACCEPTED", "QUEST_REMOVED", "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGIN",
   "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
-  "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED" }) do
+  "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED",
+  "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", "BANK_TABS_CHANGED" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 local enAttente = false
@@ -882,13 +1311,15 @@ local function programmer()
     enAttente = false
     majVue()
     banqueMaj()
+    if not depot.enCours then depot.majPanneau() end
   end)
 end
 
 -- Le guichet de banque, pour les événements « interaction » de Retail récent.
 local function estBanquier(type)
   local t = Enum and Enum.PlayerInteractionType
-  return t and type ~= nil and type == t.Banker
+  -- AccountBanker : la banque de bataillon ouverte seule (à distance).
+  return t and type ~= nil and (type == t.Banker or (t.AccountBanker ~= nil and type == t.AccountBanker))
 end
 
 ecouteur:SetScript("OnEvent", function(_, evenement, arg1)

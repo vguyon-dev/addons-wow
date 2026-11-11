@@ -65,6 +65,18 @@ Avant de commencer :
 - [ ] Barre Ranger, Analyse et Banque collée au sac du jeu, quand le sac rangé est décoché.
 - [ ] Panneau d'analyse (`/sr`) : fond sombre, bordure dorée, titre doré avec sa croix ; la croix et Échap le ferment ; il se déplace toujours à la souris.
 
+Composants par extension (0.14.0, Retail seulement, rien de testé en jeu) :
+
+- [ ] Sac par catégories : la section Composants a un sous-titre par extension, Midnight en tête, avec le bon nombre d'objets ; un composant ancien (minerai de cuivre, tissu de lin) est bien sous « Classique ».
+- [ ] Option « Regrouper les anciennes extensions » : Midnight et The War Within gardent leur sous-titre, le reste passe sous « Anciennes extensions ».
+- [ ] Option « Composants rangés par extension » décochée : la section Composants redevient un seul bloc. Sur Forever : un seul bloc, pas de bouton « Déposer ».
+- [ ] Banque ouverte, « Banque rangée par catégories » cochée : deux boutons « Personnage » et « Bataillon » en haut de la banque rangée ; « Bataillon » montre la banque de bataillon, avec les mêmes sous-titres par extension.
+- [ ] Clic droit sur un objet de l'onglet Bataillon : le jeu le met dans tes sacs, sans message « fonction protégée ».
+- [ ] Banque ouverte : le bouton « Déposer » apparaît sur le sac ; son panneau liste les extensions présentes, les anciennes cochées d'office ; le nombre de piles sur le bouton suit les cases.
+- [ ] « Déposer N piles » vers Personnage : les piles partent une par une, le bouton compte (3/12), bilan dans le chat ; aucun message « fonction protégée » ni objet resté collé à la souris.
+- [ ] Même chose vers Bataillon ; un composant lié au personnage reste dans le sac et le bilan le dit.
+- [ ] Fermer la banque pendant un dépôt : arrêt net, bilan « la banque s'est fermée ». Banque pleine : arrêt, bilan « la banque est pleine ».
+
 ## Marchand auto : équipement lié vendu (nouveau)
 
 - [ ] Option « Vendre aussi l'équipement lié que tu ne peux pas porter » : grisée si Sacs rangés est désactivé ou absent, cochable sinon (coupée par défaut).

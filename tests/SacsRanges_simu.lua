@@ -676,4 +676,67 @@ verifie("conseils (banque) : tout reste rangé par section", 3, #autB)
 local partsB = ns.repartir(autB)
 verifie("banque : sections par qualité puis nom", "Heaume,Anneau,Bottes",
   partsB.equip[1].nom .. "," .. partsB.equip[2].nom .. "," .. partsB.equip[3].nom)
+
+-- Composants par extension (Retail) --------------------------------------------
+do
+  local function o(nom, e, sac, case, extra)
+    local t = { nom = nom, extension = e, sac = sac or 0, case = case or 1, id = case, categorie = "compo", qualite = 1 }
+    for k, v in pairs(extra or {}) do t[k] = v end
+    return t
+  end
+  local liste = { o("Bismuth", 10, 0, 1), o("Lin", 0, 0, 2), o("Minerai solaire", 11, 0, 3), o("Rêverie", 6, 0, 4),
+    o("Saronite", 2, 0, 5), o("Soie d'aube", 11, 0, 6), o("Sans numéro", nil, 0, 7) }
+  local function noms(groupes)
+    local l = {}
+    for _, g in ipairs(groupes) do l[#l + 1] = g.nom .. "=" .. #g.objets end
+    return table.concat(l, ",")
+  end
+  verifie("extensions : nom connu", "Midnight", ns.nomExtension(11))
+  verifie("extensions : nom Classique", "Classique", ns.nomExtension(0))
+  verifie("extensions : numéro inconnu", "Extension 14", ns.nomExtension(14))
+  verifie("extensions : en cours pas ancienne", false, ns.estAncienne(11, 11))
+  verifie("extensions : celle d'avant pas ancienne", false, ns.estAncienne(10, 11))
+  verifie("extensions : deux avant, ancienne", true, ns.estAncienne(9, 11))
+  verifie("extensions : Forever, pas de groupes", nil, ns.grouperExtensions(liste, 0))
+  verifie("extensions : sans numéro d'extension en cours, pas de groupes", nil, ns.grouperExtensions(liste, nil))
+  local g = ns.grouperExtensions(liste, 11, false)
+  verifie("extensions : la plus récente d'abord, sans numéro = Classique",
+    "Midnight=2,The War Within=1,Legion=1,Wrath of the Lich King=1,Classique=2", noms(g))
+  verifie("extensions : ordre gardé dans un groupe", "Minerai solaire,Soie d'aube", g[1].objets[1].nom .. "," .. g[1].objets[2].nom)
+  verifie("extensions : groupe en cours pas ancien", false, g[1].ancienne)
+  verifie("extensions : groupe Legion ancien", true, g[3].ancienne)
+  local r = ns.grouperExtensions(liste, 11, true)
+  verifie("extensions : anciennes regroupées, à la fin", "Midnight=2,The War Within=1,Anciennes extensions=4", noms(r))
+  verifie("extensions : regroupées, la plus récente d'abord", "Rêverie,Saronite,Lin,Sans numéro",
+    r[3].objets[1].nom .. "," .. r[3].objets[2].nom .. "," .. r[3].objets[3].nom .. "," .. r[3].objets[4].nom)
+  verifie("extensions : liste vide", 0, #ns.grouperExtensions({}, 11))
+
+  -- La hauteur de la fenêtre avec une section découpée en groupes.
+  verifie("hauteur : section en groupes", 58 + (16 + (14 + 41) + (14 + 2 * 41) + 6) + 30,
+    ns.hauteurVue({ sections = { { 3, 12, 0 } } }, 10))
+  verifie("hauteur : groupes tous vides, rien", 58 + 30, ns.hauteurVue({ sections = { { 0, 0 } } }, 10))
+  verifie("hauteur : groupes et section simple", 58 + (16 + 41 + 6) + (16 + 14 + 41 + 6) + 30,
+    ns.hauteurVue({ sections = { 4, { 2 } } }, 10))
+
+  -- Ce qui part en banque.
+  local sacLu = { o("Bismuth", 10, 0, 1), o("Lin", 0, 0, 2), o("Minerai solaire", 11, 0, 3), o("Rêverie", 6, 1, 4),
+    o("Verrouillé", 6, 1, 5, { verrou = true }), o("Potion", 6, 1, 6, { categorie = "conso" }) }
+  local function cases(l)
+    local t = {}
+    for _, x in ipairs(l) do t[#t + 1] = x.sac .. ":" .. x.case end
+    return table.concat(t, ",")
+  end
+  verifie("dépôt : par défaut, les anciennes seulement", "0:2,1:4", cases(ns.aDeposer(sacLu, nil, 11)))
+  verifie("dépôt : choix du joueur (TWW oui, Classique non)", "0:1,1:4", cases(ns.aDeposer(sacLu, { [10] = true, [0] = false }, 11)))
+  verifie("dépôt : tout décoché", "", cases(ns.aDeposer(sacLu, { [0] = false, [6] = false }, 11)))
+  verifie("dépôt : rien à lire", 0, #ns.aDeposer(nil, nil, 11))
+  verifie("dépôt : l'objet garde son numéro", 4, ns.aDeposer(sacLu, nil, 11)[2].id)
+  local parExt, presentes = ns.compterExtensions(sacLu)
+  verifie("dépôt : extensions présentes, la plus récente d'abord", "11,10,6,0", table.concat(presentes, ","))
+  verifie("dépôt : piles par extension (verrouillée comptée, potion non)", 2, parExt[6])
+  verifie("dépôt : bilan simple", "1 pile de composants déposée en banque (Personnage).", ns.bilanDepot(1, "Personnage", 0, 0))
+  verifie("dépôt : bilan complet",
+    "12 piles de composants déposées en banque (Bataillon), 2 liées au personnage laissées, 1 laissée (verrouillée ou déplacée). Arrêt : la banque est pleine.",
+    ns.bilanDepot(12, "Bataillon", 2, 1, "la banque est pleine"))
+end
 os.exit(ok and 0 or 1)

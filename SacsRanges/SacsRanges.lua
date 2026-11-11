@@ -18,6 +18,8 @@ local DEFAUTS = {
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
   banqueCategories = false, -- la banque aussi rangée en sections, dans une seconde fenêtre (dépend de vueCategories)
+  compoExtension = true,    -- section Composants découpée par extension (Retail ; sans effet sur Forever)
+  compoRegrouper = false,   -- les anciennes extensions en un seul groupe
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
   conseilsBulles = true,   -- « Mieux pour <spé> » dans toutes les bulles d'objets
@@ -505,7 +507,11 @@ ns.reglages = ns.creerReglages({
     { cle = "vueCategories", libelle = "Sac rangé par catégories (remplace les sacs du jeu)",
       aide = "Un seul sac en sections : Équipement, Consommables, Composants, Métiers, Quête, Divers, À vendre. Décoché : les sacs du jeu reviennent." },
     { cle = "banqueCategories", libelle = "Banque rangée par catégories", dependDe = "vueCategories",
-      aide = "À l'ouverture de la banque, une seconde fenêtre à gauche du sac montre son contenu dans les mêmes sections. Clic droit sur un objet : le jeu le met dans tes sacs. La fenêtre de banque du jeu reste toujours visible." },
+      aide = "À l'ouverture de la banque, une seconde fenêtre à gauche du sac montre son contenu dans les mêmes sections. Clic droit sur un objet : le jeu le met dans tes sacs. La fenêtre de banque du jeu reste toujours visible. Sur Retail, deux onglets : Personnage et Bataillon." },
+    { cle = "compoExtension", libelle = "Composants rangés par extension (Retail)", dependDe = "vueCategories",
+      aide = "Dans la section Composants du sac et de la banque : un sous-titre par extension (Midnight, The War Within… Classique), la plus récente d'abord. Banque ouverte, le bouton « Déposer » du sac envoie en banque les composants des extensions que tu coches. Sans effet sur Forever." },
+    { cle = "compoRegrouper", libelle = "Regrouper les anciennes extensions en un seul groupe", dependDe = "vueCategories",
+      aide = "L'extension en cours et celle d'avant gardent leur sous-titre ; toutes les autres vont sous « Anciennes extensions »." },
     { cle = "apparenceWow", libelle = "Garder le cadre du jeu (sinon le nouveau visuel)", dependDe = "vueCategories",
       aide = "Mêmes sections, recherche et boutons ; seule l'apparence change." },
     { cle = "conseils", libelle = "Section « À équiper » et flèche verte", dependDe = "vueCategories",
