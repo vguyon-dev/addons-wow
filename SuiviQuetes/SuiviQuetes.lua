@@ -1355,6 +1355,11 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
     majObjets()
   elseif evenement == "PLAYER_ENTERING_WORLD" or evenement == "ZONE_CHANGED_NEW_AREA" then
     appliquerSuiviJeu()
+    -- Sonde (voir noterGenres) : on demande au jeu les quêtes à prendre de la zone, la réponse arrive plus tard.
+    if C_QuestLine and C_QuestLine.RequestQuestLinesForMap and C_Map and C_Map.GetBestMapForUnit then
+      local okCarte, carte = pcall(C_Map.GetBestMapForUnit, "player")
+      if okCarte and type(carte) == "number" then pcall(C_QuestLine.RequestQuestLinesForMap, carte) end
+    end
   end
   demander()
 end)
@@ -1374,6 +1379,28 @@ noterGenres = function(silencieux)
   if not db then return end
   local quetes = collecter(true) -- sans les filtres d'affichage : on veut tout voir
   db.diagnostic = { date = date and date("%Y-%m-%d %H:%M") or "", lignes = {} }
+  -- Sonde : le jeu sait-il dire quelles quêtes sont À PRENDRE sur la carte ? (pour un futur affichage
+  -- des quêtes disponibles). On note ce qu'il renvoie pour la zone du joueur, sans rien afficher.
+  pcall(function()
+    local s = { api = (C_QuestLine and C_QuestLine.GetAvailableQuestLines) and "oui" or "non", quetes = {} }
+    db.diagnosticCarte = s
+    local carte = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+    s.carte = carte
+    if C_Minimap and C_Minimap.IsTrackingHiddenQuests then s.suiviBasNiveau = tostring(C_Minimap.IsTrackingHiddenQuests()) end
+    if s.api ~= "oui" or type(carte) ~= "number" then return end
+    local liste = C_QuestLine.GetAvailableQuestLines(carte)
+    s.nombre = type(liste) == "table" and #liste or -1
+    for i = 1, math.min(type(liste) == "table" and #liste or 0, 25) do
+      local q = liste[i]
+      s.quetes[i] = string.format("%s (n° %s) x=%.3f y=%.3f cachee=%s journaliere=%s importante=%s enCours=%s",
+        tostring(q.questName), tostring(q.questID), tonumber(q.x) or -1, tonumber(q.y) or -1,
+        tostring(q.isHidden), tostring(q.isDaily), tostring(q.isImportant), tostring(q.inProgress))
+    end
+    if C_QuestLine.GetForceVisibleQuests then
+      local forcees = C_QuestLine.GetForceVisibleQuests(carte)
+      s.forcees = type(forcees) == "table" and #forcees or -1
+    end
+  end)
   if #quetes == 0 then if not silencieux then dire("aucune quête suivie à examiner.") end return end
   if not silencieux then dire("ce que le jeu dit de tes quêtes suivies (" .. #quetes .. ") :") end
   local function v(x) if x == nil then return "-" end return tostring(x) end
