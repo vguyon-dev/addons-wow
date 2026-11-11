@@ -738,7 +738,7 @@ verifie("épingle : accrochée au coin haut gauche de la toile", "CENTER,TOPLEFT
 verifieProche("épingle : position x (0,5 de 1000)", 500, p1._pt[4])
 verifieProche("épingle : position y (0,6333 de 667, vers le bas)", -(1900 / 3000) * 667, p1._pt[5])
 verifie("épingle : taille par défaut", "20,20", p1._w .. "," .. p1._h)
-verifie("épingle : niveau de cadre au-dessus de la toile", JEU.toile._niveau + 2000, p1._niveau)
+verifie("épingle : niveau de cadre au-dessus de la toile", JEU.toile._niveau + 7000, p1._niveau)
 verifie("épingle : le « ! » de quête", "Interface\\GossipFrame\\AvailableQuestIcon", p1.image._tex)
 verifie("épingle : pas grisée", false, p1.image._desat)
 verifie("épingle : alpha plein", 1, p1._alpha)
