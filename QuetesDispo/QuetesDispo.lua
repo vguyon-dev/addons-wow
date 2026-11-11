@@ -832,7 +832,9 @@ local function dessiner(liste, carte, toile)
     local p = prendreEpingle(i, toile)
     p.donnees = { carte = carte, x = e.x, y = e.y, quetes = e.quetes, grise = e.grise }
     p:SetSize(taille, taille)
-    p:SetFrameLevel(toile:GetFrameLevel() + 2000) -- au-dessus des zones bleues
+    -- Tout en haut de la carte : à +2000, les zones bleues des quêtes en cours passaient encore par-dessus
+    -- et les « ! » y paraissaient effacés (capture du 11/11). Le jeu plafonne le niveau à 10000.
+    p:SetFrameLevel(math.min(toile:GetFrameLevel() + 7000, 9990))
     p.image:SetDesaturated(e.grise and true or false)
     p:SetAlpha(e.grise and 0.6 or 1)
     p.nombre:SetText(#e.quetes > 1 and tostring(#e.quetes) or "")
