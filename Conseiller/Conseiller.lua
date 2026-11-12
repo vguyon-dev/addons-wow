@@ -246,7 +246,20 @@ end
 
 -- Le jeu laisse-t-il acheter un rang de ce nœud maintenant (palier atteint, point à dépenser) ?
 -- true / false, ou nil quand le jeu ne le dit pas (on essaiera).
+-- Les points libres de l'arbre de la configuration (nil si le jeu ne le dit pas).
+local function pointsLibresArbre(configID)
+  if not (C_Traits.GetConfigInfo and C_Traits.GetTreeCurrencyInfo) then return nil end
+  local okC, c = pcall(C_Traits.GetConfigInfo, configID)
+  local arbre = okC and type(c) == "table" and type(c.treeIDs) == "table" and c.treeIDs[1]
+  if not arbre or ns.estSecret(arbre) then return nil end
+  local okD, devises = pcall(C_Traits.GetTreeCurrencyInfo, configID, arbre, false)
+  if not okD then return nil end
+  return ns.pointsLibres(devises)
+end
+
 local function peutAcheter(configID, nodeID)
+  -- Aucun point libre : rien n'est achetable, même si le nœud dit le contraire (voir ns.pointsLibres).
+  if pointsLibresArbre(configID) == 0 then return false end
   local ok, n = pcall(C_Traits.GetNodeInfo, configID, nodeID)
   if not ok or type(n) ~= "table" or ns.estSecret(n) then return nil end
   if n.canPurchaseRank == false or n.isAvailable == false then return false end

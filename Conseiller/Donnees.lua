@@ -1026,6 +1026,9 @@ D.ROTATIONS = {
       E("BALAYAGE", "En ours : Balayage quand 2 monstres ou plus sont sur toi", PRET, "ennemisProches>=2"),
       E("LACERATION", "En ours : Lacération, dès qu'elle est prête", PRET),
       E("MUTILER", "En ours : Mutiler, dès qu'il est prêt (cible seule)", PRET),
+      -- Vu en jeu le 12/11 (druide niveau 3) : sans forme animale, la liste n'avait plus rien pour frapper.
+      -- En forme, Colère n'est pas utilisable : elle est sautée toute seule.
+      E("COLERE", "Colère tant que tu n'as pas de forme animale (ou hors forme)", PRET),
     },
     gardien = {
       U("ECORCE", "Écorce si tu es à moins de 50 % de vie", PRET, VIE_MOI(50)),

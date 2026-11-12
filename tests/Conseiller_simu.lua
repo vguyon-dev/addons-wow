@@ -283,6 +283,12 @@ verifie("prochain talent : le palier atteint, elle redevient la prochaine", 102,
 achetable[102] = nil -- le jeu ne dit rien (nil) : on essaie
 verifie("prochain talent : achat inconnu (nil), on essaie", 102, (ns.prochainNoeud(suiv, rangT, peutT) or {}).nodeID)
 verifie("prochain talent : sans fonction d'achat, comme avant", 102, (ns.prochainNoeud(suiv, rangT) or {}).nodeID)
+-- Points libres (vu en jeu le 12/11 : canPurchaseRank vrai sans aucun point).
+verifie("points libres : aucun", 0, ns.pointsLibres({ { traitCurrencyID = 3820, quantity = 0, spent = 0 } }))
+verifie("points libres : somme de deux devises", 3, ns.pointsLibres({ { quantity = 1 }, { quantity = 2 } }))
+verifie("points libres : le jeu ne dit rien", nil, ns.pointsLibres({}))
+verifie("points libres : pas une table", nil, ns.pointsLibres(nil))
+verifie("points libres : quantité absente", nil, ns.pointsLibres({ { spent = 4 } }))
 
 -- Conditions ajoutées : points de combo, et « absent » pour un sort inconnu.
 local apiCombo = { pointsCombo = function() return 4 end }

@@ -253,6 +253,21 @@ function ns.resoudreBuild(build, index)
   return res
 end
 
+-- Les points de talent encore libres, d'après C_Traits.GetTreeCurrencyInfo (somme des « quantity ») ;
+-- nil quand le jeu ne dit rien. Vu en jeu le 12/11 (Forever, druide niveau 3) : canPurchaseRank est vrai
+-- sur 6 nœuds alors qu'aucun point n'est libre (quantity 0) ; sans ce contrôle, un talent était annoncé
+-- comme à prendre tout de suite.
+function ns.pointsLibres(devises)
+  if type(devises) ~= "table" or #devises == 0 then return nil end
+  local n, lu = 0, false
+  for _, d in ipairs(devises) do
+    if type(d) == "table" and type(d.quantity) == "number" and not secret(d.quantity) then
+      n, lu = n + d.quantity, true
+    end
+  end
+  return lu and n or nil
+end
+
 -- Le prochain talent à prendre : la première entrée dont le rang voulu n'est pas atteint ET que le jeu
 -- laisse acheter maintenant (palier atteint, point disponible) ; sinon on passe à la suivante.
 -- rangDe(nodeID, entrée) rend le rang pris, ou nil si le nœud n'existe pas dans l'arbre (sauté) ;

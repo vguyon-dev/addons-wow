@@ -11,6 +11,8 @@ Avant de commencer :
 
 ## Vérifié en jeu le 12/11/2026 (Forever, druide niveau 3, essais pilotés par Claude)
 
+Après-midi du 12/11 : fenêtre de réglages commune (engrenage, clic droit, Maj+clic, recherche, curseurs, partage des réglages), Suivi des quêtes (clic, bulle, rangement, repli), Tenues (enregistrer, /tenue com, supprimer), Conseiller (6 onglets ; corrigé en 0.3.1 : talent annoncé « à prendre » sans point libre, et druide sans forme sans sort d'attaque), GPS (balise, flèche verte, arrivée, clic droit) et trois panneaux sombres cochés plus bas. Piège de l'outil : un clic instantané n'est pas toujours pris par le jeu (engrenage), un appui de 0,15 s l'est. Barres de vie et Butin rapide attendent une quête de monstres.
+
 Aucune erreur des addons dans BugGrabber pendant toute la série.
 
 - [x] Fenêtres déplaçables : personnage, grimoire, carte, options, menu du jeu se déplacent par leur barre de titre (après le correctif 0.1.4 : poignée sur la couche au-dessus de la fenêtre).
@@ -37,32 +39,32 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 
 ## La fenêtre de réglages commune (refaite le 10/11)
 
-- [ ] Clic sur l'engrenage de la minimap : la fenêtre « Addons de Valentin » s'ouvre, sans erreur. Échap la ferme.
-- [ ] À gauche : les 18 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
-- [ ] Clic droit sur un addon de la liste : il s'active ou se coupe, le point change de couleur.
-- [ ] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs ou Sacs rangés : son panneau s'ouvre.
-- [ ] En-tête d'une page : icône, nom, description, et l'interrupteur général « Activé / Coupé ».
-- [ ] Les onglets : un par section ; l'onglet choisi est souligné en doré. Sacs rangés et Quêtes auto en ont beaucoup : ils passent sur deux lignes sans se chevaucher.
-- [ ] Les interrupteurs basculent (vert à droite = activé) et l'effet est immédiat.
-- [ ] Addon coupé : ses options sont grisées. Une option qui dépend d'une autre est grisée tant que l'autre est coupée.
-- [ ] Les curseurs (taille de la flèche du GPS, écart de niveau de Sacs rangés) : glisser, molette, valeur affichée.
+- [x] Clic sur l'engrenage de la minimap : la fenêtre « Addons de Valentin » s'ouvre, sans erreur. Échap la ferme.
+- [x] À gauche : les 18 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
+- [x] Clic droit sur un addon de la liste : il s'active ou se coupe, le point change de couleur.
+- [x] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs ou Sacs rangés : son panneau s'ouvre.
+- [x] En-tête d'une page : icône, nom, description, et l'interrupteur général « Activé / Coupé ».
+- [x] Les onglets : un par section ; l'onglet choisi est souligné en doré. Sacs rangés et Quêtes auto en ont beaucoup : ils passent sur deux lignes sans se chevaucher.
+- [x] Les interrupteurs basculent (vert à droite = activé) et l'effet est immédiat.
+- [x] Addon coupé : ses options sont grisées. Une option qui dépend d'une autre est grisée tant que l'autre est coupée.
+- [x] Les curseurs (taille de la flèche du GPS, écart de niveau de Sacs rangés) : glisser, molette, valeur affichée.
 - [ ] Une aide sur plusieurs lignes ne chevauche pas l'option suivante.
 - [ ] Un onglet long défile à la molette, avec sa barre de défilement.
 - [ ] Les boutons d'action en bas de la page (Ranger maintenant, Balise ici, Choisir la touche…).
 - [ ] Les onglets de listes : Marchand auto « Listes », Butin rapide « Objets ignorés », Quêtes auto « Listes », GPS « Balises », Familier « Nourriture », Carnet « Sessions », Métiers auto « Outils », Montures « Touche », Rapport d'erreurs « En direct ».
 - [ ] Glisser un objet du sac dans une liste, le retirer avec la croix.
-- [ ] Recherche en haut : taper « fleche » liste les réglages de plusieurs addons ; un clic mène au bon addon et au bon onglet.
-- [ ] Les commandes (/sr options, /gps, /qa…) ouvrent la fenêtre directement sur le bon addon.
+- [x] Recherche en haut : taper « fleche » liste les réglages de plusieurs addons ; un clic mène au bon addon et au bon onglet.
+- [x] Les commandes (/sr options, /gps, /qa…) ouvrent la fenêtre directement sur le bon addon.
 - [ ] Échap > Options > AddOns : le bouton « Ouvrir les réglages » marche aussi.
 - [ ] Tout en haut de la liste de gauche : « Quoi de neuf », sans point vert ni rouge, avec l'icône d'une note ; les addons sont en dessous, un peu plus bas.
 - [ ] À la première connexion après la mise à jour : un seul message dans le chat « Addons de Valentin : il y a du nouveau… » (pas 17), quelques secondes après l'arrivée dans le jeu, et une pastille dorée sur « Quoi de neuf » (et la ligne « Il y a du nouveau » dans la bulle de l'engrenage de la minimap).
 - [ ] Clic sur « Quoi de neuf » : les nouveautés s'affichent dans un cadre qui défile à la molette, les plus récentes en premier, marquées « [nouveau] » (toutes, à la toute première mise à jour, quand aucune date vue n'existe) ; la pastille disparaît.
 - [ ] `/reload` : plus de message, plus de pastille. Les nouveautés s'ouvrent toujours quand on clique sur l'entrée.
-- [ ] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas. Le cadre grandit avec le texte et se fait défiler à la molette, sans couper la fin.
-- [ ] Changer un réglage (par exemple la taille de la flèche du GPS), coller l'ancien texte dans le second cadre, « Appliquer » : message vert « N réglage(s) appliqué(s) dans M addon(s) », et le réglage revient à l'ancienne valeur tout de suite, sans `/reload`.
-- [ ] Texte abîmé : retirer le début « VA1; » ou couper le texte au milieu d'un réglage, « Appliquer » : message rouge clair, rien n'est changé. Cadre vide : « Colle d'abord le texte reçu. »
+- [x] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas. Le cadre grandit avec le texte et se fait défiler à la molette, sans couper la fin.
+- [x] Changer un réglage (par exemple la taille de la flèche du GPS), coller l'ancien texte dans le second cadre, « Appliquer » : message vert « N réglage(s) appliqué(s) dans M addon(s) », et le réglage revient à l'ancienne valeur tout de suite, sans `/reload`.
+- [x] Texte abîmé : retirer le début « VA1; » ou couper le texte au milieu d'un réglage, « Appliquer » : message rouge clair, rien n'est changé. Cadre vide : « Colle d'abord le texte reçu. »
 - [ ] Les listes (objets ignorés de Butin rapide, balises du GPS, courses de Métiers auto) ne bougent pas après « Appliquer ».
-- [ ] En haut à droite de la page de chaque addon, sous l'interrupteur général : « Réglages propres à ce personnage » avec son petit interrupteur (bulle d'aide au survol), sans chevaucher la description ni les onglets (Sacs rangés et Quêtes auto : onglets sur deux lignes).
+- [x] En haut à droite de la page de chaque addon, sous l'interrupteur général : « Réglages propres à ce personnage » avec son petit interrupteur (bulle d'aide au survol), sans chevaucher la description ni les onglets (Sacs rangés et Quêtes auto : onglets sur deux lignes).
 - [ ] Activer l'interrupteur sur un addon, changer un réglage, puis se connecter avec un autre personnage : l'autre personnage garde les réglages communs. Revenir sur le premier : il retrouve les siens. Couper l'interrupteur : il retrouve ceux du compte.
 - [ ] Carnet de session et Butin rapide (qui ont aussi une sauvegarde par personnage) : session, historique et bilan de farm toujours là après la mise à jour, interrupteur « propres à ce personnage » sans effet sur eux.
 - [ ] Au premier lancement après la mise à jour, aucun réglage n'a changé sur aucun personnage (rien ne bouge tant qu'on n'active pas l'interrupteur).
@@ -143,13 +145,13 @@ Composants par extension (0.14.0, Retail seulement, rien de testé en jeu) :
 
 ## GPS (nouveau)
 
-- [ ] `/gps etat` (ou la ligne « En ce moment » des réglages) dit ce que suit la flèche, ou pourquoi elle est cachée.
-- [ ] `/way 45.2 67.8 Test` : la flèche apparaît, avec le titre, la distance et le temps restant quand tu avances.
-- [ ] La flèche tourne dans le bon sens et devient verte quand tu marches droit vers la balise.
+- [x] `/gps etat` (ou la ligne « En ce moment » des réglages) dit ce que suit la flèche, ou pourquoi elle est cachée.
+- [x] `/way 45.2 67.8 Test` : la flèche apparaît, avec le titre, la distance et le temps restant quand tu avances.
+- [x] La flèche tourne dans le bon sens et devient verte quand tu marches droit vers la balise.
 - [ ] `/way Hurlevent 60 70` depuis Elwynn : la flèche montre une balise dans une autre zone.
 - [ ] Ctrl + clic droit sur la carte du monde : une balise apparaît à cet endroit.
 - [ ] L'épingle du jeu (carte et minimap) suit la balise suivie.
-- [ ] Arrivé à moins de 10 m : un son, la balise disparaît, la suivante prend le relais.
+- [x] Arrivé à moins de 10 m : un son, la balise disparaît, la suivante prend le relais.
 - [ ] La flèche est grosse au départ ; le curseur « Taille de la flèche » (60 à 300 %) la change aussitôt.
 - [ ] Clic droit sur la flèche : la balise est retirée. Glisser la flèche, puis « Replacer la flèche ».
 - [ ] Réglages : la liste des balises (la suivie marquée d'un « > »), la croix, « Balise ici », « Tout effacer ».
@@ -216,7 +218,7 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 
 À lancer sur le chasseur, puis sur le plus de classes possible (le plus utile : une classe à rotation de points de combo, voleur ou druide, et une classe à talents que tu as déjà pris). L'API des talents et des barres de Forever n'a été vérifiée que dans la documentation de Blizzard, jamais en jeu. Les noms français des talents et les identifiants de sorts viennent de Classic, de mémoire : ce que le jeu ne reconnaît pas doit se voir, jamais se deviner.
 
-- [ ] `/conseil` (ou `/cs`) ouvre la fenêtre : en-tête avec classe, niveau, race, spécialisation et situation ; les 6 onglets Talents, Rotation, Compétences, Équipement, Métiers, Race s'affichent sans erreur (BugSack).
+- [x] `/conseil` (ou `/cs`) ouvre la fenêtre : en-tête avec classe, niveau, race, spécialisation et situation ; les 6 onglets Talents, Rotation, Compétences, Équipement, Métiers, Race s'affichent sans erreur (BugSack).
 - [ ] `/cs etat` : classe, spécialisation, situation, nombre de sorts connus. Si la spécialisation est « inconnue », noter ce que le jeu donne (Forever n'a peut-être pas de spécialisations au sens de Midnight). S'il y a des talents non reconnus, une deuxième ligne donne leurs noms.
 - [ ] `/cs export` puis `/reload` : `ConseillerDB.export` dans `WTF\Account\<compte>\SavedVariables\Conseiller.lua` contient `noeuds` (nodeID, posX, posY, maxRanks, entrees avec spellID et nom) et `grimoire`. Si « configuration active introuvable », le jeu ne donne pas l'arbre : le noter. **Garder ce fichier : les vrais noms des talents servent à corriger les builds.**
 - [ ] Forever, un seul arbre en trois groupes (0.2.2) : `/cs etat` affiche « points par groupe de talents : Sacré N, Protection N, Vindicte N ; spécialisation détectée : … ». La spécialisation doit être celle où tu as le plus de points (pas celle de GetSpecialization), et « aucune » en cas d'égalité ou de zéro point. Puis la ligne « build utilisé : … (N entrées) », « prochain talent : NOM (nœud N) » et le nombre de talents non reconnus avec leurs noms. Noter si les points par groupe sont faux (alors `GetGroupCurrencyInfo` ne se lit pas comme prévu).
@@ -224,7 +226,7 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] Onglet Talents, spécialisation différente de la conseillée (0.2.2) : une ligne grise « Tu es en Vindicte ; en groupe sans tank, Protection est conseillée » et « Le build ci-dessous est celui de ta spécialisation » ; le build montré est celui de ta spécialisation. `/cs export` écrit aussi `groupes` (groupID, displayName, orderIndex, depense) et `groupIDs` sur chaque nœud : à relire dans le fichier.
 - [ ] Onglet Talents, build affiché pour chaque classe : la spécialisation conseillée et le « Pourquoi » s'affichent, puis « Prochain talent : … » (rang X sur Y) avec le bon talent de TA classe, et la ligne grise « Build croisé entre plusieurs guides, mis à jour le 10/11/2026 ». Passer par le bouton « Situation » (Seul, En groupe, Donjon, Raid) : le build et la spécialisation changent. Noter, pour chaque classe jouée : le prochain talent est-il bien le premier du build que le jeu laisse prendre ?
 - [ ] Talents non reconnus : une ligne rouge « N talents du build n'ont pas été reconnus : fais /cs export… » avec leurs noms en gris. Noter combien, pour quelle classe, et surtout quels noms (client en français : un nom français mal retenu est compté ici, c'est attendu et corrigeable avec l'export). Si **tous** sont non reconnus : le message « aucun de ses talents n'a été reconnu » s'affiche, et c'est alors le nom de l'arbre ou la lecture de C_Traits qui est en cause, à noter.
-- [ ] Palier pas atteint : à un niveau bas, le prochain talent annoncé est bien un talent achetable maintenant (pas un talent d'un palier suivant) ; si plus rien n'est achetable, l'onglet dit « Le jeu ne permet pas de le prendre pour l'instant » et le bouton « Prendre ce talent » est grisé.
+- [x] Palier pas atteint : à un niveau bas, le prochain talent annoncé est bien un talent achetable maintenant (pas un talent d'un palier suivant) ; si plus rien n'est achetable, l'onglet dit « Le jeu ne permet pas de le prendre pour l'instant » et le bouton « Prendre ce talent » est grisé.
 - [ ] « Prendre ce talent » : un rang est acheté sur le talent annoncé (hors combat), le talent suivant est annoncé ensuite ; le contour vert se pose sur ce talent dans la fenêtre des talents du jeu.
 - [ ] Validation : après « talent pris », la fenêtre des talents du jeu ne montre plus de modifications en attente (le bouton « Appliquer » n'est pas à faire) ; si elle en montre, le message « talent acheté, mais le jeu a refusé de valider » doit être apparu. Dans une zone où les talents sont verrouillés, le bouton doit dire pourquoi au lieu d'acheter.
 - [ ] Rotation, avec une cible attaquable, pour chaque classe jouée : un contour bleu pulse sur le bouton de la barre d'action du prochain sort. Le sort doit être posé sur une barre ; sinon l'onglet le dit. Vérifier l'ordre d'un combat : la rotation ne propose que des sorts d'attaque, jamais un soin ni un défensif, même vie basse ; une classe de mêlée à points de combo (voleur, druide en chat) propose le finisseur à 5 points (la condition `pointsCombo`).
@@ -242,8 +244,8 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 - [ ] Message de niveau (0.3.0) : monter d'un niveau avec une liste retenue qui contient un sort indispensable de ce niveau : « Niveau N : 2 sorts indispensables chez ton maître de classe (38 pa). » Sans liste retenue, à chaque niveau pair : « Niveau N : pense à passer chez ton maître de classe. » Aucun message sur Retail. Réglage « Rappeler le maître de classe à la montée de niveau » décoché : plus de message.
 - [ ] Message de sort absent de la barre (0.3.0) : enlever de ta barre un sort de ta rotation que tu connais, puis `/reload` ou changer de barre : quelques secondes après, « Frappe sacrée fait partie de ta rotation mais n'est sur aucune barre. » Un seul message par sort et par session, aucun en combat (il vient à la fin du combat), pas plus de trois d'un coup. Pas de message pour un sort de repli (Sceau de piété quand tu as le Sceau de fureur) ni pour un sort que tu as sur une barre cachée ou dans un sous-menu : noter les faux messages. Réglage « Prévenir quand un sort de la rotation n'est sur aucune barre » décoché : plus de message.
 - [ ] Équipement : l'ordre des statistiques de ta spécialisation ; `/run print(Conseiller_OrdreStats()[1])` répond une clé de statistique.
-- [ ] Métiers : trois propositions pour ta classe, et « À faire maintenant » avec tes métiers (compétence, palier suivant).
-- [ ] Race : tes capacités de race, actives et passives.
+- [x] Métiers : trois propositions pour ta classe, et « À faire maintenant » avec tes métiers (compétence, palier suivant).
+- [x] Race : tes capacités de race, actives et passives.
 - [ ] Réglages « Conseiller » dans la fenêtre commune : interrupteurs, mode, épaisseur du contour, boutons « Ouvrir le Conseiller » et « Exporter mon arbre de talents ».
 
 ## Confort (nouveau)
@@ -274,9 +276,9 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 
 - [ ] Carnet de session (`/carnet`) : fond sombre, titre doré, croix ; il garde sa place après un `/reload` et se déplace toujours.
 - [ ] Liste de courses de Métiers auto (`/mt courses 5 <recette>`) : fond sombre, titre doré, la croix la décoche dans les réglages, la place est gardée.
-- [ ] Panneau de Livres de bibliothèque (`/livres`, Forever) : fond sombre, titre doré, croix, Échap le ferme.
-- [ ] Panneau de Quêtes du groupe (`/qg`) : fond sombre, titre doré, croix, Échap le ferme.
-- [ ] Rapport d'erreurs (`/re`) : fond sombre, titre doré, croix, Échap le ferme, le texte reste sélectionnable et copiable.
+- [x] Panneau de Livres de bibliothèque (`/livres`, Forever) : fond sombre, titre doré, croix, Échap le ferme.
+- [x] Panneau de Quêtes du groupe (`/qg`) : fond sombre, titre doré, croix, Échap le ferme.
+- [x] Rapport d'erreurs (`/re`) : fond sombre, titre doré, croix, Échap le ferme, le texte reste sélectionnable et copiable.
 - [ ] Sur chacune : rien ne chevauche le titre, le texte reste lisible, aucune erreur Lua (BugSack) à l'ouverture, en combat ou non.
 - [ ] Retail et Forever : même rendu (si le cadre n'a pas de fond, un cadre enfant le dessine derrière).
 
@@ -288,11 +290,11 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 - [ ] Les sections sont dans l'ordre : À rendre, Principal, Général, Donjons et groupe, Classe, Métiers. Une section vide n'apparaît pas.
 - [ ] Une quête finie passe dans « À rendre » avec un « ? » ; décocher « À rendre en haut » la remet dans son genre.
 - [ ] Cliquer le nom d'une section la replie ; après `/reload`, elle est toujours repliée.
-- [ ] Clic gauche sur une quête : fond doré, et la flèche du GPS la suit. Un second clic ne fait rien (0.1.5 : l'addon n'ouvre plus le journal du jeu).
-- [ ] Survol d'une quête : la bulle montre sa description, puis les clics possibles. Le menu du clic droit n'a plus « Ouvrir dans le journal ».
+- [x] Clic gauche sur une quête : fond doré, et la flèche du GPS la suit. Un second clic ne fait rien (0.1.5 : l'addon n'ouvre plus le journal du jeu).
+- [x] Survol d'une quête : la bulle montre sa description, puis les clics possibles. Le menu du clic droit n'a plus « Ouvrir dans le journal ».
 - [ ] Erreur corrigée en 0.1.5 : après un `/reload`, cliquer des quêtes du panneau, entrer en combat, ouvrir la carte (M) : plus aucune « action bloquée … SetPassThroughButtons » au nom de SuiviQuetes dans BugSack.
 - [ ] Maj + clic : la quête n'est plus suivie et quitte le panneau.
-- [ ] Clic droit : menu « Ranger dans » ; choisir « Principal » déplace la quête, « Automatique » la remet. Le choix tient après `/reload`.
+- [x] Clic droit : menu « Ranger dans » ; choisir « Principal » déplace la quête, « Automatique » la remet. Le choix tient après `/reload`.
 - [ ] Une quête sans objectif chiffré (« Livraison pour Foudrepique ») affiche son texte court, y compris juste après la connexion.
 - [ ] Titres colorés comme dans le journal du jeu (rouge, orange, jaune, vert, gris) et distance à droite (« 140 m », « 2,6 km »).
 - [ ] Objet de quête : son bouton apparaît à gauche du panneau ; un clic l'utilise, aussi en combat. Replier la section cache le bouton.
@@ -325,7 +327,7 @@ Même fond sombre, même bordure dorée et titre doré que la fenêtre de régla
 
 ## Tenues (nouveau)
 
-- [ ] `/tenue` ouvre la fenêtre. Taper « Combat », laisser toutes les cases cochées, « Enregistrer ce que je porte » : la tenue apparaît, « (portée) », bordure verte.
+- [x] `/tenue` ouvre la fenêtre. Taper « Combat », laisser toutes les cases cochées, « Enregistrer ce que je porte » : la tenue apparaît, « (portée) », bordure verte.
 - [ ] Mettre la canne à pêche (et un chapeau de pêche si tu en as), enregistrer « Pêche » en ne cochant que ces emplacements.
 - [ ] « Mettre » sur Combat : l'arme revient, le reste ne bouge pas. « Mettre » sur Pêche : seule la canne change.
 - [ ] `/tenue retour` remet ce qui était porté avant.
