@@ -1020,6 +1020,10 @@ end
 
 -- Le portrait du style compact : la tête du PNJ en 3D, cadrée de près. Sans modèle (le jeu refuse),
 -- l'image ronde du portrait prend la place dans le même carré.
+-- Avec le zoom « portrait », un visage à l'angle 0 est vu de trois quarts ; -0,3 le met de face
+-- (essayé en jeu le 12/11 sur Yala Veillevent : 0 trois quarts, -0,6 trop tourné, -0,3 de face).
+local ANGLE_TETE = -0.3
+
 local function chargerTete(m, unite)
   -- Le modèle se charge un peu après SetUnit et reprend alors l'orientation du PNJ (vu en jeu le
   -- 12/11 : visage de profil quand le PNJ se tourne vers le joueur). Une fois chargé, on le remet
@@ -1028,14 +1032,14 @@ local function chargerTete(m, unite)
     pcall(m.SetScript, m, "OnModelLoaded", function(self)
       sur(self.SetPortraitZoom, self, 1)
       sur(self.SetCamDistanceScale, self, 1)
-      sur(self.SetFacing, self, 0)
+      sur(self.SetFacing, self, ANGLE_TETE)
     end)
   end
   local ok = pcall(function()
     m:SetUnit(unite)
     sur(m.SetPortraitZoom, m, 1)
     sur(m.SetCamDistanceScale, m, 1)
-    sur(m.SetFacing, m, 0)
+    sur(m.SetFacing, m, ANGLE_TETE)
   end)
   if ok then m:Show() else m:Hide() end
   return ok
@@ -1606,7 +1610,7 @@ local function placerTextes(e, style)
     b.caseTouche:SetSize(46, 22)
     b.boutonDeux:SetSize(86, 26)
     b.boutonDeux:SetPoint("RIGHT", b.caseTouche:IsShown() and b.caseTouche or b.bouton, "LEFT", -8, 0)
-    b.boutonJeu:SetSize(96, 18)
+    b.boutonJeu:SetSize(116, 18)
     b.boutonJeu:SetPoint("TOPRIGHT", -30, -5)
     local repere = b.bouton
     if b.caseTouche:IsShown() then repere = b.caseTouche end
