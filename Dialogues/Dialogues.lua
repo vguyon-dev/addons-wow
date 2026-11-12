@@ -527,6 +527,14 @@ end
 -- Tout ce qui parle au jeu
 -- ---------------------------------------------------------------------------
 
+-- Le numéro de créature d'un PNJ, tiré de son identifiant (« Creature-0-…-numéro-… ») ; nil sinon.
+function ns.numeroCreature(guid)
+  if type(guid) ~= "string" then return nil end
+  local genre, numero = guid:match("^(%a+)%-[^%-]*%-[^%-]*%-[^%-]*%-[^%-]*%-(%d+)")
+  if genre ~= "Creature" and genre ~= "Vehicle" then return nil end
+  return tonumber(numero)
+end
+
 if not CreateFrame then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- Un appel protégé qui rend les résultats de la fonction (ou rien si elle manque ou échoue).
@@ -1020,9 +1028,11 @@ end
 
 -- Le portrait du style compact : la tête du PNJ en 3D, cadrée de près. Sans modèle (le jeu refuse),
 -- l'image ronde du portrait prend la place dans le même carré.
--- Avec le zoom « portrait », un visage à l'angle 0 est vu de trois quarts ; -0,3 le met de face
--- (essayé en jeu le 12/11 sur Yala Veillevent : 0 trois quarts, -0,6 trop tourné, -0,3 de face).
-local ANGLE_TETE = -0.3
+-- Chargé par SetUnit, le modèle garde l'orientation du PNJ par rapport au joueur : le visage change
+-- d'angle selon l'endroit où l'on se tient (vu en jeu le 12/11). Chargé par le numéro de la créature
+-- (SetCreature), il part toujours du même angle ; -0,15 le met alors de face (essayé sur Yala
+-- Veillevent : 0 trois quarts, -0,15 de face, -0,3 de profil).
+local ANGLE_TETE = -0.15
 
 local function chargerTete(m, unite)
   -- Le modèle se charge un peu après SetUnit et reprend alors l'orientation du PNJ (vu en jeu le
@@ -1036,7 +1046,13 @@ local function chargerTete(m, unite)
     end)
   end
   local ok = pcall(function()
-    m:SetUnit(unite)
+    local guid = UnitGUID and UnitGUID(unite)
+    local numero = guid and not (issecretvalue and issecretvalue(guid)) and ns.numeroCreature(guid)
+    if numero and m.SetCreature then
+      m:SetCreature(numero)
+    else
+      m:SetUnit(unite)
+    end
     sur(m.SetPortraitZoom, m, 1)
     sur(m.SetCamDistanceScale, m, 1)
     sur(m.SetFacing, m, ANGLE_TETE)

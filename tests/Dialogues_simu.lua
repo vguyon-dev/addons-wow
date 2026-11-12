@@ -23,7 +23,7 @@ verifie("toc : charge Reglages.lua puis Dialogues.lua", true, toc:find("Reglages
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: DialoguesDB", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : version 0.3.4", true, toc:find("## Version: 0.3.4", 1, true) ~= nil)
+verifie("toc : version 0.3.5", true, toc:find("## Version: 0.3.5", 1, true) ~= nil)
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)
@@ -1962,6 +1962,9 @@ do
 end
 
 print = printOrigine
+verifie("numéro de créature : PNJ", 249363, ns.numeroCreature("Creature-0-3299-1-12-249363-0000A1B2C3"))
+verifie("numéro de créature : joueur", nil, ns.numeroCreature("Player-93-0ABCDEF1"))
+verifie("numéro de créature : rien", nil, ns.numeroCreature(nil))
 io.write(string.format("%d vérifications OK\n", nbOK))
 if ok then io.write("Tout est bon.\n") end
 os.exit(ok and 0 or 1)

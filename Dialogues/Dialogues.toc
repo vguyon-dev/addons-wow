@@ -3,7 +3,7 @@
 ## Notes: Remplace la fenêtre de dialogue des PNJ, en cinq styles au choix (compact avec la tête du PNJ en 3D, bandeau, scène, face à face, cinéma) : nom, texte écrit lettre par lettre et par morceaux, réponses et récompenses en cartes, et le clavier (Espace, chiffres, Échap). La fenêtre du jeu reprend la main en cas de souci.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.3.4
+## Version: 0.3.5
 ## IconTexture: Interface\GossipFrame\GossipGossipIcon
 ## SavedVariables: DialoguesDB
 ## AddonCompartmentFunc: Dialogues_OuvrirReglages
