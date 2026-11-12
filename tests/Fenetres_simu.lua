@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.4", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.2.0", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -1331,6 +1331,20 @@ scenario("glisser par l'appui", function()
   h._scripts.OnUpdate(h)
   verifie("relâché ailleurs : suivi débranché", nil, h._scripts.OnUpdate)
   _G.GetCursorPosition, _G.IsMouseButtonDown = copie, copieBouton
+end)
+
+-- ----- 15 quater. second écran (fonctions pures)
+scenario("second écran : calculs", function()
+  demarrer()
+  verifie("deux écrans : 3840 x 1080", true, ns.deuxEcrans(3840, 1080))
+  verifie("deux écrans : 1920 x 1080 non", false, ns.deuxEcrans(1920, 1080))
+  verifie("deux écrans : 2560 x 1080 (ultra large) non", false, ns.deuxEcrans(2560, 1080))
+  local x = ns.bornerDeux(-1500, -100, 600, 500, 1920, 1080, false)
+  verifie("jeu à droite : une fenêtre peut aller sur l'écran de gauche", -1500, x)
+  x = ns.bornerDeux(-2500, -100, 600, 500, 1920, 1080, false)
+  verifie("jeu à droite : pas plus loin que le bord gauche", -1920, x)
+  x = ns.bornerDeux(2500, -100, 600, 500, 1920, 1080, true)
+  verifie("jeu à gauche : une fenêtre peut aller sur l'écran de droite", 2500, x)
 end)
 
 -- ----- 16. nettoyage : rien ne reste dans le monde global de ce qui n'est pas à nous

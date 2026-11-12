@@ -35,6 +35,8 @@ local DEFAUTS = {
   actif = true,
   memoriser = true,   -- garder la place (et la taille) de chaque fenêtre
   dansEcran = true,   -- garder les fenêtres dans l'écran (décocher pour les poser sur un second écran)
+  secondEcran = false, -- fenêtre du jeu étirée sur deux écrans : le jeu sur l'un, les fenêtres sur l'autre
+  mondeAGauche = false, -- second écran : le jeu sur l'écran de gauche (sinon celui de droite)
   molette = true,     -- Ctrl + molette change la taille
   fenetres = {},      -- [nom du cadre] = { x, y, echelle } : ce qu'on a gardé
   ignorees = {},      -- [nom du cadre] = true : fenêtres que le joueur ne veut plus voir gérées
@@ -160,6 +162,21 @@ end
 -- Ramène une place dans l'écran (utile quand la résolution a changé). x et y : coin haut gauche, mesuré
 -- depuis le coin haut gauche de l'écran (y négatif vers le bas) ; largeur, hauteur et écran : en unités
 -- de l'écran. Une fenêtre plus grande que l'écran est collée en haut à gauche.
+-- Second écran : la fenêtre du jeu couvre deux écrans côte à côte (au moins 2,9 fois plus large que haute).
+function ns.deuxEcrans(largeur, hauteur)
+  return type(largeur) == "number" and type(hauteur) == "number" and hauteur > 0 and largeur / hauteur >= 2.9
+end
+
+-- Second écran : les bornes d'une fenêtre. L'interface (UIParent) n'occupe qu'un écran ; l'autre est à
+-- gauche (le jeu à droite) ou à droite (le jeu à gauche). Rend x, y bornés sur les DEUX écrans.
+function ns.bornerDeux(x, y, largeur, hauteur, largeurEcran, hauteurEcran, mondeAGauche)
+  if mondeAGauche then
+    return ns.borner(x, y, largeur, hauteur, largeurEcran * 2, hauteurEcran)
+  end
+  local bx, by = ns.borner(x + largeurEcran, y, largeur, hauteur, largeurEcran * 2, hauteurEcran)
+  return bx - largeurEcran, by
+end
+
 function ns.borner(x, y, largeur, hauteur, largeurEcran, hauteurEcran)
   if not (nb(x) and nb(y)) then return x, y end
   if not (nb(largeur) and nb(hauteur) and nb(largeurEcran) and nb(hauteurEcran)) then return x, y end
@@ -324,7 +341,12 @@ local function poser(rec, place)
     local x, y = place.x, place.y
     if db and db.dansEcran then
       local k = (nb(ef) and nb(ep) and ep > 0) and ef / ep or 1
-      x, y = ns.borner(x, y, f:GetWidth() * k, f:GetHeight() * k, UIParent:GetWidth(), UIParent:GetHeight())
+      if ns.secondEcranActif then
+        x, y = ns.bornerDeux(x, y, f:GetWidth() * k, f:GetHeight() * k, UIParent:GetWidth(), UIParent:GetHeight(),
+          db.mondeAGauche)
+      else
+        x, y = ns.borner(x, y, f:GetWidth() * k, f:GetHeight() * k, UIParent:GetWidth(), UIParent:GetHeight())
+      end
     end
     local ox, oy = ns.decalageDepuis(x, y, ef, ep)
     f:ClearAllPoints()
@@ -999,6 +1021,11 @@ ns.reglages = ns.creerReglages({
       aide = "La fenêtre revient là où tu l'as laissée, à chaque ouverture et à chaque session. Décoché : elle suit la souris mais retrouve sa place d'origine à la prochaine ouverture." },
     { cle = "dansEcran", libelle = "Garder les fenêtres dans l'écran",
       aide = "Une fenêtre ne peut pas sortir de l'écran, et une place gardée hors de l'écran (résolution changée) est ramenée dedans. À décocher pour poser des fenêtres sur un second écran." },
+    { titre = "Second écran" },
+    { cle = "secondEcran", libelle = "Le jeu sur un écran, les fenêtres sur l'autre",
+      aide = "Pour une fenêtre du jeu étirée sur deux écrans (outils\\second-ecran.ps1 le fait) : le monde et toute l'interface restent sur un écran, l'autre est libre ; glisse-y les fenêtres. Sans effet si la fenêtre du jeu ne couvre qu'un écran. Jamais appliqué en plein combat : à la fin du combat." },
+    { cle = "mondeAGauche", libelle = "Le jeu sur l'écran de gauche", dependDe = "secondEcran",
+      aide = "Décoché : le jeu sur l'écran de droite, les fenêtres à gauche." },
     { cle = "molette", libelle = "Ctrl + molette change la taille",
       aide = "Sur la barre de titre d'une fenêtre : de 50 à 150 %, par pas de 5 %. La taille est gardée comme la place." },
   },
@@ -1040,6 +1067,7 @@ ns.reglages = ns.creerReglages({
   surChangement = function()
     if not db then return end
     scanner()
+    if ns.appliquerSecondEcran then ns.appliquerSecondEcran() end
   end,
 })
 
@@ -1074,9 +1102,46 @@ local function noterDiagnostic()
   db.diagnostic = d
 end
 
+-- ----- second écran : le monde (WorldFrame) et l'interface (UIParent) sur une seule moitié de la fenêtre.
+-- Vu en jeu le 12/11 : hors combat, le jeu accepte ces deux SetPoint (ils sont refusés en combat).
+local secondAFaire = false
+local function appliquerSecondEcran()
+  if not db then return end
+  if InCombatLockdown and InCombatLockdown() then secondAFaire = true return end
+  secondAFaire = false
+  local largeur, hauteur
+  if GetPhysicalScreenSize then largeur, hauteur = GetPhysicalScreenSize() end
+  local voulu = db.actif and db.secondEcran and ns.deuxEcrans(largeur, hauteur)
+  if voulu then
+    local ok = pcall(function()
+      UIParent:ClearAllPoints()
+      if db.mondeAGauche then
+        UIParent:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, 0)
+        UIParent:SetPoint("BOTTOMRIGHT", nil, "BOTTOM", 0, 0)
+      else
+        UIParent:SetPoint("TOPLEFT", nil, "TOP", 0, 0)
+        UIParent:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0)
+      end
+      WorldFrame:ClearAllPoints()
+      WorldFrame:SetAllPoints(UIParent)
+    end)
+    ns.secondEcranActif = ok
+  elseif ns.secondEcranActif then
+    pcall(function()
+      UIParent:ClearAllPoints()
+      UIParent:SetAllPoints()
+      WorldFrame:ClearAllPoints()
+      WorldFrame:SetAllPoints()
+    end)
+    ns.secondEcranActif = false
+  end
+end
+ns.appliquerSecondEcran = appliquerSecondEcran
+
 -- Le combat est fini : on fait ce qu'on avait dû remettre à plus tard.
 local function rattraper()
   messageCombatDit = false
+  if secondAFaire then appliquerSecondEcran() end
   for _, rec in pairs(suivi) do
     if rec.arestaurer then restaurer(rec) end
     if rec.aprendre and gere(rec) then prendre(rec) end
@@ -1102,8 +1167,10 @@ ecouteur:SetScript("OnEvent", function(_, evenement, nom)
     if type(nom) == "string" and nom:sub(1, 9) == "Blizzard_" then pcall(scanner) end
   elseif evenement == "PLAYER_ENTERING_WORLD" then
     pcall(scanner)
+    pcall(appliquerSecondEcran)
     if C_Timer and C_Timer.After then C_Timer.After(2, function() pcall(scanner) end) end
   else
+    pcall(appliquerSecondEcran) -- la fenêtre du jeu a peut-être été étirée (ou ramenée) entre-temps
     -- La résolution ou l'échelle de l'interface a changé : on replace les fenêtres ouvertes.
     for _, rec in pairs(suivi) do
       if gere(rec) and sur(rec.fenetre.IsShown, rec.fenetre) then planifier(rec) end
