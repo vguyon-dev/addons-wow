@@ -1040,7 +1040,7 @@ ns.reglages = ns.creerReglages({
     { cle = "dansEcran", libelle = "Garder les fenêtres dans l'écran",
       aide = "Une fenêtre ne peut pas sortir de l'écran, et une place gardée hors de l'écran (résolution changée) est ramenée dedans. À décocher pour poser des fenêtres sur un second écran." },
     { cle = "secondEcran", libelle = "Le jeu sur un écran, les fenêtres sur l'autre",
-      aide = "Pour une fenêtre du jeu étirée sur deux écrans (outils\\second-ecran.ps1 le fait) : le monde et toute l'interface restent sur un écran, l'autre est libre ; glisse-y les fenêtres. Sans effet si la fenêtre du jeu ne couvre qu'un écran. Jamais appliqué en plein combat : à la fin du combat." },
+      aide = "Pour une fenêtre du jeu étirée sur deux écrans (le programme de Fenetres\\SecondEcran le fait, installé une fois par Installer.cmd) : le monde et toute l'interface restent sur un écran, l'autre est libre ; glisse-y les fenêtres. Sans effet si la fenêtre du jeu ne couvre qu'un écran. Jamais appliqué en plein combat : à la fin du combat." },
     { cle = "mondeAGauche", libelle = "Le jeu sur l'écran de gauche", dependDe = "secondEcran",
       aide = "Décoché : le jeu sur l'écran de droite, les fenêtres à gauche." },
     { cle = "molette", libelle = "Ctrl + molette change la taille",
@@ -1048,7 +1048,7 @@ ns.reglages = ns.creerReglages({
   },
   boutons = {
     { texte = "Passer au second écran", largeur = 190,
-      aide = "Le jeu passe en fenêtre deux fois plus large que l'écran ; outils\second-ecran.ps1 -Surveiller l'étale sur deux écrans. Le monde et l'interface restent sur un écran, l'autre reçoit les fenêtres que tu y glisses.",
+      aide = "Le jeu passe en fenêtre deux fois plus large que l'écran  ; le petit programme du dossier Fenetres\\SecondEcran (installé une fois par un double-clic sur Installer.cmd) l'étale sur deux écrans. Le monde et l'interface restent sur un écran, l'autre reçoit les fenêtres que tu y glisses.",
       action = function() ns.passerSecondEcran(true) end },
     { texte = "Revenir à un seul écran", largeur = 190,
       aide = "Le jeu revient en plein écran fenêtré habituel, sur un seul écran.",
@@ -1163,7 +1163,8 @@ ns.appliquerSecondEcran = appliquerSecondEcran
 
 -- Passer au second écran, ou revenir à un seul, depuis le jeu : on change le mode d'affichage du jeu.
 --   second écran : mode « fenêtré » (gxMaximize 0) deux fois plus large que l'écran ; le petit programme
---                  outils\second-ecran.ps1 -Surveiller (lancé avec Windows) étire alors la fenêtre sur
+--                  Fenetres\SecondEcran\second-ecran.ps1 -Surveiller (installé par Installer.cmd, lancé avec
+--                  Windows) étire alors la fenêtre sur
 --                  les deux écrans, sans bordure. Un addon ne peut pas déplacer la fenêtre du jeu lui-même.
 --   un écran     : mode « plein écran fenêtré » habituel (gxMaximize 1).
 -- Vu en jeu le 12/11 : en plein écran fenêtré, Windows ne montre le jeu que sur un écran.
@@ -1193,7 +1194,7 @@ function ns.passerSecondEcran(actif)
     poserCVar("gxMaximize", "0")
     relancerAffichage()
     dire("second écran : le jeu passe en fenêtre de " .. double .. ". Si elle ne s'étale pas seule sur les deux écrans, "
-      .. "lance outils\\second-ecran.ps1 (ou laisse tourner outils\\second-ecran.ps1 -Surveiller).")
+      .. "double-clique une fois sur Interface\\AddOns\\Fenetres\\SecondEcran\\Installer.cmd (dans le dossier du jeu), puis recommence.")
   else
     ns.reglages.changer("secondEcran", false)
     appliquerSecondEcran()
@@ -1290,7 +1291,7 @@ local function commande(texte)
     local largeur, hauteur
     if GetPhysicalScreenSize then largeur, hauteur = GetPhysicalScreenSize() end
     if db.secondEcran and not ns.deuxEcrans(largeur, hauteur) then
-      dire("second écran coché, mais la fenêtre du jeu ne couvre qu'un écran : lance outils\\second-ecran.ps1.")
+      dire("second écran coché, mais la fenêtre du jeu ne couvre qu'un écran : double-clique une fois sur Interface\\AddOns\\Fenetres\\SecondEcran\\Installer.cmd, puis /fen second on.")
     else
       dire("second écran : " .. (db.secondEcran and ("le jeu sur l'écran de " .. (db.mondeAGauche and "gauche" or "droite")) or "coupé") .. ".")
     end
