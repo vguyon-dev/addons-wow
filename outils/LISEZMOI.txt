@@ -1,4 +1,4 @@
-ADDONS DE VALENTIN : INSTALLATION
+MES ADDONS : INSTALLATION
 =================================
 
 LE PLUS SIMPLE : WOWUP (mises à jour automatiques)
@@ -29,7 +29,7 @@ SINON, À LA MAIN :
    gardés, ils sont ailleurs).
 
 5. Lance le jeu. Sur l'écran des personnages, bouton « AddOns » en bas à
-   gauche : ils sont rangés ensemble dans la catégorie « Addons de Valentin ».
+   gauche : ils sont rangés ensemble dans la catégorie « Mes addons ».
    Vérifie qu'ils sont cochés. Pour éviter les doublons, décoche
    AutoQuests et SpeedyAutoLoot si tu les as.
 
@@ -65,9 +65,9 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
   /qg      Quêtes du groupe (en groupe : les quêtes de chacun ; ancien nom EntreFreres,
            supprime son vieux dossier si tu l'avais copié à la main)
-  /re      Rapport d'erreurs : tes erreurs partent toutes seules à Valentin quand il est
-           en ligne (groupe, guilde ou amis). /re test pour essayer, /re etat si rien n'arrive
+  /re      Rapport d'erreurs : tes erreurs partent toutes seules vers celui qui les suit
+           quand il est en ligne (groupe, guilde ou amis). /re test pour essayer, /re etat si rien n'arrive
            (les mêmes boutons sont dans la fenêtre de réglages).
 
-En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie à
-Valentin le message d'erreur.
+En cas d'erreur : installe BugSack et BugGrabber (CurseForge) et envoie le
+message d'erreur à celui qui t'a donné les addons.

@@ -35,8 +35,8 @@ verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: Fenetr
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
-verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.3.0", 1, true) ~= nil)
+verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Mes addons", 1, true) ~= nil
+  and toc:find("## Author: addons-wow", 1, true) ~= nil and toc:find("## Version: 0.3.0", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -190,7 +190,7 @@ do
   for _, n in ipairs(voulues) do if not vus[n] then manque[#manque + 1] = n end end
   verifie("fenêtres : toutes celles du cahier des charges", "", table.concat(manque, ","))
   local exclues = { "PlayerFrame", "TargetFrame", "Minimap", "MinimapCluster", "ObjectiveTrackerFrame", "ContainerFrame1",
-    "MainMenuBar", "MainActionBar", "SuiviQuetesCadre", "GPSCadre", "ValentinAddonsReglages", "UIParent" }
+    "MainMenuBar", "MainActionBar", "SuiviQuetesCadre", "GPSCadre", "MesAddonsReglages", "UIParent" }
   local presentes = {}
   for _, n in ipairs(exclues) do if vus[n] then presentes[#presentes + 1] = n end end
   verifie("fenêtres : rien de ce qui est géré ailleurs", "", table.concat(presentes, ","))
@@ -390,7 +390,7 @@ local function installer()
   imprime = {}
   for _, n in ipairs(creees or {}) do _G[n] = nil end
   creees = {}
-  _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
+  _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.FenetresDB, _G.FenetresMenu = nil, nil
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920
@@ -1088,9 +1088,9 @@ scenario("liste et commandes", function()
   verifie("/fen aide : la liste des commandes", true, compter("/fen reset") >= 1)
   SlashCmdList.FENETRES("n'importe quoi")
   verifie("/fen inconnue : message", true, compter("commande inconnue") == 1)
-  _G.ValentinAddonsReglages:Hide()
+  _G.MesAddonsReglages:Hide()
   SlashCmdList.FENETRES("")
-  verifie("/fen : ouvre les réglages", true, _G.ValentinAddonsReglages._shown)
+  verifie("/fen : ouvre les réglages", true, _G.MesAddonsReglages._shown)
   SlashCmdList.FENETRES("off")
   verifie("/fen off : coupe l'addon", false, FenetresDB.actif)
   SlashCmdList.FENETRES("on")

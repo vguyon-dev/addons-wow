@@ -490,7 +490,7 @@ ns.reglages = ns.creerReglages({
     { cle = "bilan", libelle = "Afficher le bilan de farm",
       aide = "Objets, or, valeur et gain par heure de la session de ce personnage." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   ongletContenu = "Objets ignorés",
   contenu = function(fenetre, y, r)

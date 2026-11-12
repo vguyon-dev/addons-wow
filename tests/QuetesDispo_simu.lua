@@ -32,7 +32,7 @@ verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: Quetes
 verifie("toc : seulement Forever (les données viennent de Classic)", true, toc:find("## Interface: 16001\n", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: QuetesDispo_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true) ~= nil)
-verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
+verifie("toc : catégorie Mes addons", true, toc:find("## Category: Mes addons", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
 verifie("toc : version 0.3.0", true, toc:find("## Version: 0.3.0", 1, true) ~= nil)
@@ -651,7 +651,7 @@ local function installer(avecAPI)
           posJoueur = { x = 0.5, y = 0.6267 }, carteJoueur = nil, regard = 0, rotation = "0", rayonMini = 200, temps = 1000,
           groupe = nil, guid = "Creature-0-3-0-0-1234-0000AAAA", gossip = {}, greeting = {}, detail = nil, envoyes = {}, prefixes = {},
           dedans = false }
-  _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
+  _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.QuetesDispoDB, _G.QuetesDispoReglages, _G.QuetesDispoMinimap = nil, nil, nil
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920

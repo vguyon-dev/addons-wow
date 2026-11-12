@@ -661,7 +661,7 @@ ns.reglages = ns.creerReglages({
     { cle = "actif", libelle = "Activer Métiers auto",
       aide = "Interrupteur général. Le clic droit sur l'icône fait la même chose." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
     { titre = "Pêche" },
     { cle = "pecheDoubleClic", libelle = "Double clic droit pour lancer la ligne",
       aide = "Seulement en mode pêche. Pour ferrer : clic droit sur le bouchon." },

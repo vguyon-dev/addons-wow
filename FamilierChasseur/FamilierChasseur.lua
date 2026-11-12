@@ -233,7 +233,7 @@ ns.reglages = ns.creerReglages({
     { cle = "son", libelle = "Son en plus du message" },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   ongletContenu = "Nourriture",
   contenu = function(f, y)

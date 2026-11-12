@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: Tenues
 ## Notes: Enregistre tes tenues (combat, pêche, ville…) et en change d'un clic ou d'une touche. Une tenue peut être partielle (canne, chapeau, bottes). La tenue Pêche se met toute seule avec le mode pêche de Métiers auto.
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.1.0
 ## IconTexture: Interface\Icons\INV_Chest_Cloth_17
 ## SavedVariables: TenuesDB

@@ -24,7 +24,7 @@ verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: Dialog
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : version 0.3.5", true, toc:find("## Version: 0.3.5", 1, true) ~= nil)
-verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
+verifie("toc : catégorie Mes addons", true, toc:find("## Category: Mes addons", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)
 verifie("source : aucun tiret cadratin ni demi-cadratin", true, source:find("—", 1, true) == nil and source:find("–", 1, true) == nil)
@@ -465,7 +465,7 @@ end
 local function installer()
   toutes, enCombat, file = {}, false, {}
   imprime = {}
-  _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
+  _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.DialoguesDB, _G.DialoguesBandeau, _G.DialoguesListe = nil, nil, nil
   _G.DialoguesBandeHaut, _G.DialoguesModelePNJ, _G.DialoguesModeleJoueur, _G.DialoguesEcrivain = nil, nil, nil, nil
   _G.DialoguesCadrePortrait, _G.DialoguesModeleTete = nil, nil

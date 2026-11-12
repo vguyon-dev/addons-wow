@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: Quêtes auto
 ## Notes: Rend d'abord les quêtes finies, puis accepte les autres, choisit la récompense, partage les quêtes en groupe, filtre et passe les cinématiques déjà vues.
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.8.1
 ## IconTexture: Interface\GossipFrame\AvailableQuestIcon
 ## SavedVariables: QuetesAutoDB

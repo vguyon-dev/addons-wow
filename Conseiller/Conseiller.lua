@@ -1118,7 +1118,7 @@ ns.reglages = ns.creerReglages({
       aide = "Un message dans le chat, une fois par sort et par session, hors combat. Conseiller ne pose rien sur ta barre." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   boutons = {
     { texte = "Ouvrir le Conseiller", aide = "La fenêtre avec les six onglets.", action = function()

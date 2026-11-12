@@ -523,7 +523,7 @@ ns.reglages = ns.creerReglages({
       aide = "Décoché : l'addon juge seul (caractéristique principale de ta spécialisation, dégâts de l'arme, Endurance), sans Pawn." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   astuce = "Le panneau d'analyse : /sr, le bouton en haut ou Maj+clic dans l'icône commune. Ranger : /sr ranger ou un raccourci clavier.",
   auChargement = function(d) db = d; ns.db = d end,

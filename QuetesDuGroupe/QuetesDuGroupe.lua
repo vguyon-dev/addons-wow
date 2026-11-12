@@ -280,7 +280,7 @@ ns.reglages = ns.creerReglages({
       aide = "Quand un joueur du groupe qui a l'addon envoie ses quêtes pour la première fois." },
     { titre = "Affichage" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   astuce = "Le panneau : /qg, le bouton en haut de cette fenêtre ou Maj+clic sur la ligne de l'icône commune.",
   auChargement = function(d) db = d end,

@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: GPS
 ## Notes: Balises (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte) et une flèche avec distance et temps restant, même loin ; balises partagées avec le groupe.
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.6.2
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
 ## SavedVariables: GPSDB

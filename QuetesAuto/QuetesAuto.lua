@@ -749,7 +749,7 @@ local reglages = ns.creerReglages({
     { cle = "cinematiques", libelle = "Passer les cinématiques déjà vues",
       aide = "La première fois tu la regardes, les fois suivantes elle est passée." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
     { cle = "bouton", libelle = "Bouton à l'écran",
       aide = "Un second « ! » jaune à poser où tu veux, en plus de l'icône de la minimap. Clic : activer ou couper." },
   },

@@ -330,7 +330,7 @@ local function installer(avecAPI)
   toutes, enCombat, file, tickers = {}, false, {}, {}
   appelsJeu = { suivi = {}, retire = {}, journal = {} }
   imprime = {}
-  _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
+  _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.SuiviQuetesDB, _G.SuiviQuetesPerso, _G.SuiviQuetesCadre = nil, nil, nil
   _G.ObjectiveTrackerFrame = nil
   for i = 1, 8 do _G["SuiviQuetesObjet" .. i] = nil end

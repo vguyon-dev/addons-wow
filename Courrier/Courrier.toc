@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: Courrier
 ## Notes: Récupère le courrier en un clic : tout, l'or seulement, ou les courriers cochés. Destinataires rapides, bilan à la fin. Jamais de contre-remboursement payé.
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.5.1
 ## IconTexture: Interface\Icons\INV_Letter_15
 ## SavedVariables: CourrierDB

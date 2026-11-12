@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: Familier du chasseur
 ## Notes: Prévient quand ton familier a faim, est mort ou n'est pas appelé, avec le bon bouton (Nourrir, Ressusciter, Appeler).
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.4.1
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastCall
 ## SavedVariables: FamilierChasseurDB

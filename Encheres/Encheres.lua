@@ -423,7 +423,7 @@ ns.reglages = ns.creerReglages({
       aide = "Dépose un objet dans l'onglet Vendre : le panneau affiche le prix le plus bas connu et un prix conseillé (un peu en dessous, jamais sous le prix du marchand). « Mettre ce prix » remplit le champ du jeu, c'est toi qui valides la mise en vente." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   boutons = {
     { texte = "Oublier les prix", aide = "Efface tous les prix gardés pour ce royaume.", action = function()

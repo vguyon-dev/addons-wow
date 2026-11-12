@@ -274,7 +274,7 @@ do
   local dits = {}
   local vraiPrint = print
   print = function(...) dits[#dits + 1] = table.concat({ ... }, " ") end
-  _G.ValentinAddons.messageNouveau = nil
+  _G.MesAddons.messageNouveau = nil
   local function creer(nomAddon, nomDB)
     local nsX = {}
     assert(loadfile(reglagesLua))(nomAddon, nsX)
@@ -288,7 +288,7 @@ do
   for i, scripts in ipairs(ecouteurs) do scripts.OnEvent({ UnregisterEvent = function() end }, "ADDON_LOADED", i == 1 and "FauxA" or "FauxB") end
   print = vraiPrint
   CreateFrame = vrai
-  local hub = _G.ValentinAddons
+  local hub = _G.MesAddons
   verifie("chargement : un seul message pour deux addons", 1, #dits)
   verifie("chargement : le message parle de « Quoi de neuf »", true, (dits[1] or ""):find("Quoi de neuf", 1, true) ~= nil)
   verifie("chargement : le drapeau est dans le hub commun", true, hub.messageNouveau)
@@ -541,14 +541,14 @@ do
     return r, _G.FauxPersoDB, nsX
   end
   local function entree()
-    for i = #_G.ValentinAddons.entrees, 1, -1 do
-      if _G.ValentinAddons.entrees[i].titre == "FauxPerso" then return _G.ValentinAddons.entrees[i], i end
+    for i = #_G.MesAddons.entrees, 1, -1 do
+      if _G.MesAddons.entrees[i].titre == "FauxPerso" then return _G.MesAddons.entrees[i], i end
     end
   end
   local function oterEntree()
     local _, i = entree()
     while i do
-      table.remove(_G.ValentinAddons.entrees, i)
+      table.remove(_G.MesAddons.entrees, i)
       _, i = entree()
     end
   end

@@ -1,11 +1,11 @@
 -- ============================================================================
--- Reglages.lua : LA fenêtre de réglages de tous les addons de Valentin.
+-- Reglages.lua : LA fenêtre de réglages commune à tous nos addons (« Mes addons »).
 --
 -- Fichier COMMUN : la même copie se trouve dans chaque addon du dépôt
 -- (QuetesAuto, MarchandAuto…). Si tu le modifies, recopie-le dans les autres
 -- (un test vérifie qu'ils sont identiques).
 --
--- Une seule fenêtre « Addons de Valentin » (créée par le premier addon chargé) :
+-- Une seule fenêtre « Mes addons » (créée par le premier addon chargé) :
 --   - à gauche, la liste des addons avec un point vert (activé) ou rouge (coupé) ;
 --     clic = ses réglages, clic droit = activer ou couper, Maj+clic = son panneau ;
 --   - à droite, la page de l'addon : interrupteur général, un onglet par
@@ -194,6 +194,12 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-12", titre = "La fenêtre s'appelle « Mes addons »", lignes = {
+    "La fenêtre commune des réglages s'appelle maintenant « Mes addons », comme la catégorie dans la liste des addons du jeu.",
+    "Fenêtres déplaçables : deux boutons, « Passer au second écran » et « Revenir à un seul écran », changent l'affichage du jeu sans passer par la console.",
+    "Conseiller : plus de talent annoncé tant que tu n'as pas de point à dépenser, et le druide sans forme animale a Colère dans sa rotation.",
+    "Mets à jour tous les addons d'un coup : un addon d'avant cette version garde l'ancienne fenêtre à part, et le partage des balises du GPS ne passe qu'entre versions à jour.",
+  } },
   { date = "2026-11-12", titre = "Dialogues comme Immersion, session réunie, quêtes apprises", lignes = {
     "Dialogues de quête : nouveau style compact par défaut, comme Immersion : visage du PNJ en 3D, texte page par page, réponses en pile à droite. Les autres styles restent dans /dial style.",
     "Carnet de session et Bilan de farm réunis dans un seul cadre « Session » (ou à onglets, au choix dans les réglages du Carnet). Un clic sur le titre le replie en une ligne. La durée du bilan ne compte plus que le temps de jeu.",
@@ -239,7 +245,7 @@ ns.NOUVEAUTES = {
     "Réglages propres à chaque personnage : en haut de la page de chaque addon, un interrupteur « Réglages propres à ce personnage ». Activé, ce personnage a ses réglages (copiés depuis les réglages actuels) et les autres ne changent pas. Coupé, il retrouve ceux du compte.",
   } },
   { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
-    "Les réglages des 23 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
+    "Les réglages des 23 addons sont dans une seule fenêtre, « Mes addons », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
     "À gauche, la liste des addons avec un point vert (activé) ou rouge (coupé). Un clic droit active ou coupe un addon.",
     "À droite, les réglages de l'addon choisi, rangés en onglets, avec des interrupteurs et des curseurs.",
     "En haut, une recherche trouve un réglage dans tous les addons, même sans les accents.",
@@ -429,7 +435,7 @@ function ns.changerMode(db, cles, moi, perso, defauts)
 end
 
 -- ------------------------------------------------------- le texte à partager
--- Format : « VA1;Addon:cle=valeur,cle=valeur;Addon:… » (VA = addons de Valentin, 1 = version
+-- Format : « VA1;Addon:cle=valeur,cle=valeur;Addon:… » (VA = « Mes addons », 1 = version
 -- du format). Un interrupteur s'écrit 1 ou 0, un curseur par son nombre.
 
 local function formatNombre(v)
@@ -855,21 +861,21 @@ function ns.creerListe(parent, y, spec)
 end
 
 -- ============================================================ la fenêtre commune
--- _G.ValentinAddons : { entrees, fenetre, zone, courant, … }, créé par le premier
+-- _G.MesAddons : { entrees, fenetre, zone, courant, … }, créé par le premier
 -- addon chargé. Une entrée : { titre, icone, db, ouvrir, basculer, actif = fonction,
 -- panneau = fonction ou nil, page = cadre, recherche = { … }, allerOnglet = fonction }.
 
 local function leHub()
-  local hub = _G.ValentinAddons
+  local hub = _G.MesAddons
   if hub and hub.pret then return hub end
   hub = hub or {}
   hub.entrees = hub.entrees or {}
   hub.speciales = {} -- les pages qui ne sont pas des addons (Quoi de neuf…), refaites avec le hub
-  _G.ValentinAddons = hub
+  _G.MesAddons = hub
 
   -- Si une copie précédente a échoué en route, on repart de sa fenêtre.
-  local fenetre = _G.ValentinAddonsReglages
-    or CreateFrame("Frame", "ValentinAddonsReglages", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  local fenetre = _G.MesAddonsReglages
+    or CreateFrame("Frame", "MesAddonsReglages", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
   hub.fenetre = fenetre
   fenetre:SetSize(LARGEUR, HAUTEUR)
   fenetre:SetPoint("CENTER")
@@ -887,11 +893,11 @@ local function leHub()
     fenetre:SetBackdropBorderColor(0.80, 0.63, 0.30, 1)
   end
   fenetre:Hide()
-  tinsert(UISpecialFrames, "ValentinAddonsReglages") -- Échap la ferme
+  tinsert(UISpecialFrames, "MesAddonsReglages") -- Échap la ferme
 
   local titre = fenetre:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   titre:SetPoint("TOPLEFT", 14, -12)
-  titre:SetText("Addons de Valentin")
+  titre:SetText("Mes addons")
   local fermer = CreateFrame("Button", nil, fenetre, "UIPanelCloseButton")
   fermer:SetPoint("TOPRIGHT", 0, 0)
   fermer:SetScript("OnClick", function() fenetre:Hide() end)
@@ -901,8 +907,8 @@ local function leHub()
   trait:SetPoint("TOPRIGHT", -6, -38)
   trait:SetHeight(1)
 
-  local okR, recherche = pcall(CreateFrame, "EditBox", "ValentinAddonsRecherche", fenetre, "SearchBoxTemplate")
-  if not okR or not recherche then recherche = CreateFrame("EditBox", "ValentinAddonsRecherche", fenetre, "InputBoxTemplate") end
+  local okR, recherche = pcall(CreateFrame, "EditBox", "MesAddonsRecherche", fenetre, "SearchBoxTemplate")
+  if not okR or not recherche then recherche = CreateFrame("EditBox", "MesAddonsRecherche", fenetre, "InputBoxTemplate") end
   recherche:SetSize(220, 20)
   recherche:SetPoint("TOPRIGHT", -40, -10)
   recherche:SetAutoFocus(false)
@@ -1081,7 +1087,7 @@ local function leHub()
   soustitreNeuf:SetPoint("TOPLEFT", titreNeuf, "BOTTOMLEFT", 0, -4)
   soustitreNeuf:SetText("Ce qui a changé dans les addons, du plus récent au plus ancien.")
 
-  local okN, defileNeuf = pcall(CreateFrame, "ScrollFrame", "ValentinAddonsNeufDefile", pageNeuf, "UIPanelScrollFrameTemplate")
+  local okN, defileNeuf = pcall(CreateFrame, "ScrollFrame", "MesAddonsNeufDefile", pageNeuf, "UIPanelScrollFrameTemplate")
   if not okN or not defileNeuf then defileNeuf = CreateFrame("ScrollFrame", nil, pageNeuf) end
   defileNeuf:SetPoint("TOPLEFT", 6, -52)
   defileNeuf:SetPoint("BOTTOMRIGHT", -26, 8)
@@ -1139,7 +1145,7 @@ local function leHub()
     hub.messageNouveau = true
     local function dire()
       if hub.aDuNeuf() then
-        print("|cffffd200Addons de Valentin|r : il y a du nouveau, clique sur l'engrenage (autour de la minimap) puis sur « Quoi de neuf ».")
+        print("|cffffd200Mes addons|r : il y a du nouveau, clique sur l'engrenage (autour de la minimap) puis sur « Quoi de neuf ».")
       end
     end
     if C_Timer and C_Timer.After then C_Timer.After(5, dire) else dire() end
@@ -1235,8 +1241,8 @@ local function leHub()
   end)
 
   -- L'icône commune autour de la minimap : un clic ouvre la fenêtre.
-  if not _G.ValentinAddonsMinimap then
-    local bouton = CreateFrame("Button", "ValentinAddonsMinimap", Minimap)
+  if not _G.MesAddonsMinimap then
+    local bouton = CreateFrame("Button", "MesAddonsMinimap", Minimap)
     bouton:SetSize(31, 31)
     bouton:SetFrameStrata("MEDIUM")
     bouton:SetFrameLevel(8)
@@ -1282,7 +1288,7 @@ local function leHub()
     bouton:SetScript("OnClick", function() hub.basculerFenetre() end)
     bouton:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-      GameTooltip:AddLine("Addons de Valentin")
+      GameTooltip:AddLine("Mes addons")
       for _, x in ipairs(hub.entrees) do
         local actif = x.actif and x.actif()
         local etat = actif == nil and "" or (actif and "|cff00ff00activé|r" or "|cffff4040coupé|r")
@@ -1639,7 +1645,7 @@ function ns.creerReglages(p)
   pageJeu.name = p.titre
   local pageTexte = pageJeu:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   pageTexte:SetPoint("TOPLEFT", 16, -16)
-  pageTexte:SetText("Tous les réglages de " .. p.titre .. " sont dans la fenêtre des addons de Valentin :")
+  pageTexte:SetText("Tous les réglages de " .. p.titre .. " sont dans la fenêtre « Mes addons » :")
   local pageBouton = CreateFrame("Button", nil, pageJeu, "UIPanelButtonTemplate")
   pageBouton:SetSize(200, 26)
   pageBouton:SetPoint("TOPLEFT", pageTexte, "BOTTOMLEFT", 0, -12)

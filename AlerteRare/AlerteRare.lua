@@ -16,7 +16,7 @@
 local NOM_ADDON, ns = ...
 
 local DEFAUTS = {
-  actif = false,      -- coupé au départ, à la demande de Valentin
+  actif = false,      -- coupé au départ
   rares = true,       -- prévenir pour les monstres rares
   coffres = true,     -- prévenir pour les coffres et trésors de la minimap
   elites = false,     -- prévenir aussi pour les élites (hors donjon)
@@ -142,7 +142,7 @@ ns.reglages = ns.creerReglages({
       aide = "Vers le rare repéré sur la minimap, avec la flèche du jeu pour y aller." },
     { titre = "Affichage" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   astuce = "Chaque monstre ou coffre n'est annoncé qu'une fois toutes les 5 minutes. Commande : /ar.",
   auChargement = function(d) db = d end,

@@ -17,7 +17,7 @@
 -- La balise suivie est aussi posée comme épingle du jeu (carte et minimap).
 -- Pour les autres addons : GPS_Ajouter(carte, x, y, titre) avec x, y entre 0 et 1.
 -- Partage : « Envoyer au groupe » (onglet Balises) ou /way envoyer envoient la
--- balise suivie aux membres du groupe (message d'addon, préfixe « GPSValentin »).
+-- balise suivie aux membres du groupe (message d'addon, préfixe « GPSBalises »).
 -- Chez eux, avec l'option « Accepter les balises de mon groupe », elle s'ajoute
 -- avec « (de Nom) » dans son titre, sans doublon.
 -- ============================================================================
@@ -355,7 +355,7 @@ end
 -- un message d'addon sur le canal du groupe, préfixe enregistré une fois)
 -- ---------------------------------------------------------------------------
 
-local PREFIXE = "GPSValentin"
+local PREFIXE = "GPSBalises"
 local MAX_ENVOI = 20   -- balises envoyées d'un coup, au plus
 local MAX_BALISES = 100 -- au-delà, on n'ajoute plus de balise reçue
 
@@ -677,7 +677,7 @@ ns.reglages = ns.creerReglages({
       aide = "Quand un membre de ton groupe t'envoie une balise (onglet Balises, ou /way envoyer), elle est ajoutée avec « (de Nom) » dans son titre, sans doublon. Jamais une balise venant de toi-même." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   boutons = {
     { texte = "Balise ici", aide = "Pose une balise là où tu es (pour revenir plus tard).", action = function()

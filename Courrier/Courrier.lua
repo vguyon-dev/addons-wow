@@ -589,7 +589,7 @@ ns.reglages = ns.creerReglages({
       aide = "À la fin : l'or et le nombre d'objets pris, puis les courriers laissés de côté et pourquoi (contre-remboursement, MJ, sacs pleins)." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   astuce = "Jamais de contre-remboursement payé ni de courrier de MJ ouvert. La récupération s'arrête quand tes sacs sont pleins, quand tu fermes la boîte, ou si tu recliques sur le bouton.",
   auChargement = function(d) db = d end,

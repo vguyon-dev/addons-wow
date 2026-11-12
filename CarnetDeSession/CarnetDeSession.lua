@@ -568,7 +568,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement, ...)
 end)
 
 ---------------------------------------------------------------------------
--- Les réglages (fenêtre commune de Reglages.lua, menu « Addons de Valentin »)
+-- Les réglages (fenêtre commune de Reglages.lua, menu « Mes addons »)
 ---------------------------------------------------------------------------
 
 local function remettreAZero()
@@ -610,7 +610,7 @@ reglages = ns.creerReglages({
     { cle = "affiche", libelle = "Afficher la fenêtre du carnet",
       aide = "Elle se déplace à la souris ; « Recentrer » la remet au milieu de l'écran." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   boutons = {
     { texte = "Remettre à zéro", aide = "Range la session en cours dans l'historique et repart de zéro.",

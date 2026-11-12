@@ -393,7 +393,7 @@ ns.reglages = ns.creerReglages({
     { cle = "bilan", libelle = "Écrire le bilan dans le chat",
       aide = "Ce que la vente a rapporté et ce que la réparation a coûté." },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   ongletContenu = "Listes",
   contenu = function(fenetre, y, r)

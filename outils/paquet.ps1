@@ -7,7 +7,7 @@ $addons = Get-ChildItem $racine -Directory | Where-Object { Test-Path (Join-Path
 $date = Get-Date -Format "yyyy-MM-dd"
 $sortie = Join-Path $env:USERPROFILE "Downloads\@Claude\Telechargements\AddonsWow"
 New-Item -ItemType Directory -Force $sortie | Out-Null
-$zip = Join-Path $sortie "$date AddonsValentin.zip"
+$zip = Join-Path $sortie "$date MesAddons.zip"
 
 # Dossier de travail : les addons + la notice, puis on zippe.
 $tmp = Join-Path $env:TEMP "paquet-addons-wow"

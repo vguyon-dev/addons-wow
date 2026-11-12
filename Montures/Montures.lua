@@ -212,7 +212,7 @@ ns.reglages = ns.creerReglages({
       aide = "Clic : monter. Clic droit : réglages. Glisser : déplacer." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   boutons = {
     { texte = "Choisir la touche", aide = "Appuie ensuite sur la touche voulue. Échap annule. Impossible en combat.", action = function()

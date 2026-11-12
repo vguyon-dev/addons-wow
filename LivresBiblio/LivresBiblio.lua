@@ -532,7 +532,7 @@ ns.reglages = ns.creerReglages({
       aide = "Coupé : ils disparaissent de la carte dès que tu les ramasses." },
     { titre = "Affichage" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin. Clic droit : activer ou couper." },
+      aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },
   },
   astuce = "La liste des livres : /livres, le bouton en haut ou Maj+clic dans l'icône commune. Sur la carte : clic gauche = balise, clic droit = ramassé ou pas.",
   auChargement = function(d)

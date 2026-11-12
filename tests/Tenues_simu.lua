@@ -24,8 +24,8 @@ verifie("toc : sauvegardes déclarées", true, toc:find("## SavedVariables: Tenu
   and toc:find("## SavedVariablesPerCharacter: TenuesPerso", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Tenues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.0", 1, true) ~= nil)
+verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Mes addons", 1, true) ~= nil
+  and toc:find("## Author: addons-wow", 1, true) ~= nil and toc:find("## Version: 0.1.0", 1, true) ~= nil)
 local bindings = lire((fichier:gsub("Tenues%.lua$", "Bindings.xml")))
 for n = 1, 5 do
   verifie("Bindings.xml : touche " .. n, true, bindings:find('name="TENUES_TENUE' .. n .. '"', 1, true) ~= nil
@@ -400,7 +400,7 @@ end
 local function installer(retirer)
   toutes, enCombat, file, tickers, delais = {}, false, {}, {}, {}
   imprime = {}
-  _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
+  _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.TenuesDB, _G.TenuesPerso, _G.TenuesFenetre = nil, nil, nil
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920

@@ -6,10 +6,10 @@
 --  - « Envoyer mes erreurs » (coché au départ) : chez tes amis. Leurs erreurs
 --    partent vers un joueur qui a coché « Recevoir », dès qu'il est en ligne et
 --    joignable : dans ton groupe, dans ta guilde ou dans ta liste d'amis.
---  - « Recevoir les erreurs des autres » (décoché au départ) : chez Valentin.
+--  - « Recevoir les erreurs des autres » (décoché au départ) : chez celui qui suit les erreurs.
 --    Les erreurs reçues sont rangées par joueur dans RapportErreursDB, que
 --    l'on relit hors du jeu après un /reload.
--- Par défaut, seules les erreurs des « Addons de Valentin » partent.
+-- Par défaut, seules les erreurs des addons de la catégorie « Mes addons » partent.
 -- Commandes : /re (le panneau), /re options, /re demander <joueur>, /re test,
 -- /re etat, /re effacer, /re <réglage> (coche ou décoche : envoyer, recevoir…).
 -- Un addon peut écrire dans le journal : RapportErreurs_Noter("MonAddon", "texte").
@@ -19,12 +19,12 @@ local NOM_ADDON, ns = ...
 local PREFIXE = "RapportErreurs" -- 16 caractères au plus, imposé par le jeu
 local TAILLE = 220               -- octets de texte par message (le jeu en accepte 255)
 local MAX_ERREURS, MAX_JOURNAL, MAX_RECUES = 60, 200, 60
-local CATEGORIE = "Addons de Valentin"
+local CATEGORIE = "Mes addons"
 
 local DEFAUTS = {
   actif = true,
   envoyer = true,      -- envoyer mes erreurs à ceux qui reçoivent
-  recevoir = false,    -- recevoir les erreurs des autres (Valentin)
+  recevoir = false,    -- recevoir les erreurs des autres (celui qui suit les erreurs)
   toutes = false,      -- envoyer aussi les erreurs des autres addons
   annoncer = true,     -- un message dans le chat à chaque erreur reçue
   minimap = false,
@@ -156,7 +156,7 @@ local function estANous(addon)
     local lire = GetMeta or function() end
     local ok1, cat = pcall(lire, addon, "Category")
     local ok2, auteur = pcall(lire, addon, "Author")
-    nosAddons[addon] = (ok1 and cat == CATEGORIE) or (ok2 and auteur == "Valentin") or false
+    nosAddons[addon] = (ok1 and cat == CATEGORIE) or (ok2 and auteur == "addons-wow") or false
   end
   return nosAddons[addon]
 end
@@ -532,7 +532,7 @@ ns.reglages = ns.creerReglages({
     { cle = "envoyer", libelle = "Envoyer mes erreurs",
       aide = "À un joueur qui a coché « Recevoir », dès qu'il est dans ton groupe, ta guilde ou ta liste d'amis et en ligne." },
     { cle = "toutes", libelle = "Aussi les erreurs des autres addons", dependDe = "envoyer",
-      aide = "Coupé : seules les erreurs des Addons de Valentin partent." },
+      aide = "Coupé : seules les erreurs des addons « Mes addons » partent." },
     { titre = "Recevoir" },
     { cle = "recevoir", libelle = "Recevoir les erreurs des autres",
       aide = "Pour celui qui analyse les erreurs. Elles sont gardées par joueur, lisibles avec /re." },
@@ -540,7 +540,7 @@ ns.reglages = ns.creerReglages({
       aide = "Un message avec le nom du joueur et de l'addon en cause, à la première fois qu'une erreur arrive." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de l'icône commune des addons de Valentin." },
+      aide = "En plus de l'icône commune « Mes addons »." },
   },
   ongletContenu = "En direct",
   contenu = function(f, y, r)

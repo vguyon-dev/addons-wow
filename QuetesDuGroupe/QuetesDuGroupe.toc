@@ -1,8 +1,8 @@
 ## Interface: 120105, 16001
 ## Title: Quêtes du groupe
 ## Notes: En groupe, montre les quêtes de chacun : en commun (avec la progression de chacun), les siennes et les tiennes.
-## Category: Addons de Valentin
-## Author: Valentin
+## Category: Mes addons
+## Author: addons-wow
 ## Version: 0.5.1
 ## IconTexture: Interface\Icons\Achievement_GuildPerk_EverybodysFriend
 ## SavedVariables: QuetesDuGroupeDB

@@ -17,7 +17,7 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 
 - [x] Fenêtres déplaçables : personnage, grimoire, carte, options, menu du jeu se déplacent par leur barre de titre (après le correctif 0.1.4 : poignée sur la couche au-dessus de la fenêtre).
 - [x] Fenêtres déplaçables : place gardée à la fermeture et à la réouverture (personnage, carte) ; deux fenêtres ouvertes ensemble gardent chacune leur place ; croix de fermeture toujours cliquable ; infobulle de la barre de titre ; clic droit, « Remettre à sa place d'origine ».
-- [ ] Fenêtres déplaçables : Ctrl + molette (marche chez Valentin ; mon outil n'envoie pas Ctrl avec la molette), glisser en combat, marchand, courrier, banque.
+- [ ] Fenêtres déplaçables : Ctrl + molette (marche avec ta souris ; mon outil n'envoie pas Ctrl avec la molette), glisser en combat, marchand, courrier, banque.
 - [x] Sacs rangés : B ouvre le sac ; plus aucune lueur bleue « nouvel objet » après `/reload` (0 sur 4 cases).
 - [x] Réglages communs : la fenêtre liste les 23 addons ; « Quoi de neuf » ; la recherche « taille » trouve 6 réglages et un clic mène à la bonne page (GPS) ; l'icône de Confort s'affiche (0.3.2).
 - [x] GPS : `/way 45 60 Essai GPS` montre la flèche avec la distance ; `/way effacer` la retire.
@@ -39,7 +39,7 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 
 ## La fenêtre de réglages commune (refaite le 10/11)
 
-- [x] Clic sur l'engrenage de la minimap : la fenêtre « Addons de Valentin » s'ouvre, sans erreur. Échap la ferme.
+- [x] Clic sur l'engrenage de la minimap : la fenêtre « Mes addons » s'ouvre, sans erreur. Échap la ferme.
 - [x] À gauche : les 18 addons, avec un point vert (activé) ou rouge (coupé). Clic : sa page à droite.
 - [x] Clic droit sur un addon de la liste : il s'active ou se coupe, le point change de couleur.
 - [x] Maj+clic sur Livres de bibliothèque, Quêtes du groupe, Rapport d'erreurs ou Sacs rangés : son panneau s'ouvre.
@@ -57,7 +57,7 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 - [x] Les commandes (/sr options, /gps, /qa…) ouvrent la fenêtre directement sur le bon addon.
 - [ ] Échap > Options > AddOns : le bouton « Ouvrir les réglages » marche aussi.
 - [ ] Tout en haut de la liste de gauche : « Quoi de neuf », sans point vert ni rouge, avec l'icône d'une note ; les addons sont en dessous, un peu plus bas.
-- [ ] À la première connexion après la mise à jour : un seul message dans le chat « Addons de Valentin : il y a du nouveau… » (pas 17), quelques secondes après l'arrivée dans le jeu, et une pastille dorée sur « Quoi de neuf » (et la ligne « Il y a du nouveau » dans la bulle de l'engrenage de la minimap).
+- [ ] À la première connexion après la mise à jour : un seul message dans le chat « Mes addons : il y a du nouveau… » (pas 17), quelques secondes après l'arrivée dans le jeu, et une pastille dorée sur « Quoi de neuf » (et la ligne « Il y a du nouveau » dans la bulle de l'engrenage de la minimap).
 - [ ] Clic sur « Quoi de neuf » : les nouveautés s'affichent dans un cadre qui défile à la molette, les plus récentes en premier, marquées « [nouveau] » (toutes, à la toute première mise à jour, quand aucune date vue n'existe) ; la pastille disparaît.
 - [ ] `/reload` : plus de message, plus de pastille. Les nouveautés s'ouvrent toujours quand on clique sur l'entrée.
 - [x] « Partager mes réglages », sous « Quoi de neuf » : deux cadres (mes réglages à copier, réglages reçus à coller) ; un clic dans le premier sélectionne tout le texte (`VA1;GPS:…;SacsRanges:…`), Ctrl+C le copie, taper dedans ne le change pas. Le cadre grandit avec le texte et se fait défiler à la molette, sans couper la fin.

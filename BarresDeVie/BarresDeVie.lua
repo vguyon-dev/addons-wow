@@ -3,7 +3,7 @@
 -- l'esprit de Threat Plates, réécrit à notre façon, sans reprendre son code).
 --
 -- On garde les barres du jeu telles quelles (« comme le jeu », voulu par
--- Valentin) et on ajoute :
+-- le joueur) et on ajoute :
 --   - un grand « ! » au-dessus des monstres de tes quêtes, et sous lui ta
 --     progression « 2/6 » avec l'icône de l'objet à ramasser (ou une épée
 --     quand il faut le tuer) ;
@@ -383,12 +383,12 @@ ns.reglages = ns.creerReglages({
       aide = "La barre de ta cible est agrandie (réglage du jeu remis comme avant si tu décoches)." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
-      aide = "En plus de la ligne dans l'icône commune des addons de Valentin." },
+      aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
   },
   auChargement = function(d)
     db = d
     d.butins = type(d.butins) == "table" and d.butins or {} -- [genre de monstre] = { [objet] = true }
-    -- Une fois : la 0.1.0 cochait tout ; Valentin veut les barres « comme le jeu ».
+    -- Une fois : la 0.1.0 cochait tout ; le joueur veut les barres « comme le jeu ».
     if not d.commeLeJeu then
       d.menace, d.etoiles, d.pourcent, d.cibleGrande, d.commeLeJeu = false, false, false, false, true
     end
