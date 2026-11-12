@@ -24,6 +24,8 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 - [ ] Dialogues de quête : les chiffres pour choisir (mon outil envoie « ^ » au lieu de « 3 » : à essayer avec ton clavier), et un vrai PNJ.
 - [x] Tenues : `/tenue` ouvre la fenêtre ; enregistrer une tenue (9 pièces, marquée portée) ; « Mettre » (déjà portée) ; supprimer avec « Sûr ? ».
 - [x] Conseiller : `/cs` s'ouvre et lit la classe et le niveau.
+- [x] Dialogues, style compact (comme Immersion) avec un vrai PNJ : visage en 3D, survol et clic d'une réponse, fiche de quête page par page, Refuser, rendu d'une quête et enchaînement sur la suivante.
+- [ ] Dialogues : visage du PNJ de profil quand il se tourne vers toi (à corriger) ; libellé « Fenêtre du jeu » coupé ; choix parmi plusieurs récompenses sur une vraie quête.
 
 ## La fenêtre de réglages commune (refaite le 10/11)
 
