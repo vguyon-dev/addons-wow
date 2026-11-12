@@ -25,7 +25,14 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 - [x] Tenues : `/tenue` ouvre la fenêtre ; enregistrer une tenue (9 pièces, marquée portée) ; « Mettre » (déjà portée) ; supprimer avec « Sûr ? ».
 - [x] Conseiller : `/cs` s'ouvre et lit la classe et le niveau.
 - [x] Dialogues, style compact (comme Immersion) avec un vrai PNJ : visage en 3D, survol et clic d'une réponse, fiche de quête page par page, Refuser, rendu d'une quête et enchaînement sur la suivante.
-- [ ] Dialogues : visage du PNJ de profil quand il se tourne vers toi (à corriger) ; libellé « Fenêtre du jeu » coupé ; choix parmi plusieurs récompenses sur une vraie quête.
+- [x] Dialogues 0.3.5 : visage chargé par numéro de créature, même angle depuis deux endroits ; bouton « Fenêtre du jeu » lisible.
+- [ ] Dialogues : choix parmi plusieurs récompenses sur une vraie quête, touches 1 à 9 au vrai clavier.
+- [x] Butin rapide 0.7.2 : durée du bilan = temps de jeu (0 puis 1 min après une minute et un /reload).
+- [x] Carnet de session 0.8.0 : cadre « Session » réuni, repli en une ligne, onglets Personnage / Farm, bilan séparé caché.
+- [x] Quêtes disponibles 0.3.0 : une quête de Forever apprise en parlant au PNJ (Yala), montrée sur la carte et la minimap.
+- [ ] Quêtes disponibles : sens des « ! » de la minimap pour une quête éloignée ; partage des quêtes apprises au groupe.
+- [x] Second écran (Fenêtres 0.2.2 + outils/second-ecran.ps1) : fenêtre du jeu étirée sur l'écran de gauche et le principal, jeu et interface entiers sur le principal, fenêtre du personnage posée et gardée sur l'écran de gauche, glisser sur l'écran principal sans saut.
+- [ ] Second écran : glisser une fenêtre d'un écran à l'autre avec ta souris (mon outil ne sait pas le faire), et le combat (rien ne doit bouger pendant).
 
 ## La fenêtre de réglages commune (refaite le 10/11)
 
