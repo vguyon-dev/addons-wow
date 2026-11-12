@@ -37,6 +37,9 @@ verifie("verrouillé : attendre", "attendre", ns.decision({ verrouille = true },
 verifie("gris le moins cher", 2, ns.grisAJeter({ { valeur = 50 }, { valeur = 3 }, { valeur = 9 } }))
 verifie("aucun gris : rien", nil, ns.grisAJeter({}))
 verifie("par heure : 1000 en 30 min", 2000, ns.parHeure(1000, 1800))
+verifie("durée jouée : sessions d'avant + celle-ci", 900, ns.dureeJouee(600, 1000, 1300))
+verifie("durée jouée : rien d'avant", 300, ns.dureeJouee(nil, 1000, 1300))
+verifie("durée jouée : horloge qui recule, pas de négatif", 600, ns.dureeJouee(600, 2000, 1300))
 verifie("par heure : moins d'une minute = 0", 0, ns.parHeure(1000, 30))
 
 -- Lignes de la liste « à ne jamais ramasser ».

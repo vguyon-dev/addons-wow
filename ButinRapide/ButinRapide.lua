@@ -145,6 +145,15 @@ function ns.grisAJeter(gris)
 end
 
 -- Gain par heure (0 avant une minute de farm, pour ne pas afficher n'importe quoi).
+-- La durée d'un bilan : seulement le temps passé EN JEU. Avant, on comptait depuis le tout premier
+-- démarrage, temps hors ligne compris (vu en jeu le 12/11 : « Durée : 8794 min »).
+--   joue : secondes de jeu déjà comptées (sessions d'avant) ; debutSession : time() de la connexion.
+function ns.dureeJouee(joue, debutSession, maintenant)
+  local d = tonumber(joue) or 0
+  if debutSession and maintenant and maintenant >= debutSession then d = d + (maintenant - debutSession) end
+  return d
+end
+
 function ns.parHeure(valeur, secondes)
   if secondes < 60 then return 0 end
   return valeur * 3600 / secondes
@@ -348,8 +357,11 @@ texteBilan:SetPoint("TOPLEFT", 10, -28)
 texteBilan:SetWidth(230)
 texteBilan:SetJustifyH("LEFT")
 
+local debutSession = time and time() or 0 -- l'heure de la connexion (ou du dernier « remettre à zéro »)
+
 local function nouveauBilan()
   perso.debut, perso.argent, perso.objets = time(), 0, {}
+  perso.joue, debutSession = 0, time()
 end
 
 function majBilan()
@@ -364,7 +376,7 @@ function majBilan()
     liste[#liste + 1] = o
   end
   table.sort(liste, function(a, b) return a.nombre > b.nombre end)
-  local duree = time() - perso.debut
+  local duree = ns.dureeJouee(perso.joue, debutSession, time())
   local lignes = {
     string.format("Durée : %d min     Objets : %d", math.floor(duree / 60), nombre),
     "Or ramassé : " .. texteOr(perso.argent),
@@ -450,7 +462,9 @@ ns.reglages = ns.creerReglages({
     db = d
     ButinRapidePerso = ButinRapidePerso or {}
     perso = ButinRapidePerso
-    if not perso.debut then nouveauBilan() end
+    -- Une fois : un bilan d'avant la 0.7.2 n'a pas son temps de jeu ; sa durée était fausse, on repart.
+    if not perso.debut or perso.joue == nil then nouveauBilan() end
+    debutSession = time()
     -- Le jeu remet parfois ses réglages au démarrage : on repose les nôtres.
     C_Timer.After(2, function() appliquerCadavres(d, false) end)
     if db.positionBilan then
@@ -478,10 +492,15 @@ ns.reglages = ns.creerReglages({
 
 local argentAvant
 local ecouteur = CreateFrame("Frame")
-for _, e in ipairs({ "LOOT_READY", "LOOT_CLOSED", "PLAYER_MONEY", "UI_ERROR_MESSAGE" }) do
+for _, e in ipairs({ "LOOT_READY", "LOOT_CLOSED", "PLAYER_MONEY", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT" }) do
   ecouteur:RegisterEvent(e)
 end
 ecouteur:SetScript("OnEvent", function(_, evenement, a, b)
+  if evenement == "PLAYER_LOGOUT" then
+    -- On range le temps de jeu de cette session dans le bilan (déconnexion ou /reload).
+    if perso then perso.joue, debutSession = ns.dureeJouee(perso.joue, debutSession, time()), time() end
+    return
+  end
   if not db or not db.actif then
     -- Coupé : la fenêtre de butin du jeu doit rester visible (alpha remis à 1).
     if evenement == "LOOT_CLOSED" then
