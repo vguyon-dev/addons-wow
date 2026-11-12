@@ -1610,7 +1610,7 @@ local function placerTextes(e, style)
     b.caseTouche:SetSize(46, 22)
     b.boutonDeux:SetSize(86, 26)
     b.boutonDeux:SetPoint("RIGHT", b.caseTouche:IsShown() and b.caseTouche or b.bouton, "LEFT", -8, 0)
-    b.boutonJeu:SetSize(116, 18)
+    b.boutonJeu:SetSize(140, 20)
     b.boutonJeu:SetPoint("TOPRIGHT", -30, -5)
     local repere = b.bouton
     if b.caseTouche:IsShown() then repere = b.caseTouche end
