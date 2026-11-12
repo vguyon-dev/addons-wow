@@ -194,6 +194,12 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-12", titre = "Dialogues comme Immersion, session réunie, quêtes apprises", lignes = {
+    "Dialogues de quête : nouveau style compact par défaut, comme Immersion : visage du PNJ en 3D, texte page par page, réponses en pile à droite. Les autres styles restent dans /dial style.",
+    "Carnet de session et Bilan de farm réunis dans un seul cadre « Session » (ou à onglets, au choix dans les réglages du Carnet). Un clic sur le titre le replie en une ligne. La durée du bilan ne compte plus que le temps de jeu.",
+    "Quêtes disponibles : les « ! » s'affichent aussi sur la minimap. Les PNJ de Forever qui te proposent une quête absente de la base sont retenus, et partagés avec ton groupe.",
+    "Fenêtres déplaçables : la fenêtre du personnage et les autres se déplacent enfin (la zone de la barre de titre ne recevait pas la souris).",
+  } },
   { date = "2026-11-12", titre = "Nouvel addon : Fenêtres déplaçables", lignes = {
     "Toutes les grandes fenêtres du jeu se déplacent : glisse leur barre de titre (personnage, grimoire, carte, quêtes, marchand, courrier, banque, métiers, amis, options…). Chacune se rouvre là où tu l'as laissée.",
     "Ctrl + molette sur la barre de titre change la taille de la fenêtre. Clic droit : la remettre à sa place d'origine. Réglages : /fen.",

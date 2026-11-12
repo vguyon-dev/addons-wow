@@ -16,6 +16,10 @@
 --   - clic gauche : une balise (notre GPS, sinon la balise du jeu) ;
 --   - clic droit : ne plus montrer ces quêtes (gardé par personnage, réversible dans les réglages).
 --
+--   - il apprend les quêtes que les PNJ proposent et que la base ne connaît pas (Forever a les siennes),
+--     retient où elles se prennent, et les partage avec le groupe (préfixe d'addon « QuetesDispo ») ;
+--   - de petits « ! » sur la minimap pour les quêtes à prendre à moins d'une portée de minimap.
+--
 --   /qd : les réglages     /qd etat : ce que l'addon voit sur la carte     /qd aide
 --
 -- Le fichier a deux parties : la logique pure (testée hors jeu, tests/QuetesDispo_simu.lua),
@@ -40,7 +44,11 @@ local DEFAUTS = {
   suites = true,         -- cacher les quêtes d'une suite pas encore débloquée
   taille = 20,           -- taille des « ! », de 12 à 32
   continent = false,     -- montrer aussi sur la carte d'un continent
-  minimap = false,
+  minimap = false,       -- l'icône à part autour de la minimap (réglages communs), PAS les « ! » de la minimap
+  surMinimap = true,     -- montrer les « ! » des quêtes proches sur la minimap
+  apprendre = true,      -- retenir les quêtes que les PNJ proposent et que la base ne connaît pas
+  partager = true,       -- envoyer ces quêtes au groupe et recevoir celles du groupe
+  appris = {},           -- [ numéro de quête ] = { titre, niveau, monde = { continent, x, y }, carte, pnj, date, source }
   ignorees = {},         -- [ "Nom-Royaume" ] = { [numéro de quête] = true } : cachées à la main, par personnage
 }
 
@@ -167,6 +175,28 @@ function ns.fiche(numero)
   }
   fiches[numero] = f
   return f
+end
+
+-- Les quêtes apprises en jeu (QuetesDispoDB.appris, posé par la partie « jeu » dans ns.apprises).
+-- Une fiche apprise n'a que ce que le jeu a donné : titre, niveau parfois. Tout le reste est « inconnu »
+-- (race, classe, niveau minimal, prérequis à 0 : aucun jugement), sauf ce que filtrent déjà le journal et les rendues.
+ns.apprises = nil
+function ns.ficheApprise(numero, a)
+  if type(a) ~= "table" then return nil end
+  return {
+    numero = numero, niveau = tonumber(a.niveau) or 0, niveauMin = 0, races = 0, classes = 0, avant = 0, groupe = 0,
+    drapeaux = 0, metier = 0, niveauMetier = 0, titre = type(a.titre) == "string" and a.titre or nil,
+    autres = {}, reputation = 0, appris = true, source = a.source,
+  }
+end
+
+-- La fiche d'une quête : celle de la base d'abord (une fiche apprise ne la remplace jamais), sinon l'apprise.
+function ns.ficheDe(numero)
+  local f = ns.fiche(numero)
+  if f then return f end
+  local a = type(ns.apprises) == "table" and ns.apprises[numero]
+  if a then return ns.ficheApprise(numero, a) end
+  return nil
 end
 
 -- L'index des groupes exclusifs : { [groupe] = { numéros des quêtes du groupe } }. Dans un groupe, prendre
@@ -308,16 +338,18 @@ end
 function ns.lignesQuetes(numeros, joueur, reglages, titreDe)
   local lignes = {}
   for _, n in ipairs(numeros or {}) do
-    local f = ns.fiche(n)
+    local f = ns.ficheDe(n)
     if f then
       local _, raison = ns.disponible(f, joueur, reglages)
       local titre = titreDe and titreDe(n) or ns.titreQuete(n, nil, f.titre)
       local r, g, b
       if raison == "bientot" or raison == "verrouillee" then r, g, b = 0.75, 0.75, 0.75
       else r, g, b = ns.couleurDifficulte(f.niveau, joueur and joueur.niveau, joueur and joueur.plageVerte) end
+      local marques = ns.marques(f.drapeaux, f.metier, f.reputation)
+      if f.appris then marques[#marques + 1] = f.source == "groupe" and "appris par ton groupe" or "appris en jeu" end
       lignes[#lignes + 1] = {
         numero = n, niveau = f.niveau, titre = titre, texte = ns.titreAffiche(f.niveau, titre),
-        marques = table.concat(ns.marques(f.drapeaux, f.metier, f.reputation), ", ")
+        marques = table.concat(marques, ", ")
           .. (raison == "verrouillee" and " (pas encore débloquée)" or ""), r = r, v = g, b = b, bientot = raison == "bientot",
       }
     end
@@ -421,6 +453,92 @@ function ns.choisirOrientation(convertir)
   return meilleur, scoreMeilleur
 end
 
+-- L'inverse de chaque transformation : du jeu vers les axes de la base. Les six premières se défont elles-mêmes ;
+-- la septième (y, -x) et la huitième (-y, x) sont l'inverse l'une de l'autre.
+ns.INVERSES = {}
+for i = 1, 6 do ns.INVERSES[i] = ns.TRANSFORMATIONS[i] end
+ns.INVERSES[7], ns.INVERSES[8] = ns.TRANSFORMATIONS[8], ns.TRANSFORMATIONS[7]
+
+-- ---------------------------------------------------------------------------
+-- Le partage des quêtes apprises : un message compact « A~numéro~niveau~continent~x~y~titre ».
+-- Le « ~ » sépare les champs, donc il est retiré du titre ; la barre « | » aussi (un message reçu ne doit pas
+-- pouvoir glisser un lien ou une couleur dans une bulle).
+-- ---------------------------------------------------------------------------
+ns.PREFIXE = "QuetesDispo"
+local TITRE_MAX, TITRE_OCTETS = 80, 200
+
+-- Le titre sans caractère de contrôle, « ~ » ni « | », coupé à 80 caractères (et 200 octets) sans casser une lettre accentuée.
+local function titreNet(t)
+  t = tostring(t == nil and "" or t)
+  t = t:gsub("[%c~|]", "")
+  t = t:gsub("^%s+", ""):gsub("%s+$", "")
+  local sortie, n, octets = {}, 0, 0
+  for c in t:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+    if n >= TITRE_MAX or octets + #c > TITRE_OCTETS then break end
+    n, octets = n + 1, octets + #c
+    sortie[n] = c
+  end
+  return table.concat(sortie)
+end
+
+-- Le texte à envoyer pour une quête apprise : fiche = { numero, titre, niveau, monde = { continent, x, y } }.
+-- nil si la fiche est incomplète. Niveau inconnu : 0.
+function ns.codeAppris(fiche)
+  if type(fiche) ~= "table" or type(fiche.monde) ~= "table" then return nil end
+  local numero, continent = tonumber(fiche.numero), tonumber(fiche.monde[1])
+  local x, y = tonumber(fiche.monde[2]), tonumber(fiche.monde[3])
+  if not (numero and continent and x and y) then return nil end
+  if x ~= x or y ~= y or math.abs(x) > 100000 or math.abs(y) > 100000 then return nil end
+  local niveau = tonumber(fiche.niveau)
+  if not niveau or niveau ~= niveau or niveau < 0 or niveau > 100 then niveau = 0 end
+  local titre = titreNet(fiche.titre)
+  if titre == "" then return nil end
+  return string.format("A~%d~%d~%d~%.1f~%.1f~%s", math.floor(numero), math.floor(niveau), math.floor(continent), x, y, titre)
+end
+
+-- Le contraire : la fiche { numero, niveau (nil si inconnu), titre, monde = { continent, x, y } }, ou nil si le texte
+-- est abîmé, trop long, ou dit des choses impossibles.
+function ns.decodeAppris(texte)
+  if type(texte) ~= "string" or #texte > 255 then return nil end
+  local n, niv, cont, x, y, titre = texte:match("^A~(%d+)~(%-?%d+)~(%d+)~(%-?%d+%.?%d*)~(%-?%d+%.?%d*)~([^~]*)$")
+  if not n then return nil end
+  n, niv, cont, x, y = tonumber(n), tonumber(niv), tonumber(cont), tonumber(x), tonumber(y)
+  if not (n and niv and cont and x and y) then return nil end
+  if n < 1 or n > 9999999 or cont > 9999 or niv > 100 then return nil end
+  if math.abs(x) > 100000 or math.abs(y) > 100000 then return nil end
+  titre = titreNet(titre)
+  if titre == "" then return nil end
+  return { numero = n, niveau = niv > 0 and niv or nil, titre = titre, monde = { cont, x, y } }
+end
+
+-- ---------------------------------------------------------------------------
+-- La minimap : où poser l'icône d'une quête.
+-- Les axes du monde sont ceux de la base (CMaNGOS) : x vers le NORD, y vers l'OUEST. Preuve par les villes de
+-- ns.ANCRES : Darnassus (9947, 2483) est au nord-ouest de Pitons-du-Tonnerre (-1277, 125), et Hurlevent (-8833, 629)
+-- est bien au sud de Fossoyeuse (1584, 242) : le nord, c'est x qui monte ; l'ouest, c'est y qui monte.
+-- (À vérifier en jeu : si les icônes sont en miroir est-ouest ou nord-sud, c'est ce passage qu'il faut corriger.)
+-- dxMonde, dyMonde : position de la quête moins position du joueur, dans ces axes, en mètres.
+-- rayon : mètres vus par la minimap (centre au bord). demiLargeur : demi-largeur de la minimap en pixels.
+-- rotation : angle en radians dont on tourne l'image, dans le sens inverse des aiguilles d'une montre. 0 quand le
+-- nord est en haut ; -GetPlayerFacing() quand la minimap tourne (le regard du joueur va en haut).
+-- marge (facultative) : pixels gardés libres au bord, pour que l'icône ne déborde pas du cercle.
+-- Rend px (vers la droite) et py (vers le haut), en pixels depuis le centre, ou nil si c'est hors du cercle.
+-- ---------------------------------------------------------------------------
+function ns.placementMinimap(dxMonde, dyMonde, rayon, demiLargeur, rotation, marge)
+  if type(dxMonde) ~= "number" or type(dyMonde) ~= "number" or type(rayon) ~= "number" or type(demiLargeur) ~= "number" then
+    return nil
+  end
+  if dxMonde ~= dxMonde or dyMonde ~= dyMonde or rayon <= 0 or demiLargeur <= 0 then return nil end
+  if dxMonde * dxMonde + dyMonde * dyMonde >= rayon * rayon then return nil end -- au bord ou au-delà : pas montré
+  local est, nord = -dyMonde, dxMonde
+  local t = tonumber(rotation) or 0
+  local c, s = math.cos(t), math.sin(t)
+  local px, py = (est * c - nord * s) * demiLargeur / rayon, (est * s + nord * c) * demiLargeur / rayon
+  local m = tonumber(marge) or 0
+  if px * px + py * py > (demiLargeur - m) * (demiLargeur - m) then return nil end
+  return px, py
+end
+
 if not CreateFrame then return end -- hors jeu : la suite ne sert qu'en jeu
 
 -- ---------------------------------------------------------------------------
@@ -449,6 +567,15 @@ end
 -- Une action après un délai ; sans C_Timer, tout de suite.
 local function apres(delai, f)
   if C_Timer and C_Timer.After then C_Timer.After(delai, f) else f() end
+end
+
+-- L'heure en secondes (GetTime ; sans lui, l'heure du système, au pire 0).
+local function maintenant()
+  if type(GetTime) == "function" then
+    local t = sur(GetTime)
+    if type(t) == "number" then return t end
+  end
+  return type(time) == "function" and time() or 0
 end
 
 -- Une position donnée par le jeu : un objet qui a GetXY, ou une simple table { x, y } (vu sur Forever).
@@ -655,6 +782,85 @@ local function positionsDeCarte(carte, rappel)
 end
 
 -- ---------------------------------------------------------------------------
+-- Le joueur dans le monde, et les quêtes apprises
+-- ---------------------------------------------------------------------------
+
+local apprisVersion = 0  -- monte à chaque changement des quêtes apprises : les calculs qui en dépendent se refont
+local cacheAppris = {}   -- [carte] = { version, ori, points } : les quêtes apprises posées sur chaque carte
+local miniSale = true    -- vrai : la liste des quêtes proches de la minimap est à refaire
+local dernierEssaiOri = -1000
+
+local function majApprises()
+  apprisVersion = apprisVersion + 1
+  cacheAppris = {}
+  miniSale = true
+end
+
+-- Où est le joueur : { carte, continent, a, b (vecteur du jeu), x, y (axes de la base : x nord, y ouest) }.
+-- nil si le jeu ne le dit pas (instance, valeur secrète, API absente) ou si l'orientation n'est pas reconnue
+-- (sans elle, passer du jeu à la base donnerait des positions fausses).
+local function positionJoueur()
+  if not (C_Map and C_Map.GetBestMapForUnit and C_Map.GetPlayerMapPosition and C_Map.GetWorldPosFromMapPos) then return nil end
+  local carte = lisible(sur(C_Map.GetBestMapForUnit, "player"))
+  if type(carte) ~= "number" then return nil end
+  local pos = lisible(sur(C_Map.GetPlayerMapPosition, carte, "player"))
+  if type(pos) ~= "table" then return nil end
+  local continent, monde = sur(C_Map.GetWorldPosFromMapPos, carte, pos)
+  continent = lisible(continent)
+  monde = lisible(monde)
+  if type(continent) ~= "number" then return nil end
+  local a, b = xyDe(monde)
+  a, b = lisible(a), lisible(b)
+  if type(a) ~= "number" or type(b) ~= "number" then return nil end
+  if not orientation then
+    local t = maintenant()
+    if t - dernierEssaiOri >= 5 then dernierEssaiOri = t; laOrientation() end -- pas plus d'un essai toutes les 5 s
+    if not orientation then return nil end
+  end
+  local x, y = ns.INVERSES[orientation](a, b)
+  return { carte = carte, continent = continent, a = a, b = b, x = x, y = y }
+end
+
+-- Une quête apprise est-elle valable ? (la sauvegarde peut avoir été abîmée à la main)
+local function apprisePosee(numero, a)
+  return type(numero) == "number" and type(a) == "table" and type(a.monde) == "table"
+    and type(a.monde[1]) == "number" and type(a.monde[2]) == "number" and type(a.monde[3]) == "number"
+    and not (type(ns.QUETES) == "table" and ns.QUETES[numero]) -- la base gagne toujours
+end
+
+-- Les numéros des quêtes apprises, dans l'ordre (le même résultat à chaque fois).
+local function numerosApprises()
+  local liste = {}
+  if db and type(db.appris) == "table" then
+    for numero, a in pairs(db.appris) do
+      if apprisePosee(numero, a) then liste[#liste + 1] = numero end
+    end
+  end
+  table.sort(liste)
+  return liste
+end
+
+-- Les quêtes apprises qui tombent sur la carte : { { x, y, quetes = { numéro } } }, gardées jusqu'au prochain changement.
+local function pointsApprisDe(carte)
+  local ori = laOrientation()
+  local c = cacheAppris[carte]
+  if c and c.version == apprisVersion and c.ori == ori then return c.points end
+  local points = {}
+  local continents = continentsDe(carte)
+  local transformer = ns.TRANSFORMATIONS[ori]
+  for _, numero in ipairs(numerosApprises()) do
+    local m = db.appris[numero].monde
+    if continents[m[1]] then
+      local ga, gb = transformer(m[2], m[3])
+      local x, y = convertirBrut(m[1], ga, gb, carte)
+      if x and x >= 0 and x <= 1 and y >= 0 and y <= 1 then points[#points + 1] = { x = x, y = y, quetes = { numero } } end
+    end
+  end
+  cacheAppris[carte] = { version = apprisVersion, ori = ori, points = points }
+  return points
+end
+
+-- ---------------------------------------------------------------------------
 -- Ce qui est à montrer sur une carte
 -- ---------------------------------------------------------------------------
 
@@ -671,7 +877,7 @@ local function titreDe(numero, demanderLeJeu)
     end
     t = nil
   end
-  local f = ns.fiche(numero)
+  local f = ns.ficheDe(numero)
   return ns.titreQuete(numero, t, f and f.titre)
 end
 
@@ -687,12 +893,12 @@ local function evaluer(carte, tolerance, rappel)
   joueurDernier = joueur
   local resultats, exclues, montrees = {}, {}, 0
   local bruts = {}
-  for _, p in ipairs(points) do
+  local function visiter(p)
     local gardees = {}
     for _, n in ipairs(p.quetes) do
       local r = resultats[n]
       if r == nil then
-        local f = ns.fiche(n)
+        local f = ns.ficheDe(n)
         if f then
           local dispo, raison = ns.disponible(f, joueur, db)
           r = { dispo = dispo, raison = raison }
@@ -706,6 +912,8 @@ local function evaluer(carte, tolerance, rappel)
     end
     if #gardees > 0 then bruts[#bruts + 1] = { x = p.x, y = p.y, quetes = gardees } end
   end
+  for _, p in ipairs(points) do visiter(p) end
+  for _, p in ipairs(pointsApprisDe(carte)) do visiter(p) end -- les quêtes apprises en jeu
   local epingles = ns.regrouper(bruts, tolerance)
   local titres = {}
   for _, e in ipairs(epingles) do
@@ -713,7 +921,7 @@ local function evaluer(carte, tolerance, rappel)
     for _, n in ipairs(e.quetes) do
       if resultats[n].raison ~= "bientot" then e.grise = false end
       if #titres < 15 then
-        local f = ns.fiche(n)
+        local f = ns.ficheDe(n)
         titres[#titres + 1] = ns.titreAffiche(f.niveau, titreDe(n, false)) .. " (n° " .. n .. ")"
       end
     end
@@ -765,15 +973,12 @@ end
 
 local MAX_LIGNES = 15 -- lignes de quêtes dans la bulle, au plus
 
-local function infobulle(p)
-  local e = p.donnees
-  if not e then return end
-  survol = p
-  GameTooltip:SetOwner(p, "ANCHOR_RIGHT")
-  local nb = #e.quetes
+-- Le contenu de la bulle d'un « ! » : les quêtes, et le rappel des clics (la minimap n'en a pas).
+local function remplirBulle(quetes, avecClics)
+  local nb = #quetes
   GameTooltip:AddLine(nb > 1 and ("Quêtes disponibles (" .. nb .. ")") or "Quête disponible", 1, 0.82, 0)
   local joueur = joueurDernier or construireJoueur()
-  local lignes = ns.lignesQuetes(e.quetes, joueur, db, function(n) return titreDe(n, true) end)
+  local lignes = ns.lignesQuetes(quetes, joueur, db, function(n) return titreDe(n, true) end)
   for i, l in ipairs(lignes) do
     if i > MAX_LIGNES then
       GameTooltip:AddLine("… et " .. (#lignes - MAX_LIGNES) .. " autres", 0.6, 0.6, 0.6)
@@ -781,8 +986,16 @@ local function infobulle(p)
     end
     GameTooltip:AddDoubleLine(l.texte, l.marques, l.r, l.v, l.b, 0.6, 0.6, 0.6)
   end
-  GameTooltip:AddLine("Clic gauche : balise     Clic droit : ne plus montrer ces quêtes", 0.6, 0.6, 0.6)
+  if avecClics then GameTooltip:AddLine("Clic gauche : balise     Clic droit : ne plus montrer ces quêtes", 0.6, 0.6, 0.6) end
   GameTooltip:Show()
+end
+
+local function infobulle(p)
+  local e = p.donnees
+  if not e then return end
+  survol = p
+  GameTooltip:SetOwner(p, "ANCHOR_RIGHT")
+  remplirBulle(e.quetes, true)
 end
 
 local function clic(self, bouton)
@@ -905,6 +1118,356 @@ ns.rafraichir = rafraichirSur
 function ns.etat() return dernierEtat end
 
 -- ---------------------------------------------------------------------------
+-- Apprendre les donneurs de quêtes
+-- Quand un PNJ propose une quête que la base ne connaît pas, on retient où le joueur se tenait (à côté du PNJ) :
+-- elle réapparaît ensuite sur la carte et la minimap comme les autres. On la partage avec le groupe.
+-- ---------------------------------------------------------------------------
+
+local APPRIS_MAX = 3000   -- au plus autant de quêtes apprises : la sauvegarde reste petite
+local dernierRecu = {}    -- [numéro de quête] = heure du dernier message traité pour elle
+local nbDernierRecu = 0
+
+local function arrondi1(v) return math.floor(v * 10 + 0.5) / 10 end
+
+local function nbApprises()
+  local n, groupe = 0, 0
+  for _, a in pairs(db and type(db.appris) == "table" and db.appris or {}) do
+    n = n + 1
+    if type(a) == "table" and a.source == "groupe" then groupe = groupe + 1 end
+  end
+  return n, groupe
+end
+
+-- Le PNJ (ou l'objet) avec qui le joueur parle. Rend « ok » et son numéro de créature ; « refuse » si c'est autre
+-- chose (un joueur qui partage une quête, un objet qui en donne une : le joueur peut être loin) ; « inconnu » si le
+-- jeu ne le dit pas.
+local function cibleDeQuete()
+  if type(UnitGUID) ~= "function" then return "inconnu" end
+  local guid = lisible(sur(UnitGUID, "npc")) or lisible(sur(UnitGUID, "questnpc"))
+  if type(guid) ~= "string" then return "inconnu" end
+  local genre, id = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+  if genre == "Creature" or genre == "Vehicle" or genre == "GameObject" then return "ok", tonumber(id) end
+  return "refuse"
+end
+
+-- Le canal du groupe : « RAID », « PARTY », ou rien si on est seul.
+local function canalGroupe()
+  if sur(IsInRaid) then return "RAID" end
+  if sur(IsInGroup) then return "PARTY" end
+  return nil
+end
+
+-- Envoie une quête apprise au groupe (option « partager »).
+local function partagerQuete(numero, a)
+  if not db.partager then return end
+  local canal = canalGroupe()
+  if not canal then return end
+  local texte = ns.codeAppris({ numero = numero, titre = a.titre, niveau = a.niveau, monde = a.monde })
+  if not texte then return end
+  local envoyer = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
+  sur(envoyer, ns.PREFIXE, texte, canal)
+end
+
+-- Peut-on retenir cette quête ? Pas si la base la connaît, ni si on l'a déjà, ni si la liste est pleine.
+local function retenable(numero)
+  if type(numero) ~= "number" or numero < 1 or numero % 1 ~= 0 then return false end
+  if type(ns.QUETES) == "table" and ns.QUETES[numero] then return false end
+  if db.appris[numero] ~= nil then return false end
+  return (nbApprises()) < APPRIS_MAX
+end
+
+-- Retient une quête proposée par un PNJ, avec la position du joueur. Rend la fiche retenue, ou nil.
+local function retenirDuJeu(numero, titre, niveau, pnj)
+  if not retenable(numero) then return nil end
+  local p = positionJoueur()
+  if not p then return nil end
+  local a = {
+    titre = type(titre) == "string" and titre ~= "" and titre or nil,
+    niveau = type(niveau) == "number" and niveau > 0 and niveau <= 100 and niveau or nil,
+    monde = { p.continent, arrondi1(p.x), arrondi1(p.y) }, carte = p.carte, pnj = pnj,
+    date = type(date) == "function" and date("%Y-%m-%d") or nil, source = "jeu",
+  }
+  db.appris[numero] = a
+  majApprises()
+  partagerQuete(numero, a)
+  return a
+end
+
+-- GOSSIP_SHOW, QUEST_GREETING, QUEST_DETAIL : ce que le PNJ propose.
+local function apprendreEvenement(evenement)
+  if not (db.actif and db.apprendre) or not donneesPresentes() then return end
+  local etat, pnj = cibleDeQuete()
+  local nouvelles = {}
+  local function noter(numero, titre, niveau)
+    numero, titre, niveau = lisible(numero), lisible(titre), lisible(niveau)
+    local a = retenirDuJeu(numero, titre, niveau, pnj)
+    if a then nouvelles[#nouvelles + 1] = ns.titreAffiche(a.niveau, ns.titreQuete(numero, a.titre, nil)) end
+  end
+  if evenement == "GOSSIP_SHOW" then
+    if etat == "refuse" then return end
+    local liste = C_GossipInfo and C_GossipInfo.GetAvailableQuests and sur(C_GossipInfo.GetAvailableQuests)
+    for _, q in ipairs(type(liste) == "table" and liste or {}) do
+      if type(q) == "table" then noter(q.questID, q.title, q.questLevel) end -- sans numéro, rien n'est retenu
+    end
+  elseif evenement == "QUEST_GREETING" then
+    if etat == "refuse" then return end
+    local n = lisible(sur(GetNumAvailableQuests))
+    for i = 1, (type(n) == "number" and n or 0) do
+      local r = { pcall(GetAvailableQuestInfo, i) } -- ok, trivial, fréquence, répétable, légendaire, numéro
+      noter(r[1] and r[6] or nil, sur(GetAvailableTitle, i), sur(GetAvailableLevel, i))
+    end
+  elseif evenement == "QUEST_DETAIL" then
+    if etat ~= "ok" then return end -- une quête partagée par un joueur ou donnée par un objet : on ne sait pas où est le PNJ
+    noter(sur(GetQuestID), sur(GetTitleText), nil)
+  end
+  if #nouvelles > 0 and demander then demander() end -- la carte ouverte montre tout de suite le nouveau « ! »
+  if #nouvelles == 1 then
+    dire("quête apprise (la base ne la connaît pas) : " .. nouvelles[1] .. ".")
+  elseif #nouvelles > 1 then
+    dire(#nouvelles .. " quêtes apprises (la base ne les connaît pas) : " .. table.concat(nouvelles, ", ", 1, math.min(3, #nouvelles))
+      .. (#nouvelles > 3 and ", …" or "") .. ".")
+  end
+end
+
+-- Est-ce moi qui ai envoyé ce message ? (le jeu renvoie ses propres messages d'addon)
+local function estMoi(expediteur)
+  local court = expediteur:match("^([^%-]+)")
+  local moi = sur(UnitName, "player")
+  return court ~= nil and court == moi
+end
+
+-- CHAT_MSG_ADDON : une quête apprise par quelqu'un du groupe.
+local function recevoir(prefixe, texte, canal, expediteur)
+  prefixe, texte, canal, expediteur = lisible(prefixe), lisible(texte), lisible(canal), lisible(expediteur)
+  if prefixe ~= ns.PREFIXE then return end
+  if not (db.actif and db.apprendre and db.partager) then return end
+  if canal ~= "PARTY" and canal ~= "RAID" and canal ~= "INSTANCE_CHAT" then return end
+  if type(expediteur) ~= "string" or estMoi(expediteur) then return end
+  local f = ns.decodeAppris(texte)
+  if not f or not donneesPresentes() then return end
+  -- Pas plus d'un message traité par quête et par minute (le groupe peut renvoyer la même cent fois).
+  local t = maintenant()
+  local avant = dernierRecu[f.numero]
+  if avant and t - avant < 60 then return end
+  if nbDernierRecu >= 500 then dernierRecu, nbDernierRecu = {}, 0 end
+  if not avant then nbDernierRecu = nbDernierRecu + 1 end
+  dernierRecu[f.numero] = t
+  if not retenable(f.numero) then return end
+  db.appris[f.numero] = {
+    titre = f.titre, niveau = f.niveau, monde = f.monde,
+    date = type(date) == "function" and date("%Y-%m-%d") or nil, source = "groupe",
+  }
+  majApprises()
+  if demander then demander() end
+end
+
+-- Le bouton des réglages : oublier toutes les quêtes apprises.
+local function oublier()
+  if not db then return end
+  local n = 0
+  for k in pairs(db.appris) do n = n + 1; db.appris[k] = nil end
+  dernierRecu, nbDernierRecu = {}, 0
+  majApprises()
+  if n == 0 then dire("aucune quête apprise à oublier.")
+  elseif n == 1 then dire("1 quête apprise oubliée.")
+  else dire(n .. " quêtes apprises oubliées.") end
+  rafraichirSur()
+end
+
+-- ---------------------------------------------------------------------------
+-- Les « ! » sur la minimap
+-- De petites icônes, enfants de la Minimap (on n'écrit jamais dans la Minimap elle-même : seulement SetPoint sur
+-- nos cadres). Deux rythmes : la liste des quêtes à moins de 300 m se refait toutes les 2 s, leur placement toutes
+-- les 0,2 s, et seulement si le joueur, son regard ou le zoom ont bougé.
+-- ---------------------------------------------------------------------------
+
+local MINI_TAILLE = 13   -- côté des icônes, en pixels
+local MINI_PORTEE = 300  -- on ne garde que les quêtes à moins de tant de mètres
+local MINI_MAX = 40      -- icônes au plus
+local MINI_REGROUPE = 15 -- des quêtes à moins de tant de mètres l'une de l'autre ne font qu'une icône
+local pastilles = {}     -- la réserve d'icônes, réutilisées : jamais recréées
+local miniProches = {}   -- { { x, y, quetes, grise } } : les quêtes proches, dans les axes de la base
+local miniProchesAt, miniProchesPos, miniContinent
+local miniSig            -- ce qui a servi au dernier placement
+local miniVisibles = 0
+local survolMini
+
+-- Les mètres vus par la minimap (du centre au bord) selon le zoom, quand le jeu ne les donne pas
+-- (C_Minimap.GetViewRadius). VALEURS SUPPOSÉES, d'après les diamètres connus de la minimap de WoW (mètres) :
+-- dehors 466,7 400 333,3 266,7 200 133,3 ; dedans 300 240 180 120 80 50, du zoom 0 (le plus large) à 5.
+-- Ici, les rayons : la moitié.
+local RAYON_ZOOM = {
+  dehors = { [0] = 233.33, 200, 166.67, 133.33, 100, 66.67 },
+  dedans = { [0] = 150, 120, 90, 60, 40, 25 },
+}
+
+local function rayonMinimap()
+  local r = C_Minimap and C_Minimap.GetViewRadius and lisible(sur(C_Minimap.GetViewRadius))
+  if type(r) == "number" and r > 0 then return r end
+  if type(Minimap) ~= "table" or not Minimap.GetZoom then return nil end
+  local zoom = lisible(sur(Minimap.GetZoom, Minimap))
+  if type(zoom) ~= "number" then return nil end
+  local dedans = sur(IsIndoors) and true or false
+  return (dedans and RAYON_ZOOM.dedans or RAYON_ZOOM.dehors)[zoom]
+end
+
+-- La minimap tourne-t-elle avec le regard du joueur ? (CVar « rotateMinimap »)
+local function minimapTourne()
+  local v = C_CVar and C_CVar.GetCVar and sur(C_CVar.GetCVar, "rotateMinimap")
+  if v == nil and type(GetCVar) == "function" then v = sur(GetCVar, "rotateMinimap") end
+  v = lisible(v)
+  return v == "1" or v == 1 or v == true
+end
+
+local function infobulleMini(p)
+  local e = p.mini
+  if not e then return end
+  survolMini = p
+  GameTooltip:SetOwner(p, "ANCHOR_LEFT")
+  remplirBulle(e.quetes, false)
+end
+
+local function prendrePastille(i)
+  local p = pastilles[i]
+  if not p then
+    p = CreateFrame("Button", nil, Minimap)
+    p:SetSize(MINI_TAILLE, MINI_TAILLE)
+    local niveau = Minimap.GetFrameLevel and Minimap:GetFrameLevel()
+    p:SetFrameLevel(math.min((type(niveau) == "number" and niveau or 1) + 5, 9990))
+    -- Pas de SetPassThroughButtons : cette fonction est protégée en combat (« action bloquée », déjà vu
+    -- en jeu sur ce projet), et une icône peut être créée pendant un combat.
+    p.image = p:CreateTexture(nil, "ARTWORK")
+    p.image:SetAllPoints()
+    p.image:SetTexture(ICONE)
+    p.nombre = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    p.nombre:SetPoint("BOTTOMRIGHT", 4, -3)
+    p:SetScript("OnEnter", infobulleMini)
+    p:SetScript("OnLeave", function(self) if survolMini == self then survolMini = nil end GameTooltip:Hide() end)
+    pastilles[i] = p
+  end
+  return p
+end
+
+local function cacherMinimap()
+  if miniVisibles > 0 or miniSig then
+    for _, p in ipairs(pastilles) do p:Hide() end
+    if survolMini then survolMini = nil; GameTooltip:Hide() end
+  end
+  miniVisibles, miniSig = 0, nil
+end
+
+-- Les quêtes à prendre à moins de MINI_PORTEE mètres du joueur, avec les mêmes filtres que la carte.
+local function recalculerProches(pos, rayon)
+  miniProchesAt, miniProchesPos, miniContinent, miniSale = maintenant(), { pos.x, pos.y }, pos.continent, false
+  local portee = math.max(MINI_PORTEE, rayon + 30)
+  local portee2 = portee * portee
+  local bruts = {}
+  local function proche(x, y, quetes)
+    if type(x) ~= "number" or type(y) ~= "number" then return end
+    local dx, dy = x - pos.x, y - pos.y
+    if dx * dx + dy * dy < portee2 then bruts[#bruts + 1] = { x = x, y = y, quetes = quetes } end
+  end
+  local departs = ns.DEPARTS
+  for i = 1, #departs do
+    local d = departs[i]
+    if type(d) == "table" and d[1] == pos.continent then proche(d[2], d[3], d[5] or {}) end
+  end
+  for _, numero in ipairs(numerosApprises()) do
+    local m = db.appris[numero].monde
+    if m[1] == pos.continent then proche(m[2], m[3], { numero }) end
+  end
+  miniProches = {}
+  if #bruts == 0 then return end
+  local joueur = construireJoueur()
+  joueurDernier = joueur
+  if not joueur.etatConnu then return end
+  local raisons, gardes = {}, {}
+  for _, b in ipairs(bruts) do
+    local gardees = {}
+    for _, n in ipairs(b.quetes) do
+      if raisons[n] == nil then
+        local f = ns.ficheDe(n)
+        if f then
+          local dispo, raison = ns.disponible(f, joueur, db)
+          raisons[n] = dispo and (raison or true) or false
+        else
+          raisons[n] = false
+        end
+      end
+      if raisons[n] then gardees[#gardees + 1] = n end
+    end
+    if #gardees > 0 then gardes[#gardes + 1] = { x = b.x, y = b.y, quetes = gardees } end
+  end
+  for _, e in ipairs(ns.regrouper(gardes, MINI_REGROUPE)) do
+    if #miniProches < MINI_MAX then
+      e.grise = true
+      for _, n in ipairs(e.quetes) do if raisons[n] ~= "bientot" then e.grise = false end end
+      miniProches[#miniProches + 1] = e
+    end
+  end
+end
+
+-- Un passage du minuteur de 0,2 s.
+local function tickMinimap()
+  if not db then return end
+  if not (db.actif and db.surMinimap) or not donneesPresentes() or type(Minimap) ~= "table" then
+    miniSale = true
+    return cacherMinimap()
+  end
+  local pos = positionJoueur()
+  local rayon = pos and rayonMinimap()
+  local largeur = type(Minimap.GetWidth) == "function" and Minimap:GetWidth()
+  if not pos or not rayon or type(largeur) ~= "number" or largeur <= 0 then
+    miniSale = true
+    return cacherMinimap()
+  end
+  local rotation = 0
+  if minimapTourne() then
+    local regard = lisible(sur(GetPlayerFacing))
+    if type(regard) ~= "number" then return cacherMinimap() end -- sans le regard, impossible de bien tourner
+    rotation = -regard
+  end
+  -- La liste des quêtes proches : toutes les 2 s, ou si elle est périmée (options, quêtes, continent, grand déplacement).
+  local t = maintenant()
+  local refaite = false
+  local loin = miniProchesPos and ((pos.x - miniProchesPos[1]) ^ 2 + (pos.y - miniProchesPos[2]) ^ 2 > 3600)
+  if miniSale or loin or not miniProchesAt or t - miniProchesAt >= 2 or t < miniProchesAt or pos.continent ~= miniContinent then
+    recalculerProches(pos, rayon)
+    refaite = true
+  end
+  -- Le placement : seulement si quelque chose a bougé.
+  local s = miniSig
+  if not refaite and s and s.x == pos.x and s.y == pos.y and s.rotation == rotation and s.rayon == rayon and s.largeur == largeur then
+    return
+  end
+  miniSig = { x = pos.x, y = pos.y, rotation = rotation, rayon = rayon, largeur = largeur }
+  local demi, n = largeur / 2, 0
+  for _, e in ipairs(miniProches) do
+    local px, py = ns.placementMinimap(e.x - pos.x, e.y - pos.y, rayon, demi, rotation, MINI_TAILLE / 2)
+    if px then
+      n = n + 1
+      local p = prendrePastille(n)
+      if p.mini ~= e then
+        p.mini = e
+        p.image:SetDesaturated(e.grise and true or false)
+        p:SetAlpha(e.grise and 0.6 or 1)
+        p.nombre:SetText(#e.quetes > 1 and tostring(#e.quetes) or "")
+      end
+      p:ClearAllPoints()
+      p:SetPoint("CENTER", Minimap, "CENTER", px, py)
+      p:Show()
+    end
+  end
+  for i = n + 1, #pastilles do pastilles[i]:Hide() end
+  miniVisibles = n
+end
+
+local function tickMinimapProtege()
+  local ok, erreur = pcall(tickMinimap)
+  if not ok then ns.derniereErreur = tostring(erreur) end
+end
+
+-- ---------------------------------------------------------------------------
 -- Réglages
 -- ---------------------------------------------------------------------------
 
@@ -955,23 +1518,42 @@ ns.reglages = ns.creerReglages({
       aide = "La taille des « ! » jaunes sur la carte." },
     { cle = "continent", libelle = "Montrer aussi sur la carte d'un continent",
       aide = "Kalimdor et les Royaumes de l'Est : beaucoup de « ! », regroupés plus largement. Coupé : seulement sur la carte d'une zone." },
+    { cle = "surMinimap", libelle = "Montrer les « ! » sur la minimap",
+      aide = "De petits « ! » sur la minimap pour les quêtes à prendre assez proches, avec les mêmes filtres que la carte. Survole-en un pour voir les quêtes. Pas de flèche au bord." },
+    { titre = "Quêtes apprises" },
+    { cle = "apprendre", libelle = "Retenir les quêtes que les PNJ proposent",
+      aide = "Quand un PNJ te propose une quête que la base ne connaît pas (celles propres à Forever), l'addon retient l'endroit où tu te tenais et la montre ensuite sur la carte et la minimap, marquée « appris en jeu »." },
+    { cle = "partager", libelle = "Partager avec mon groupe", dependDe = "apprendre",
+      aide = "Envoie les quêtes apprises à ton groupe ou à ton raid, et reçoit celles que les autres joueurs de l'addon ont apprises (« appris par ton groupe »)." },
   },
   boutons = {
     { texte = "Remontrer les quêtes cachées", largeur = 210,
       aide = "Remet sur la carte les quêtes que tu as cachées d'un clic droit, pour ce personnage.",
       action = function() remontrer() end },
+    { texte = "Oublier les quêtes apprises", largeur = 210,
+      aide = "Efface toutes les quêtes apprises en jeu ou reçues du groupe (pour tous tes personnages). Elles seront réapprises en reparlant aux PNJ.",
+      action = function() oublier() end },
   },
   astuce = "Clic gauche sur un « ! » : une balise. Clic droit : ne plus montrer ces quêtes. /qd etat dit ce que l'addon voit sur la carte ouverte.",
   auChargement = function(d)
     db = d
     if type(db.ignorees) ~= "table" then db.ignorees = {} end
+    if type(db.appris) ~= "table" then db.appris = {} end
+    ns.apprises = db.appris
+    majApprises()
+    -- Le canal des messages du groupe (une inscription par session).
+    sur((C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or RegisterAddonMessagePrefix, ns.PREFIXE)
     if not donneesPresentes() and not donneesDites then
       donneesDites = true
       dire("données absentes : le fichier Donnees.lua est vide ou manquant, l'addon ne fait rien.")
     end
   end,
   surChangement = function()
-    if db then rafraichirSur() end
+    if db then
+      miniSale = true
+      tickMinimapProtege() -- une option de la minimap s'applique tout de suite
+      rafraichirSur()
+    end
   end,
 })
 
@@ -1027,7 +1609,7 @@ local function noterDiagnostic()
   local titres = {}
   for i, t in ipairs(e and e.titres or {}) do if i <= 15 then titres[i] = t end end
   db.diagnostic = {
-    date = date and date("%Y-%m-%d %H:%M") or "", donnees = ns.VERSION_DONNEES, connues = nbConnues(),
+    date = date and date("%Y-%m-%d %H:%M") or "", donnees = ns.VERSION_DONNEES, connues = nbConnues(), apprises = (nbApprises()),
     orientation = orientation, ancresReconnues = orientationScore,
     carte = e and e.carte, montrees = e and e.montrees, epingles = e and e.epingles, exclues = exclues, titres = titres,
   }
@@ -1035,11 +1617,12 @@ end
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "QUEST_ACCEPTED", "QUEST_TURNED_IN",
-                     "QUEST_REMOVED", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "QUEST_DATA_LOAD_RESULT" }) do
+                     "QUEST_REMOVED", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "QUEST_DATA_LOAD_RESULT",
+                     "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "CHAT_MSG_ADDON" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 
-ecouteur:SetScript("OnEvent", function(_, evenement, arg1)
+ecouteur:SetScript("OnEvent", function(_, evenement, arg1, arg2, arg3, arg4)
   if evenement == "ADDON_LOADED" then
     if arg1 == "Blizzard_WorldMap" then accrocherCarte() end
     return
@@ -1054,11 +1637,20 @@ ecouteur:SetScript("OnEvent", function(_, evenement, arg1)
   elseif evenement == "QUEST_DATA_LOAD_RESULT" then
     -- Un titre vient d'arriver : la bulle ouverte le montre.
     if survol and survol.donnees and survol:IsShown() then pcall(infobulle, survol) end
+    if survolMini and survolMini.mini and survolMini:IsShown() then pcall(infobulleMini, survolMini) end
+  elseif evenement == "GOSSIP_SHOW" or evenement == "QUEST_GREETING" or evenement == "QUEST_DETAIL" then
+    local ok, erreur = pcall(apprendreEvenement, evenement)
+    if not ok then ns.derniereErreur = tostring(erreur) end
+  elseif evenement == "CHAT_MSG_ADDON" then
+    local ok, erreur = pcall(recevoir, arg1, arg2, arg3, arg4)
+    if not ok then ns.derniereErreur = tostring(erreur) end
   elseif evenement == "QUEST_TURNED_IN" then
     -- Le jeu marque la quête rendue un peu après : on regarde une seconde fois.
+    miniSale = true
     demander()
-    apres(1, demander)
+    apres(1, function() miniSale = true; demander() end)
   else
+    miniSale = true -- la minimap refait sa liste de quêtes proches au prochain passage
     demander()
   end
 end)
@@ -1081,6 +1673,11 @@ if C_Timer and C_Timer.NewTicker then
   end)
 end
 
+-- Les « ! » de la minimap : un minuteur de 0,2 s (sans lui, pas de minimap ; la carte du monde n'en dépend pas).
+if C_Timer and C_Timer.NewTicker then
+  C_Timer.NewTicker(0.2, tickMinimapProtege)
+end
+
 -- ---------------------------------------------------------------------------
 -- Commandes
 -- ---------------------------------------------------------------------------
@@ -1096,6 +1693,10 @@ local function commandeEtat()
   else
     dire("positions : pas encore calculées" .. (orientationScore == 0 and " (aucune ville reconnue)" or "") .. ".")
   end
+  local nbA, nbG = nbApprises()
+  dire("quêtes apprises : " .. nbA .. (nbA > 0 and (" (dont " .. nbG .. " reçue(s) du groupe)") or "")
+    .. (db.apprendre and "" or ", apprentissage coupé") .. ".")
+  dire("minimap : " .. (db.surMinimap and (miniVisibles .. " « ! » proche(s) affiché(s)") or "« ! » coupés") .. ".")
   -- Carte ouverte : on refait une passe pour avoir son état à jour.
   if type(WorldMapFrame) == "table" and WorldMapFrame.IsShown and WorldMapFrame:IsShown() then rafraichirSur() end
   local e = dernierEtat

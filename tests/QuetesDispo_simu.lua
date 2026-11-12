@@ -35,7 +35,7 @@ verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.2.2", true, toc:find("## Version: 0.2.2", 1, true) ~= nil)
+verifie("toc : version 0.3.0", true, toc:find("## Version: 0.3.0", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -362,6 +362,137 @@ do
 end
 
 -- ============================================================================
+-- 1b. Les quêtes apprises, leur partage et la minimap : les fonctions pures.
+-- ============================================================================
+
+-- Un nombre écrit à deux décimales, sans « -0.00 » (un petit reste de calcul ne doit pas changer le texte).
+local function f2(v)
+  v = math.floor(v * 100 + 0.5) / 100
+  if v == 0 then v = 0 end
+  return string.format("%.2f", v)
+end
+
+-- Les inverses des transformations : du jeu vers les axes de la base.
+do
+  local tout = true
+  for i = 1, 8 do
+    local a, b = ns.TRANSFORMATIONS[i](123.5, -45.25)
+    local x, y = ns.INVERSES[i](a, b)
+    if x ~= 123.5 or y ~= -45.25 then tout = false end
+  end
+  verifie("inverses : les huit transformations se défont", true, tout)
+end
+
+-- ns.codeAppris et ns.decodeAppris.
+local fiche1 = { numero = 90001, titre = "La peur du loup", niveau = 12, monde = { 0, -8833.38, 628.63 } }
+local code1 = ns.codeAppris(fiche1)
+verifie("codeAppris : le texte (x et y arrondis à 0,1)", "A~90001~12~0~-8833.4~628.6~La peur du loup", code1)
+verifie("codeAppris : un message d'addon tient dans 255 octets", true, #code1 <= 255)
+do
+  local d1 = ns.decodeAppris(code1)
+  verifie("decodeAppris : numéro", 90001, d1 and d1.numero)
+  verifie("decodeAppris : niveau", 12, d1 and d1.niveau)
+  verifie("decodeAppris : titre", "La peur du loup", d1 and d1.titre)
+  verifie("decodeAppris : continent", 0, d1 and d1.monde[1])
+  verifieProche("decodeAppris : x", -8833.4, d1 and d1.monde[2])
+  verifieProche("decodeAppris : y", 628.6, d1 and d1.monde[3])
+  local d2 = ns.decodeAppris(ns.codeAppris({ numero = 5, titre = "Sans niveau", monde = { 1, 10, -20 } }))
+  verifie("aller-retour : niveau inconnu, nil", nil, d2 and d2.niveau)
+  verifie("aller-retour : numéro", 5, d2 and d2.numero)
+  verifie("aller-retour : continent 1", 1, d2 and d2.monde[1])
+  verifieProche("aller-retour : y négatif entier", -20, d2 and d2.monde[3])
+  local d3 = ns.decodeAppris(ns.codeAppris({ numero = 6, titre = "Un~titre~avec | des barres", niveau = 3, monde = { 0, 1, 2 } }))
+  verifie("« ~ » et « | » dans le titre : retirés", "Untitreavec  des barres", d3 and d3.titre)
+  verifie("« ~ » dans le titre : le message reste bien formé (7 champs)", true, d3 ~= nil)
+  local long = ns.codeAppris({ numero = 7, titre = string.rep("a", 150), monde = { 0, 1, 2 } })
+  verifie("titre long : coupé à 80 caractères", 80, #(ns.decodeAppris(long).titre))
+  local accents = ns.codeAppris({ numero = 8, titre = string.rep("é", 100), monde = { 0, 1, 2 } })
+  local t8 = ns.decodeAppris(accents).titre
+  verifie("titre accentué long : 80 lettres, aucune coupée en deux", 80, select(2, t8:gsub("[^\128-\191]", "")))
+  verifie("titre accentué long : octets complets (2 par lettre)", 160, #t8)
+  verifie("fiche sans titre : pas de message", nil, ns.codeAppris({ numero = 9, titre = "", monde = { 0, 1, 2 } }))
+  verifie("fiche sans position : pas de message", nil, ns.codeAppris({ numero = 9, titre = "T" }))
+  verifie("fiche absente : pas de message", nil, ns.codeAppris(nil))
+  verifie("position non numérique : pas de message", nil, ns.codeAppris({ numero = 9, titre = "T", monde = { 0, "a", 2 } }))
+  local abimes = {
+    "", "A", "A~1~2", "B~1~5~0~1.0~1.0~Titre", "A~x~5~0~1.0~1.0~Titre", "A~-1~5~0~1.0~1.0~Titre", "A~0~5~0~1.0~1.0~Titre",
+    "A~1~5~0~1.0~1.0~", "A~1~5~0~1.0~1.0~Titre~en trop", "A~1~5~0~1e5~1.0~Titre", "A~1~5~0~999999999~1.0~Titre",
+    "A~1~5~99999~1.0~1.0~Titre", "A~1~500~0~1.0~1.0~Titre", "A~1~5~0~1.0~Titre", "a~1~5~0~1.0~1.0~Titre",
+    " A~1~5~0~1.0~1.0~Titre", "A~1~5~0~1.0~1.0~" .. string.rep("x", 300), "A~99999999~5~0~1.0~1.0~Titre",
+  }
+  local reste = {}
+  for i, t in ipairs(abimes) do if ns.decodeAppris(t) ~= nil then reste[#reste + 1] = i end end
+  verifie("decodeAppris : tous les textes abîmés sont refusés", "", table.concat(reste, ","))
+  verifie("decodeAppris : pas un texte", nil, ns.decodeAppris(42))
+  verifie("decodeAppris : nil", nil, ns.decodeAppris(nil))
+  verifie("decodeAppris : un texte correct passe", true, ns.decodeAppris("A~1~5~0~1.0~1.0~Titre") ~= nil)
+  verifie("decodeAppris : un niveau 0 devient inconnu", nil, ns.decodeAppris("A~1~0~0~1.0~1.0~Titre").niveau)
+end
+
+-- La minimap : où poser l'icône. Axes de la base : x vers le nord, y vers l'ouest ; px vers la droite, py vers le haut.
+local function pm(...)
+  local px, py = ns.placementMinimap(...)
+  if px == nil then return "nil" end
+  return f2(px) .. "," .. f2(py)
+end
+verifie("minimap : 50 m au nord, nord en haut : en haut", "0.00,35.00", pm(50, 0, 100, 70, 0))
+verifie("minimap : 50 m au sud : en bas", "0.00,-35.00", pm(-50, 0, 100, 70, 0))
+verifie("minimap : 50 m à l'est (y descend) : à droite", "35.00,0.00", pm(0, -50, 100, 70, 0))
+verifie("minimap : 50 m à l'ouest (y monte) : à gauche", "-35.00,0.00", pm(0, 50, 100, 70, 0))
+verifie("minimap : au centre", "0.00,0.00", pm(0, 0, 100, 70, 0))
+verifie("minimap : hors du cercle", "nil", pm(150, 0, 100, 70, 0))
+verifie("minimap : au bord exact : pas montré", "nil", pm(100, 0, 100, 70, 0))
+verifie("minimap : en diagonale, dans le cercle", "35.00,35.00", pm(35, -35, 70, 70, 0))
+verifie("minimap : en diagonale à 106 m : hors du cercle de 100 m", "nil", pm(75, -75, 100, 70, 0))
+verifie("minimap : sans rotation (nil), comme 0", "0.00,35.00", pm(50, 0, 100, 70, nil))
+verifie("minimap : le rayon change l'échelle", "0.00,17.50", pm(50, 0, 200, 70, 0))
+-- La minimap tourne : le regard va en haut. Rotation donnée = -regard (regard en radians, 0 = nord, vers l'ouest il monte).
+verifie("rotation : face à l'ouest, un point à l'ouest est en haut", "0.00,35.00", pm(0, 50, 100, 70, -math.pi / 2))
+verifie("rotation : face à l'ouest, un point au nord est à droite", "35.00,0.00", pm(50, 0, 100, 70, -math.pi / 2))
+verifie("rotation : face à l'est (regard -pi/2), un point à l'est est en haut", "0.00,35.00", pm(0, -50, 100, 70, math.pi / 2))
+verifie("rotation : face au sud, un point au nord est en bas", "0.00,-35.00", pm(50, 0, 100, 70, -math.pi))
+verifie("rotation : face au nord (0), rien ne change", "0.00,35.00", pm(50, 0, 100, 70, -0))
+verifie("rotation : ne change pas la distance (hors cercle reste hors)", "nil", pm(0, 150, 100, 70, -1))
+verifie("minimap : marge au bord, l'icône ne déborde pas", "nil", pm(95, 0, 100, 70, 0, 7))
+verifie("minimap : marge au bord, assez loin du bord", "0.00,56.00", pm(80, 0, 100, 70, 0, 7))
+verifie("minimap : arguments absents", "nil", pm(nil, 0, 100, 70, 0))
+verifie("minimap : rayon nul", "nil", pm(1, 1, 0, 70, 0))
+verifie("minimap : largeur nulle", "nil", pm(1, 1, 100, 0, 0))
+verifie("minimap : textes à la place des nombres", "nil", pm("1", 0, 100, 70, 0))
+
+-- Les fiches apprises.
+do
+  local avantQ = ns.QUETES
+  ns.QUETES = { [5] = { 5, 1, 0, 0, 0, 0, 0, 0, 0, "Base" } }
+  ns.apprises = { [777] = { titre = "Apprise", niveau = 7, source = "groupe" }, [5] = { titre = "Autre", niveau = 9 }, [778] = { titre = "Sans niveau" } }
+  verifie("fiche apprise : niveau", 7, ns.ficheDe(777).niveau)
+  verifie("fiche apprise : titre", "Apprise", ns.ficheDe(777).titre)
+  verifie("fiche apprise : marquée comme apprise", true, ns.ficheDe(777).appris)
+  verifie("fiche apprise sans niveau : 0 (inconnu)", 0, ns.ficheDe(778).niveau)
+  verifie("fiche apprise : la base gagne toujours", "Base", ns.ficheDe(5).titre)
+  verifie("fiche de la base : pas marquée comme apprise", nil, ns.ficheDe(5).appris)
+  verifie("fiche inconnue : nil", nil, ns.ficheDe(1))
+  local j = nouveauJoueur()
+  local function dispo777()
+    local a, b = ns.disponible(ns.ficheDe(777), j, reglages())
+    return tostring(a) .. "," .. tostring(b)
+  end
+  verifie("fiche apprise : à prendre, sans jugement sur race, classe, niveau minimal", "true,nil", dispo777())
+  rendues[777] = true
+  verifie("fiche apprise : rendue, cachée", "false,rendue", dispo777())
+  rendues[777] = nil; cours[777] = true
+  verifie("fiche apprise : dans le journal, cachée", "false,enCours", dispo777())
+  cours[777] = nil
+  local lignes = ns.lignesQuetes({ 777, 778, 5 }, j, reglages(), nil)
+  local m = {}
+  for _, l in ipairs(lignes) do m[l.numero] = l.marques end
+  verifie("bulle : « appris par ton groupe »", "appris par ton groupe", m[777])
+  verifie("bulle : « appris en jeu »", "appris en jeu", m[778])
+  verifie("bulle : une quête de la base n'a pas cette marque", "", m[5])
+  ns.QUETES, ns.apprises = avantQ, nil
+end
+
+-- ============================================================================
 -- 2. Chargement simulé avec de faux cadres.
 -- ============================================================================
 local imprime = {}
@@ -442,6 +573,7 @@ function M.GetTop(s) return s._haut or 800 end
 function M.GetBottom(s) return 300 end
 function M.GetCenter() return 500, 400 end
 function M.EnableMouse(s, v) s._souris = v end
+function M.GetZoom(s) return s._zoom end
 
 -- Une bulle qui note ce qu'on y écrit.
 local function nouvelleBulle()
@@ -514,13 +646,18 @@ local function installer(avecAPI)
   toutes, file, tickers = {}, {}, {}
   imprime = {}
   JEU = { carte = 37, niveau = 5, ori = 1, vecPlat = false, rendues = {}, cours = {}, titresJeu = {}, gps = {},
-          requetesTitre = {}, waypoint = nil, profs = {} }
+          requetesTitre = {}, waypoint = nil, profs = {},
+          -- Le joueur et son entourage : près du point de départ n° 1 (à 20 m), regard au nord, minimap fixe de 200 m.
+          posJoueur = { x = 0.5, y = 0.6267 }, carteJoueur = nil, regard = 0, rotation = "0", rayonMini = 200, temps = 1000,
+          groupe = nil, guid = "Creature-0-3-0-0-1234-0000AAAA", gossip = {}, greeting = {}, detail = nil, envoyes = {}, prefixes = {},
+          dedans = false }
   _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
   _G.QuetesDispoDB, _G.QuetesDispoReglages, _G.QuetesDispoMinimap = nil, nil, nil
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920
   _G.GameTooltip = nouvelleBulle()
   _G.Minimap = nouveau("Frame", "Minimap")
+  Minimap._w, Minimap._h, Minimap._zoom = 140, 140, 3
   _G.WorldMapFrame = nil
   _G.CreateFrame = function(genre, nom, parent, modele) return nouveau(genre, nom, parent or UIParent, modele) end
   _G.UISpecialFrames, _G.SlashCmdList = {}, {}
@@ -547,7 +684,10 @@ local function installer(avecAPI)
   _G.date = os.date
   _G.GPS_Ajouter = nil
   for _, n in ipairs({ "C_Map", "C_QuestLog", "C_SuperTrack", "UiMapPoint", "CreateVector2D", "UnitLevel", "UnitRace",
-    "UnitClass", "UnitFactionGroup", "GetProfessions", "GetProfessionInfo", "GetQuestGreenRange" }) do _G[n] = nil end
+    "UnitClass", "UnitFactionGroup", "GetProfessions", "GetProfessionInfo", "GetQuestGreenRange", "C_ChatInfo", "C_GossipInfo",
+    "C_Minimap", "C_CVar", "UnitGUID", "GetQuestID", "GetTitleText", "GetNumAvailableQuests", "GetAvailableTitle", "GetAvailableLevel",
+    "GetAvailableQuestInfo", "IsInGroup", "IsInRaid", "GetPlayerFacing", "GetCVar", "GetTime", "IsIndoors", "SendAddonMessage",
+    "RegisterAddonMessagePrefix", "issecretvalue" }) do _G[n] = nil end
   if not avecAPI then return end
 
   local function vec2(x, y)
@@ -556,7 +696,12 @@ local function installer(avecAPI)
   end
   _G.CreateVector2D = vec2
   _G.C_Map = {
-    GetBestMapForUnit = function() return 37 end,
+    GetBestMapForUnit = function() return JEU.carteJoueur or 37 end,
+    GetPlayerMapPosition = function()
+      if JEU.posSecrete then return JEU.posSecrete end
+      local p = JEU.posJoueur
+      return p and vec2(p.x, p.y) or nil
+    end,
     GetMapInfo = function(id) local m = CARTES[id] if m then return { mapID = id, name = m.nom, mapType = m.type } end end,
     GetMapPosFromWorldPos = function(cont, v, override)
       local x, y = INVERSES[JEU.ori](v.x, v.y)
@@ -591,6 +736,25 @@ local function installer(avecAPI)
   _G.GetQuestGreenRange = function() return 8 end
   _G.GetProfessions = function() return unpack(JEU.profs.indexes or {}) end
   _G.GetProfessionInfo = function(i) local p = JEU.profs.infos[i] return p.nom, "icone", p.niveau, 300, 0, 0, p.ligne end
+  _G.C_Minimap = { GetViewRadius = function() return JEU.rayonMini end }
+  _G.GetPlayerFacing = function() return JEU.regard end
+  _G.GetCVar = function(nom) if nom == "rotateMinimap" then return JEU.rotation end end
+  _G.GetTime = function() return JEU.temps end
+  _G.IsIndoors = function() return JEU.dedans == true end
+  _G.IsInGroup = function() return JEU.groupe ~= nil end
+  _G.IsInRaid = function() return JEU.groupe == "RAID" end
+  _G.UnitGUID = function() return JEU.guid end
+  _G.C_ChatInfo = {
+    RegisterAddonMessagePrefix = function(p) JEU.prefixes[#JEU.prefixes + 1] = p return true end,
+    SendAddonMessage = function(p, t, c) JEU.envoyes[#JEU.envoyes + 1] = { p, t, c } return true end,
+  }
+  _G.C_GossipInfo = { GetAvailableQuests = function() return JEU.gossip end }
+  _G.GetNumAvailableQuests = function() return #JEU.greeting end
+  _G.GetAvailableTitle = function(i) return JEU.greeting[i].titre end
+  _G.GetAvailableLevel = function(i) return JEU.greeting[i].niveau end
+  _G.GetAvailableQuestInfo = function(i) return false, 0, false, false, JEU.greeting[i].id end
+  _G.GetQuestID = function() return JEU.detail and JEU.detail.id end
+  _G.GetTitleText = function() return JEU.detail and JEU.detail.titre end
 
   -- La carte du monde, chargée avant l'addon.
   local toile = nouveau("Frame", "WorldMapCanvas", UIParent)
@@ -1036,13 +1200,18 @@ do
   ouvrirCarte(37)
   -- Une passe : on exécute les fonctions en attente jusqu'à la première étape de calcul, en comptant les appels.
   C_Map.GetMapPosFromWorldPos = function(...) appels = appels + 1 return original(...) end
-  -- La file contient : la demande de rafraîchissement (0,2 s) venue de l'ouverture de la carte, puis rien d'autre.
-  local f1 = table.remove(file, 1)
-  f1() -- passe : démarre le calcul (calibrage de l'orientation + première étape en attente)
-  local avantEtapes = appels
-  local f2 = table.remove(file, 1)
-  f2() -- première étape
-  verifie("calcul étalé : une étape convertit au plus 300 points", true, appels - avantEtapes <= 300 and appels - avantEtapes > 0)
+  -- La file contient l'annonce des nouveautés du hub, la demande de rafraîchissement (0,2 s) venue de l'ouverture de
+  -- la carte, puis les étapes. On les exécute une à une (l'orientation est déjà calibrée par la minimap au chargement,
+  -- ou pas : peu importe) et on garde le plus grand nombre de conversions faites par une seule fonction.
+  local plusGrand = 0
+  for _ = 1, 3 do
+    if #file > 0 then
+      local avant = appels
+      table.remove(file, 1)()
+      plusGrand = math.max(plusGrand, appels - avant)
+    end
+  end
+  verifie("calcul étalé : une étape convertit au plus 300 points", true, plusGrand <= 300 and plusGrand > 0)
   verifie("calcul étalé : la suite est en attente", true, #file > 0)
 end
 
@@ -1142,6 +1311,27 @@ verifie("métier : niveau lu à 0, la quête reste montrée", true, pinAvec(11) 
 -- ---------------------------------------------------------------------------
 -- 2e. Des API qui manquent une à une : rien ne plante.
 -- ---------------------------------------------------------------------------
+-- Aides pour les quêtes apprises et la minimap (utilisées ici et en 2f).
+local function nbAppris() local k = 0 for _ in pairs(QuetesDispoDB.appris) do k = k + 1 end return k end
+local function pastillesVisibles()
+  local l = {}
+  for _, f in ipairs(toutes) do
+    if f._type == "Button" and f._parent == Minimap and rawget(f, "mini") and f._shown then l[#l + 1] = f end
+  end
+  return l
+end
+local function pastilleAvec(numero)
+  for _, p in ipairs(pastillesVisibles()) do
+    for _, q in ipairs(p.mini.quetes) do if q == numero then return p end end
+  end
+end
+local function placeDe(numero)
+  local p = pastilleAvec(numero)
+  if not p then return "absente" end
+  return f2(p._pt[4]) .. "," .. f2(p._pt[5])
+end
+local function clesDe(t) local l = {} for k in pairs(t) do l[#l + 1] = tostring(k) end table.sort(l) return table.concat(l, ",") end
+
 local manques = {
   { "C_Map (entier)", function() C_Map = nil end },
   { "C_Map.GetMapPosFromWorldPos", function() C_Map.GetMapPosFromWorldPos = nil end },
@@ -1180,6 +1370,38 @@ local manques = {
       C_Map.GetWorldPosFromMapPos = function() return "x", "y" end
       C_QuestLog.IsQuestFlaggedCompleted = function() error("boum") end
     end },
+  { "C_Map.GetPlayerMapPosition", function() C_Map.GetPlayerMapPosition = nil end },
+  { "C_ChatInfo (entier)", function() C_ChatInfo = nil end },
+  { "C_ChatInfo.SendAddonMessage", function() C_ChatInfo.SendAddonMessage = nil end },
+  { "C_ChatInfo.RegisterAddonMessagePrefix", function() C_ChatInfo.RegisterAddonMessagePrefix = nil end },
+  { "C_GossipInfo (entier)", function() C_GossipInfo = nil end },
+  { "C_GossipInfo.GetAvailableQuests", function() C_GossipInfo.GetAvailableQuests = nil end },
+  { "C_Minimap (entier)", function() C_Minimap = nil end },
+  { "UnitGUID", function() UnitGUID = nil end },
+  { "GetQuestID", function() GetQuestID = nil end },
+  { "GetTitleText", function() GetTitleText = nil end },
+  { "GetNumAvailableQuests", function() GetNumAvailableQuests = nil end },
+  { "GetAvailableTitle", function() GetAvailableTitle = nil end },
+  { "GetAvailableLevel", function() GetAvailableLevel = nil end },
+  { "GetAvailableQuestInfo", function() GetAvailableQuestInfo = nil end },
+  { "IsInGroup", function() IsInGroup = nil end },
+  { "IsInRaid", function() IsInRaid = nil end },
+  { "GetPlayerFacing", function() GetPlayerFacing = nil end },
+  { "GetCVar", function() GetCVar = nil end },
+  { "GetTime", function() GetTime = nil end },
+  { "IsIndoors", function() IsIndoors = nil end },
+  { "un jeu où tout est secret", function() _G.issecretvalue = function() return true end end },
+  { "des positions du joueur qui sont n'importe quoi", function()
+      C_Map.GetPlayerMapPosition = function() return "pas une position" end
+      C_Minimap.GetViewRadius = function() return "grand" end
+      GetPlayerFacing = function() return "nord" end
+    end },
+  { "une API de quêtes qui plante", function()
+      C_GossipInfo.GetAvailableQuests = function() error("boum") end
+      GetNumAvailableQuests = function() error("boum") end
+      C_ChatInfo.SendAddonMessage = function() error("boum") end
+      UnitGUID = function() error("boum") end
+    end },
   { "des positions qui sont des textes", function()
       C_Map.GetMapPosFromWorldPos = function() return 37, { x = "a", y = "b" } end
     end },
@@ -1200,6 +1422,20 @@ for _, m in ipairs(manques) do
     declencher("PLAYER_LEVEL_UP", 6); declencher("SKILL_LINES_CHANGED"); declencher("QUEST_DATA_LOAD_RESULT", 4, true)
     avancer()
     nm3.reglages.changer("jcj", true); nm3.reglages.changer("continent", true); avancer()
+    -- Apprendre, partager, la minimap : mêmes API en moins, sans erreur.
+    JEU.groupe, JEU.rotation = "PARTY", "1"
+    JEU.gossip = { { questID = 90100, title = "Nouvelle", questLevel = 4 } }
+    JEU.greeting = { { titre = "Salut", niveau = 3, id = 90101 } }
+    JEU.detail = { id = 90102, titre = "Détail" }
+    declencher("GOSSIP_SHOW"); declencher("QUEST_GREETING"); declencher("QUEST_DETAIL")
+    declencher("CHAT_MSG_ADDON", "QuetesDispo", "A~90103~5~0~-9000.0~-120.0~Du groupe", "PARTY", "Autre-Royaume")
+    tictac(); tictac()
+    for _, p in ipairs(pastillesVisibles()) do p._scripts.OnEnter(p); p._scripts.OnLeave(p) end
+    nm3.reglages.changer("surMinimap", false); nm3.reglages.changer("surMinimap", true)
+    nm3.reglages.changer("apprendre", false); nm3.reglages.changer("partager", false)
+    nm3.reglages.changer("apprendre", true); nm3.reglages.changer("partager", true)
+    boutonTexte("Oublier les quêtes apprises")._scripts.OnClick()
+    tictac(); avancer()
     SlashCmdList.QUETESDISPO("etat")
     for _, p in ipairs(epinglesVisibles()) do p._scripts.OnClick(p, "RightButton") end
     boutonTexte("Remontrer les quêtes cachées")._scripts.OnClick()
@@ -1259,6 +1495,417 @@ do
   changerCarte(947); avancer()
   changerCarte(37); avancer()
   verifie("calibration réussie plus tard : le calcul provisoire est refait, les épingles apparaissent", "1,2 | 12 | 4,6,18 | 9,10", resume())
+end
+
+-- ---------------------------------------------------------------------------
+-- 2f. Apprendre les quêtes, le partage avec le groupe, la minimap.
+-- ---------------------------------------------------------------------------
+
+-- Apprendre : un PNJ propose des quêtes.
+do
+  installer(true)
+  JEU.posJoueur = { x = 0.6, y = 0.4 } -- (-8800, -800) dans la base : loin de tout point de départ
+  JEU.gossip = { { questID = 90001, title = "Un loup", questLevel = 6 }, { questID = 1, title = "Wolves FR", questLevel = 5 },
+    { title = "Sans numéro", questLevel = 3 } }
+  local na = demarrer()
+  declencher("GOSSIP_SHOW")
+  local a = QuetesDispoDB.appris[90001]
+  verifie("apprendre : une quête hors base est retenue", "table", type(a))
+  verifie("apprendre : titre", "Un loup", a and a.titre)
+  verifie("apprendre : niveau", 6, a and a.niveau)
+  verifie("apprendre : continent", 0, a and a.monde[1])
+  verifieProche("apprendre : x dans les axes de la base", -8800, a and a.monde[2])
+  verifieProche("apprendre : y dans les axes de la base", -800, a and a.monde[3])
+  verifie("apprendre : carte", 37, a and a.carte)
+  verifie("apprendre : numéro de créature tiré du GUID", 1234, a and a.pnj)
+  verifie("apprendre : origine", "jeu", a and a.source)
+  verifie("apprendre : date", "string", type(a and a.date))
+  verifie("apprendre : une quête de la base est ignorée", nil, QuetesDispoDB.appris[1])
+  verifie("apprendre : sans numéro de quête, rien", 1, nbAppris())
+  verifie("apprendre : le chat le dit", true, lireImprime():find("quête apprise", 1, true) ~= nil)
+  verifie("apprendre : /qd etat compte les quêtes apprises", true, (function()
+    imprime = {}
+    SlashCmdList.QUETESDISPO("etat")
+    return lireImprime():find("quêtes apprises : 1", 1, true) ~= nil
+  end)())
+  declencher("GOSSIP_SHOW")
+  verifie("apprendre : la même quête revue, pas de doublon", 1, nbAppris())
+  -- Elle réapparaît sur la carte comme les autres.
+  ouvrirCarte(37); avancer()
+  local p = pinAvec(90001)
+  verifie("carte : la quête apprise a son « ! »", true, p ~= nil)
+  verifieProche("carte : position x", 600, p and p._pt[4])
+  verifieProche("carte : position y", -0.4 * 667, p and p._pt[5])
+  local texte = p and survoler(p) or ""
+  verifie("bulle : la marque « appris en jeu »", true, texte:find("appris en jeu", 1, true) ~= nil)
+  verifie("bulle : « [niveau] Titre » de la quête apprise", true, texte:find("[6] Un loup", 1, true) ~= nil)
+  verifie("carte : les autres « ! » sont toujours là", true, pinAvec(1) ~= nil)
+  -- Une quête proposée alors que la carte est déjà ouverte : son « ! » arrive sans rien faire de plus.
+  JEU.gossip = { { questID = 90008, title = "Ouverte", questLevel = 6 } }
+  declencher("GOSSIP_SHOW"); avancer()
+  verifie("carte déjà ouverte : le « ! » de la nouvelle quête apparaît", true, pinAvec(90008) ~= nil)
+  -- Rendue ou en cours : cachée.
+  JEU.rendues[90001] = true
+  declencher("QUEST_TURNED_IN", 90001); avancer()
+  verifie("quête apprise rendue : son « ! » disparaît", nil, pinAvec(90001))
+  JEU.rendues[90001] = nil
+  declencher("QUEST_REMOVED", 90001); avancer()
+  verifie("quête apprise redevenue disponible : son « ! » revient", true, pinAvec(90001) ~= nil)
+  JEU.cours[90001] = true
+  declencher("QUEST_ACCEPTED", 1, 90001); avancer()
+  verifie("quête apprise dans le journal : son « ! » disparaît", nil, pinAvec(90001))
+  JEU.cours[90001] = nil
+  declencher("QUEST_REMOVED", 90001); avancer()
+  -- Une fiche apprise ne remplace jamais une fiche de la base (même glissée dans la sauvegarde à la main).
+  QuetesDispoDB.appris[2] = { titre = "Faux", niveau = 40, monde = { 0, -8800, -800 }, source = "jeu" }
+  JEU.gossip = { { questID = 90007, title = "Sept", questLevel = 6 } }
+  declencher("GOSSIP_SHOW"); avancer() -- (une nouvelle quête apprise force le recalcul des points appris)
+  verifie("la base gagne : la quête 2 reste à son endroit, une seule fois", "1,2", contenu(pinAvec(2)))
+  verifie("la base gagne : le titre de la base", true, survoler(pinAvec(2)):find("Letter", 1, true) ~= nil)
+  QuetesDispoDB.appris[2] = nil
+  -- Partage avec le groupe.
+  JEU.groupe = "PARTY"
+  JEU.gossip = { { questID = 90002, title = "Deux", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("partage : un message envoyé", 1, #JEU.envoyes)
+  verifie("partage : préfixe de l'addon", "QuetesDispo", JEU.envoyes[1] and JEU.envoyes[1][1])
+  verifie("partage : canal du groupe", "PARTY", JEU.envoyes[1] and JEU.envoyes[1][3])
+  verifie("partage : le texte du message", "A~90002~7~0~-8800.0~-800.0~Deux", JEU.envoyes[1] and JEU.envoyes[1][2])
+  verifie("partage : le texte se décode", 90002, ns.decodeAppris(JEU.envoyes[1][2]).numero)
+  declencher("GOSSIP_SHOW")
+  verifie("partage : pas renvoyé quand on revoit la quête", 1, #JEU.envoyes)
+  JEU.groupe = "RAID"
+  JEU.gossip = { { questID = 90003, title = "Trois", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("partage : en raid, canal RAID", "RAID", JEU.envoyes[2] and JEU.envoyes[2][3])
+  JEU.groupe = nil
+  JEU.gossip = { { questID = 90004, title = "Quatre", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("partage : seul, rien n'est envoyé", 2, #JEU.envoyes)
+  JEU.groupe = "PARTY"
+  na.reglages.changer("partager", false)
+  JEU.gossip = { { questID = 90005, title = "Cinq", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("partage coupé : la quête est retenue", true, QuetesDispoDB.appris[90005] ~= nil)
+  verifie("partage coupé : rien n'est envoyé", 2, #JEU.envoyes)
+  na.reglages.changer("partager", true)
+  -- L'option « apprendre » coupée.
+  na.reglages.changer("apprendre", false)
+  JEU.gossip = { { questID = 90006, title = "Six", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("apprendre coupé : rien n'est retenu", nil, QuetesDispoDB.appris[90006])
+  na.reglages.changer("apprendre", true)
+  -- QUEST_GREETING.
+  JEU.gossip = {}
+  JEU.greeting = { { titre = "Salut", niveau = 8, id = 90010 }, { titre = "De la base", niveau = 5, id = 2 }, { titre = "Sans numéro", niveau = 5 } }
+  declencher("QUEST_GREETING")
+  verifie("QUEST_GREETING : la quête hors base est retenue", "Salut", QuetesDispoDB.appris[90010] and QuetesDispoDB.appris[90010].titre)
+  verifie("QUEST_GREETING : son niveau", 8, QuetesDispoDB.appris[90010] and QuetesDispoDB.appris[90010].niveau)
+  verifie("QUEST_GREETING : celle de la base est ignorée", nil, QuetesDispoDB.appris[2])
+  -- QUEST_DETAIL.
+  JEU.detail = { id = 90020, titre = "Détail" }
+  declencher("QUEST_DETAIL")
+  verifie("QUEST_DETAIL : retenue", "Détail", QuetesDispoDB.appris[90020] and QuetesDispoDB.appris[90020].titre)
+  verifie("QUEST_DETAIL : sans niveau, niveau inconnu", nil, QuetesDispoDB.appris[90020] and QuetesDispoDB.appris[90020].niveau)
+  JEU.detail = { id = 90021, titre = "Partagée par un joueur" }
+  JEU.guid = "Player-1-0A1B2C3D"
+  declencher("QUEST_DETAIL")
+  verifie("QUEST_DETAIL : une quête partagée par un joueur n'est pas retenue", nil, QuetesDispoDB.appris[90021])
+  JEU.guid = "Item-4372-0-400000000A1B2C3D"
+  declencher("QUEST_DETAIL")
+  verifie("QUEST_DETAIL : une quête donnée par un objet n'est pas retenue", nil, QuetesDispoDB.appris[90021])
+  JEU.guid = nil
+  declencher("QUEST_DETAIL")
+  verifie("QUEST_DETAIL : PNJ inconnu, pas retenue", nil, QuetesDispoDB.appris[90021])
+  JEU.guid = "GameObject-0-3-0-0-176213-0000AAAA"
+  declencher("QUEST_DETAIL")
+  verifie("QUEST_DETAIL : un objet de quête (panneau) est accepté", true, QuetesDispoDB.appris[90021] ~= nil)
+  JEU.guid = "Creature-0-3-0-0-1234-0000AAAA"
+  -- Position secrète ou absente : rien n'est retenu.
+  _G.issecretvalue = function(v) return JEU.posSecrete ~= nil and v == JEU.posSecrete end
+  JEU.posSecrete = {}
+  JEU.gossip = { { questID = 90030, title = "Secrète", questLevel = 7 } }
+  declencher("GOSSIP_SHOW")
+  verifie("position secrète : rien n'est retenu", nil, QuetesDispoDB.appris[90030])
+  JEU.posSecrete = nil
+  JEU.posJoueur = nil
+  declencher("GOSSIP_SHOW")
+  verifie("position absente (instance) : rien n'est retenu", nil, QuetesDispoDB.appris[90030])
+  JEU.posJoueur = { x = 0.6, y = 0.4 }
+  _G.issecretvalue = nil
+  declencher("GOSSIP_SHOW")
+  verifie("position revenue : la quête est retenue", true, QuetesDispoDB.appris[90030] ~= nil)
+  -- Le bouton « Oublier les quêtes apprises ».
+  verifie("oublier : il y en avait plusieurs", true, nbAppris() >= 8)
+  imprime = {}
+  boutonTexte("Oublier les quêtes apprises")._scripts.OnClick()
+  verifie("oublier : tout est effacé", 0, nbAppris())
+  verifie("oublier : le chat le dit", true, lireImprime():find("quêtes apprises oubliées", 1, true) ~= nil)
+  avancer()
+  verifie("oublier : leurs « ! » disparaissent de la carte", nil, pinAvec(90001))
+  verifie("oublier : la table reste la même (la partie pure la lit encore)", true, na.apprises == QuetesDispoDB.appris)
+  JEU.gossip = { { questID = 90001, title = "Un loup", questLevel = 6 } }
+  declencher("GOSSIP_SHOW"); avancer()
+  verifie("oublier : on peut réapprendre ensuite", true, pinAvec(90001) ~= nil)
+  declencher("PLAYER_LOGOUT")
+  verifie("diagnostic : le nombre de quêtes apprises", 1, QuetesDispoDB.diagnostic.apprises)
+  verifie("apprendre : aucune erreur retenue", nil, na.derniereErreur)
+end
+
+-- Apprendre, quelle que soit l'orientation du jeu : la position est rangée dans les axes de la base.
+for ori = 1, 8 do
+  installer(true)
+  JEU.ori = ori
+  JEU.posJoueur = { x = 0.6, y = 0.4 }
+  JEU.gossip = { { questID = 90001, title = "Un loup", questLevel = 6 } }
+  demarrer()
+  declencher("GOSSIP_SHOW")
+  local a = QuetesDispoDB.appris[90001]
+  verifie("orientation " .. ori .. " : position apprise dans les axes de la base", "0,-8800,-800",
+    a and (a.monde[1] .. "," .. math.floor(a.monde[2] + 0.5) .. "," .. math.floor(a.monde[3] + 0.5)) or "rien")
+end
+
+-- Orientation inconnue au moment d'apprendre, puis reconnue.
+do
+  installer(true)
+  JEU.ori = 3
+  JEU.absentes = {}
+  for _, anc in ipairs(ns.ANCRES) do for _, id in ipairs(anc[1]) do JEU.absentes[id] = true end end
+  JEU.posJoueur = { x = 0.6, y = 0.4 }
+  JEU.gossip = { { questID = 90001, title = "Un loup", questLevel = 6 } }
+  local no = demarrer()
+  declencher("GOSSIP_SHOW")
+  verifie("orientation inconnue : rien n'est retenu (la position serait fausse)", 0, nbAppris())
+  JEU.absentes = nil
+  JEU.temps = JEU.temps + 10
+  declencher("GOSSIP_SHOW")
+  verifie("orientation reconnue ensuite : la quête est retenue", 1, nbAppris())
+  verifie("orientation reconnue ensuite : bien rangée", "-8800",
+    QuetesDispoDB.appris[90001] and tostring(math.floor(QuetesDispoDB.appris[90001].monde[2] + 0.5)))
+  verifie("orientation : aucune erreur", nil, no.derniereErreur)
+end
+
+-- Recevoir une quête apprise par le groupe.
+do
+  installer(true)
+  JEU.posJoueur = { x = 0.6, y = 0.4 }
+  local nr = demarrer()
+  verifie("groupe : le préfixe est enregistré", "QuetesDispo", JEU.prefixes[1])
+  local function recoit(texte, canal, de, prefixe)
+    declencher("CHAT_MSG_ADDON", prefixe or "QuetesDispo", texte, canal or "PARTY", de or "Autre-Royaume")
+  end
+  local msg = "A~90100~9~0~-9000.0~-120.0~Reçue du groupe"
+  recoit(msg)
+  local a = QuetesDispoDB.appris[90100]
+  verifie("groupe : la quête reçue est retenue", "Reçue du groupe", a and a.titre)
+  verifie("groupe : son niveau", 9, a and a.niveau)
+  verifie("groupe : origine « groupe »", "groupe", a and a.source)
+  verifieProche("groupe : sa position x", -9000, a and a.monde[2])
+  ouvrirCarte(37); avancer()
+  local p = pinAvec(90100)
+  verifie("groupe : elle a son « ! » sur la carte", true, p ~= nil)
+  verifie("groupe : la bulle dit « appris par ton groupe »", true, p and survoler(p):find("appris par ton groupe", 1, true) ~= nil)
+  -- De soi-même : ignoré (avec ou sans le royaume).
+  recoit("A~90101~9~0~-9000.0~-120.0~De moi", "PARTY", "Testeur-Royaume")
+  recoit("A~90102~9~0~-9000.0~-120.0~De moi", "PARTY", "Testeur")
+  verifie("groupe : un message de soi-même est ignoré", 1, nbAppris())
+  -- Deux fois en moins d'une minute : une seule.
+  QuetesDispoDB.appris[90100] = nil
+  recoit(msg)
+  verifie("groupe : le même message tout de suite : ignoré", nil, QuetesDispoDB.appris[90100])
+  JEU.temps = JEU.temps + 30
+  recoit(msg)
+  verifie("groupe : le même message 30 s après : ignoré", nil, QuetesDispoDB.appris[90100])
+  JEU.temps = JEU.temps + 31
+  recoit(msg)
+  verifie("groupe : le même message 61 s après : traité", true, QuetesDispoDB.appris[90100] ~= nil)
+  -- Ce qui doit être ignoré.
+  local avant = nbAppris()
+  recoit("A~junk")
+  recoit(nil)
+  recoit("A~90110~9~0~-9000.0~-120.0~Autre préfixe", "PARTY", "Autre-Royaume", "AutreAddon")
+  recoit("A~90111~9~0~-9000.0~-120.0~Chuchotée", "WHISPER")
+  recoit("A~90112~9~0~-9000.0~-120.0~Dite", "SAY")
+  recoit("A~90113~9~0~-9000.0~-120.0~Guilde", "GUILD")
+  recoit("A~1~5~0~-9000.0~-120.0~Dans la base")
+  declencher("CHAT_MSG_ADDON", "QuetesDispo", "A~90114~9~0~-9000.0~-120.0~Sans expéditeur", "PARTY")
+  verifie("groupe : messages abîmés, d'un autre préfixe, d'un autre canal, sans expéditeur : ignorés", avant, nbAppris())
+  verifie("groupe : une quête de la base reçue n'est pas retenue", nil, QuetesDispoDB.appris[1])
+  recoit("A~90115~9~0~-9000.0~-120.0~En raid", "RAID")
+  verifie("groupe : le canal RAID est accepté", true, QuetesDispoDB.appris[90115] ~= nil)
+  recoit("A~90116~9~0~-9000.0~-120.0~En instance", "INSTANCE_CHAT")
+  verifie("groupe : le canal INSTANCE_CHAT est accepté", true, QuetesDispoDB.appris[90116] ~= nil)
+  -- Options.
+  nr.reglages.changer("partager", false)
+  recoit("A~90120~9~0~-9000.0~-120.0~Partage coupé")
+  verifie("groupe : partage coupé, rien n'est reçu", nil, QuetesDispoDB.appris[90120])
+  nr.reglages.changer("partager", true)
+  nr.reglages.changer("apprendre", false)
+  recoit("A~90121~9~0~-9000.0~-120.0~Apprentissage coupé")
+  verifie("groupe : apprentissage coupé, rien n'est reçu", nil, QuetesDispoDB.appris[90121])
+  nr.reglages.changer("apprendre", true)
+  recoit("A~90122~9~0~-9000.0~-120.0~Remis")
+  verifie("groupe : options remises, reçu", true, QuetesDispoDB.appris[90122] ~= nil)
+  verifie("groupe : /qd etat dit combien viennent du groupe", true, (function()
+    imprime = {}
+    SlashCmdList.QUETESDISPO("etat")
+    return lireImprime():find("reçue(s) du groupe", 1, true) ~= nil
+  end)())
+  verifie("groupe : aucune erreur retenue", nil, nr.derniereErreur)
+end
+
+-- Les « ! » de la minimap.
+do
+  installer(true)
+  JEU.posJoueur = { x = 0.5, y = 0.5 } -- (-9000, -500) dans la base
+  local clesAvant = clesDe(Minimap)
+  local nm = chargerAddon()
+  nm.DEPARTS = {
+    { 0, -8900, -500, 1, { 1 } },   -- 100 m au nord
+    { 0, -9100, -500, 1, { 2 } },   -- 100 m au sud
+    { 0, -9000, -400, 1, { 16 } },  -- 100 m à l'ouest (y monte vers l'ouest)
+    { 0, -9000, -600, 1, { 17 } },  -- 100 m à l'est
+    { 0, -8500, -500, 1, { 12 } },  -- 500 m au nord : hors du cercle
+    { 1, 1500, -4300, 1, { 18 } },  -- un autre continent
+  }
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+  local niveaux = 0
+  local niveauJeu = UnitLevel
+  UnitLevel = function(...) niveaux = niveaux + 1 return niveauJeu(...) end
+  tictac()
+  verifie("minimap : quatre « ! » dans le cercle de 200 m", 4, #pastillesVisibles())
+  verifie("minimap : 100 m au nord, en haut", "0.00,35.00", placeDe(1))
+  verifie("minimap : 100 m au sud, en bas", "0.00,-35.00", placeDe(2))
+  verifie("minimap : 100 m à l'ouest, à gauche", "-35.00,0.00", placeDe(16))
+  verifie("minimap : 100 m à l'est, à droite", "35.00,0.00", placeDe(17))
+  verifie("minimap : la quête à 500 m n'est pas montrée", nil, pastilleAvec(12))
+  verifie("minimap : celle d'un autre continent non plus", nil, pastilleAvec(18))
+  verifie("minimap : les icônes sont des enfants de la Minimap", true, pastillesVisibles()[1]._parent == Minimap)
+  verifie("minimap : taille 13", "13,13", pastillesVisibles()[1]._w .. "," .. pastillesVisibles()[1]._h)
+  verifie("minimap : le « ! » de quête", "Interface\\GossipFrame\\AvailableQuestIcon", pastillesVisibles()[1].image._tex)
+  verifie("minimap : accrochée au centre de la Minimap", "CENTER,CENTER", pastilleAvec(1)._pt[1] .. "," .. pastilleAvec(1)._pt[3])
+  verifie("minimap : accrochée à la Minimap", true, pastilleAvec(1)._pt[2] == Minimap)
+  verifie("minimap : ce ne sont pas des épingles de la carte du monde", 0, nombrePins())
+  -- La bulle.
+  local bulle = survoler(pastilleAvec(2))
+  verifie("minimap : bulle de la quête", true, bulle:find("^Quête disponible ;") ~= nil and bulle:find("[6] Letter", 1, true) ~= nil)
+  verifie("minimap : pas de rappel des clics dans la bulle", true, bulle:find("Clic gauche", 1, true) == nil)
+  pastilleAvec(2)._scripts.OnLeave(pastilleAvec(2))
+  verifie("minimap : bulle cachée en quittant l'icône", false, GameTooltip._shown)
+  -- Le pool : jamais d'icône recréée, la liste n'est pas refaite à chaque passe.
+  local avantFrames, niveauxAvant = #toutes, niveaux
+  for i = 1, 20 do
+    JEU.posJoueur = { x = 0.5 + (i % 2) * 0.01, y = 0.5 }
+    tictac()
+  end
+  verifie("minimap : 20 passes en bougeant, aucun cadre de plus", avantFrames, #toutes)
+  verifie("minimap : la liste des quêtes proches n'est pas refaite à chaque passe", niveauxAvant, niveaux)
+  JEU.posJoueur = { x = 0.525, y = 0.5 } -- 50 m au nord
+  tictac()
+  verifie("minimap : le joueur avance de 50 m, la quête du nord se rapproche", "0.00,17.50", placeDe(1))
+  verifie("minimap : et celle du sud s'éloigne", "0.00,-52.50", placeDe(2))
+  tictac(); tictac()
+  JEU.temps = JEU.temps + 2.5
+  local avant2s = niveaux
+  tictac()
+  verifie("minimap : après 2 s, la liste est refaite une fois", avant2s + 1, niveaux)
+  JEU.posJoueur = { x = 0.5, y = 0.5 }
+  tictac()
+  -- Rotation : le regard va en haut.
+  JEU.rotation, JEU.regard = "1", math.pi / 2 -- face à l'ouest
+  tictac()
+  verifie("minimap tournante, face à l'ouest : la quête de l'ouest est en haut", "0.00,35.00", placeDe(16))
+  verifie("minimap tournante, face à l'ouest : la quête du nord est à droite", "35.00,0.00", placeDe(1))
+  verifie("minimap tournante, face à l'ouest : la quête de l'est est en bas", "0.00,-35.00", placeDe(17))
+  JEU.regard = nil
+  tictac()
+  verifie("minimap tournante sans regard connu : rien n'est montré, sans erreur", 0, #pastillesVisibles())
+  JEU.regard = math.pi
+  tictac()
+  verifie("minimap tournante, face au sud : la quête du nord est en bas", "0.00,-35.00", placeDe(1))
+  JEU.rotation, JEU.regard = "0", 0
+  tictac()
+  verifie("minimap fixe : retour au nord en haut", "0.00,35.00", placeDe(1))
+  -- Une quête acceptée : son icône part.
+  JEU.cours[1] = true
+  declencher("QUEST_ACCEPTED", 1, 1)
+  tictac()
+  verifie("minimap : une quête acceptée n'a plus d'icône", nil, pastilleAvec(1))
+  verifie("minimap : les trois autres restent", 3, #pastillesVisibles())
+  JEU.cours[1] = nil
+  declencher("QUEST_REMOVED", 1)
+  tictac()
+  verifie("minimap : abandonnée, l'icône revient", 4, #pastillesVisibles())
+  -- Les mêmes filtres que la carte.
+  JEU.niveau = 1
+  declencher("PLAYER_LEVEL_UP", 1); tictac()
+  verifie("minimap : niveau 1, les quêtes de plus de 4 niveaux au-dessus sont cachées (comme la carte)", "absente,absente", placeDe(2) .. "," .. placeDe(17))
+  JEU.niveau = 5
+  declencher("PLAYER_LEVEL_UP", 5); tictac()
+  verifie("minimap : niveau 5, elles reviennent", 4, #pastillesVisibles())
+  -- Une quête apprise proche apparaît aussi.
+  JEU.gossip = { { questID = 90500, title = "Apprise ici", questLevel = 5 } }
+  declencher("GOSSIP_SHOW")
+  tictac()
+  verifie("minimap : une quête apprise, à l'endroit où le joueur se tenait : au centre", "0.00,0.00", placeDe(90500))
+  verifie("minimap : sa bulle dit « appris en jeu »", true, survoler(pastilleAvec(90500)):find("appris en jeu", 1, true) ~= nil)
+  QuetesDispoDB.appris[90500] = nil
+  nm.reglages.changer("repetables", false) -- (force le recalcul de la liste)
+  verifie("minimap : la quête apprise oubliée n'a plus d'icône", 4, #pastillesVisibles())
+  -- Option coupée.
+  nm.reglages.changer("surMinimap", false)
+  verifie("minimap : option coupée, plus d'icônes tout de suite", 0, #pastillesVisibles())
+  tictac(); tictac()
+  verifie("minimap : option coupée, toujours aucune", 0, #pastillesVisibles())
+  nm.reglages.changer("surMinimap", true)
+  verifie("minimap : option remise, les icônes reviennent", 4, #pastillesVisibles())
+  nm.reglages.changer("actif", false)
+  verifie("minimap : addon coupé, plus d'icônes", 0, #pastillesVisibles())
+  nm.reglages.changer("actif", true)
+  verifie("minimap : addon réactivé, les icônes reviennent", 4, #pastillesVisibles())
+  SlashCmdList.QUETESDISPO("surminimap")
+  verifie("minimap : /qd surminimap bascule l'option", 0, #pastillesVisibles())
+  SlashCmdList.QUETESDISPO("surminimap")
+  verifie("minimap : /qd surminimap une seconde fois", 4, #pastillesVisibles())
+  -- Le rayon : à défaut de C_Minimap.GetViewRadius, une table par zoom.
+  JEU.rayonMini = nil
+  Minimap._zoom, JEU.dedans = 3, false
+  tictac()
+  verifieProche("minimap sans GetViewRadius : zoom 3 dehors (133,33 m)", 100 / 133.33 * 70, pastilleAvec(1) and pastilleAvec(1)._pt[5])
+  Minimap._zoom, JEU.dedans = 3, true
+  tictac()
+  verifie("minimap sans GetViewRadius : zoom 3 dedans (60 m), la quête à 100 m est hors du cercle", 0, #pastillesVisibles())
+  Minimap._zoom = 0
+  tictac()
+  verifieProche("minimap sans GetViewRadius : zoom 0 dedans (150 m)", 100 / 150 * 70, pastilleAvec(1) and pastilleAvec(1)._pt[5])
+  Minimap._zoom = nil
+  tictac()
+  verifie("minimap sans rayon connu du tout : rien n'est montré, sans erreur", 0, #pastillesVisibles())
+  JEU.rayonMini, Minimap._zoom, JEU.dedans = 200, 3, false
+  tictac()
+  verifie("minimap : rayon connu de nouveau, les icônes reviennent", 4, #pastillesVisibles())
+  -- Un autre continent.
+  JEU.carteJoueur = 1 -- Durotar, Kalimdor : (1500, -4250)
+  JEU.posJoueur = { x = 0.5, y = 0.5 }
+  tictac()
+  verifie("minimap : sur un autre continent, ses propres quêtes (50 m à l'est)", "17.50,0.00", placeDe(18))
+  verifie("minimap : et seulement elles", 1, #pastillesVisibles())
+  JEU.carteJoueur = nil
+  JEU.posJoueur = nil
+  tictac()
+  verifie("minimap : joueur sans position (instance) : rien", 0, #pastillesVisibles())
+  verifie("minimap : on n'écrit jamais de champ dans la Minimap", clesAvant, clesDe(Minimap))
+  verifie("minimap : aucune erreur retenue", nil, nm.derniereErreur)
+end
+
+-- Sans minuteur, la minimap ne se met à jour qu'à un changement d'option (la carte du monde, elle, marche).
+do
+  installer(true)
+  C_Timer.NewTicker = nil
+  local ns2 = demarrer()
+  ouvrirCarte(37); avancer()
+  verifie("sans minuteur : la carte marche", "1,2 | 12 | 4,6,18 | 9,10", resume())
+  verifie("sans minuteur : aucune erreur", nil, ns2.derniereErreur)
 end
 
 -- ============================================================================
