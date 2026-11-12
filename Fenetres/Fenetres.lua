@@ -174,6 +174,19 @@ function ns.resolutionDouble(largeur, hauteur)
   return math.floor(largeur * 2) .. "x" .. math.floor(hauteur)
 end
 
+-- Second écran : le tutoriel (bouton « Tuto second écran », /fen tuto). Un addon ne peut rien lancer hors
+-- du jeu : le joueur installe une fois le petit programme livré dans le dossier de l'addon.
+ns.TUTO_SECOND = {
+  "Il faut deux écrans côte à côte, de la même hauteur (réglage de Windows : Paramètres, Affichage).",
+  "1. Ouvre le dossier du jeu, puis Interface\\AddOns\\Fenetres\\SecondEcran.",
+  "2. Double-clique une fois sur Installer.cmd. Si Windows affiche un avertissement, clique « Informations complémentaires », puis « Exécuter quand même ». Une fenêtre noire dit « Second écran installé » : appuie sur une touche pour la fermer.",
+  "3. C'est tout pour Windows : le petit programme tourne caché et redémarre tout seul à chaque ouverture de Windows. Il ne touche qu'à la fenêtre du jeu.",
+  "4. Dans le jeu : /fen, puis « Passer au second écran ». L'image se recharge une seconde et la fenêtre du jeu s'étale sur les deux écrans.",
+  "5. Glisse une fenêtre (sac, personnage, carte…) par sa barre de titre sur l'autre écran : elle y reste, même après l'avoir fermée.",
+  "Le jeu sur l'écran de gauche plutôt que de droite : l'option « Le jeu sur l'écran de gauche », ici.",
+  "Revenir comme avant : « Revenir à un seul écran ». Tout enlever de Windows : Retirer.cmd, dans le même dossier.",
+}
+
 -- Second écran : les bornes d'une fenêtre. L'interface (UIParent) n'occupe qu'un écran ; l'autre est à
 -- gauche (le jeu à droite) ou à droite (le jeu à gauche). Rend x, y bornés sur les DEUX écrans.
 function ns.bornerDeux(x, y, largeur, hauteur, largeurEcran, hauteurEcran, mondeAGauche)
@@ -1048,8 +1061,11 @@ ns.reglages = ns.creerReglages({
   },
   boutons = {
     { texte = "Passer au second écran", largeur = 190,
-      aide = "Le jeu passe en fenêtre deux fois plus large que l'écran  ; le petit programme du dossier Fenetres\\SecondEcran (installé une fois par un double-clic sur Installer.cmd) l'étale sur deux écrans. Le monde et l'interface restent sur un écran, l'autre reçoit les fenêtres que tu y glisses.",
+      aide = "Le jeu passe en fenêtre deux fois plus large que l'écran ; le petit programme du dossier Fenetres\\SecondEcran (installé une fois par un double-clic sur Installer.cmd) l'étale sur deux écrans. Le monde et l'interface restent sur un écran, l'autre reçoit les fenêtres que tu y glisses.",
       action = function() ns.passerSecondEcran(true) end },
+    { texte = "Tuto second écran", largeur = 150,
+      aide = "Comment installer, une seule fois, le petit programme qui étale la fenêtre du jeu sur deux écrans.",
+      action = function() ns.montrerTuto() end },
     { texte = "Revenir à un seul écran", largeur = 190,
       aide = "Le jeu revient en plein écran fenêtré habituel, sur un seul écran.",
       action = function() ns.passerSecondEcran(false) end },
@@ -1161,6 +1177,33 @@ local function appliquerSecondEcran()
 end
 ns.appliquerSecondEcran = appliquerSecondEcran
 
+-- Le cadre du tutoriel du second écran : sombre et doré comme les autres, Échap le ferme.
+local cadreTuto
+function ns.montrerTuto()
+  if not cadreTuto then
+    cadreTuto = CreateFrame("Frame", "FenetresTutoSecond", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    cadreTuto:SetSize(560, 400)
+    cadreTuto:SetPoint("CENTER")
+    cadreTuto:SetFrameStrata("DIALOG")
+    cadreTuto:EnableMouse(true)
+    cadreTuto:SetMovable(true)
+    cadreTuto:RegisterForDrag("LeftButton")
+    cadreTuto:SetScript("OnDragStart", cadreTuto.StartMoving)
+    cadreTuto:SetScript("OnDragStop", cadreTuto.StopMovingOrSizing)
+    if ns.habiller then ns.habiller(cadreTuto, { titre = "Second écran : comment faire", fermer = true }) end
+    local texte = cadreTuto:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    texte:SetPoint("TOPLEFT", 18, -42)
+    texte:SetWidth(524)
+    texte:SetJustifyH("LEFT")
+    texte:SetSpacing(4)
+    texte:SetText(table.concat(ns.TUTO_SECOND, "\n\n"))
+    local h = texte:GetStringHeight()
+    if type(h) == "number" and h > 0 then cadreTuto:SetHeight(h + 64) end
+    tinsert(UISpecialFrames, "FenetresTutoSecond")
+  end
+  cadreTuto:Show()
+end
+
 -- Passer au second écran, ou revenir à un seul, depuis le jeu : on change le mode d'affichage du jeu.
 --   second écran : mode « fenêtré » (gxMaximize 0) deux fois plus large que l'écran ; le petit programme
 --                  Fenetres\SecondEcran\second-ecran.ps1 -Surveiller (installé par Installer.cmd, lancé avec
@@ -1194,7 +1237,7 @@ function ns.passerSecondEcran(actif)
     poserCVar("gxMaximize", "0")
     relancerAffichage()
     dire("second écran : le jeu passe en fenêtre de " .. double .. ". Si elle ne s'étale pas seule sur les deux écrans, "
-      .. "double-clique une fois sur Interface\\AddOns\\Fenetres\\SecondEcran\\Installer.cmd (dans le dossier du jeu), puis recommence.")
+      .. "double-clique une fois sur Interface\\AddOns\\Fenetres\\SecondEcran\\Installer.cmd (dans le dossier du jeu), puis recommence (/fen tuto explique tout).")
   else
     ns.reglages.changer("secondEcran", false)
     appliquerSecondEcran()
@@ -1295,9 +1338,11 @@ local function commande(texte)
     else
       dire("second écran : " .. (db.secondEcran and ("le jeu sur l'écran de " .. (db.mondeAGauche and "gauche" or "droite")) or "coupé") .. ".")
     end
+  elseif c == "tuto" or c == "second tuto" then
+    ns.montrerTuto()
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/fen : les réglages     /fen reset : tout remettre à sa place d'origine     /fen etat : l'état")
-    dire("/fen second : le jeu sur un écran, les fenêtres sur l'autre (second on, second off, second gauche, second droite)")
+    dire("/fen second : le jeu sur un écran, les fenêtres sur l'autre (second on, second off, second gauche, second droite) ; /fen tuto : comment l'installer")
     dire("Glisser la barre de titre : déplacer. Ctrl + molette : la taille. Clic droit : menu de la fenêtre.")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /fen aide donne la liste.")

@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Mes addons", 1, true) ~= nil
-  and toc:find("## Author: addons-wow", 1, true) ~= nil and toc:find("## Version: 0.3.1", 1, true) ~= nil)
+  and toc:find("## Author: addons-wow", 1, true) ~= nil and toc:find("## Version: 0.3.2", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -1348,6 +1348,19 @@ scenario("second écran : calculs", function()
   verifie("résolution double : un écran", "3840x1080", ns.resolutionDouble(1920, 1080))
   verifie("résolution double : déjà deux écrans", "3840x1080", ns.resolutionDouble(3840, 1080))
   verifie("résolution double : inconnue", nil, ns.resolutionDouble(nil, 1080))
+end)
+
+-- ----- 15 quinquies. tutoriel du second écran
+scenario("second écran : tutoriel", function()
+  local n = demarrer()
+  verifie("tuto : au moins 6 lignes", true, #ns.TUTO_SECOND >= 6)
+  local tout = table.concat(ns.TUTO_SECOND, " ")
+  verifie("tuto : nomme Installer.cmd", true, tout:find("Installer.cmd", 1, true) ~= nil)
+  verifie("tuto : nomme Retirer.cmd", true, tout:find("Retirer.cmd", 1, true) ~= nil)
+  verifie("tuto : sans tiret long", false, tout:find("—", 1, true) ~= nil or tout:find("–", 1, true) ~= nil)
+  verifie("tuto : la fonction existe", "function", type(n.montrerTuto))
+  verifie("tuto : s'ouvre sans erreur", true, (pcall(n.montrerTuto)))
+  verifie("tuto : se rouvre sans erreur", true, (pcall(n.montrerTuto)))
 end)
 
 -- ----- 16. nettoyage : rien ne reste dans le monde global de ce qui n'est pas à nous
