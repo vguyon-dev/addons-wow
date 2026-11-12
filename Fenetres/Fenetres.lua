@@ -315,13 +315,24 @@ end
 -- ----- lire et poser une place
 
 -- Où est la fenêtre en ce moment, en unités de l'écran ? ({ point, x, y } ou nil)
+-- La place lue sur l'écran est ramenée au coin de l'interface (UIParent). D'habitude ce coin est celui de
+-- l'écran ; avec le second écran, l'interface ne couvre qu'une moitié de la fenêtre du jeu (vu en jeu le
+-- 12/11 : sans cette correction, une fenêtre glissée sur l'autre écran sautait d'un écran de large).
+local function versInterface(pt)
+  if not pt then return nil end
+  -- Seul le décalage horizontal compte : le second écran ne déplace l'interface que de côté.
+  local l = sur(UIParent.GetLeft, UIParent)
+  if nb(l) then pt.x = pt.x - l end
+  return pt
+end
+
 local function lirePoint(rec)
   local f = rec.fenetre
   local ok, res = pcall(function()
     local gauche, haut = f:GetLeft(), f:GetTop()
     if not (nb(gauche) and nb(haut)) then return nil end
-    return ns.pointDepuis(gauche, haut, f:GetEffectiveScale(), UIParent:GetEffectiveScale(),
-      UIParent:GetWidth(), UIParent:GetHeight())
+    return versInterface(ns.pointDepuis(gauche, haut, f:GetEffectiveScale(), UIParent:GetEffectiveScale(),
+      UIParent:GetWidth(), UIParent:GetHeight()))
   end)
   if ok then return res end
 end
@@ -477,7 +488,7 @@ local function deplacerSousSouris(rec)
   local ef, ep = sur(f.GetEffectiveScale, f), sur(UIParent.GetEffectiveScale, UIParent)
   if not (nb(cx) and nb(cy) and nb(ef) and nb(ep) and ef > 0) then return end
   local gauche, haut = g.gauche + (cx - g.cx) / ef, g.haut + (cy - g.cy) / ef
-  local pt = ns.pointDepuis(gauche, haut, ef, ep, UIParent:GetWidth(), UIParent:GetHeight())
+  local pt = versInterface(ns.pointDepuis(gauche, haut, ef, ep, UIParent:GetWidth(), UIParent:GetHeight()))
   if not pt then return end
   local ox, oy = ns.decalageDepuis(pt.x, pt.y, ef, ep)
   rec.occupe = true
