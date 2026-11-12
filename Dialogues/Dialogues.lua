@@ -1,5 +1,12 @@
 -- ============================================================================
--- Dialogues de quête : un bandeau en bas de l'écran à la place de la fenêtre de dialogue des PNJ.
+-- Dialogues de quête : un affichage à la place de la fenêtre de dialogue des PNJ, en quatre styles
+-- (réglage « style », changeable sans /reload : /dial style bandeau, scene, face ou cinema) :
+--   bandeau : le bandeau d'origine, décrit ci-dessous ;
+--   scene   : un grand modèle 3D animé du PNJ à gauche, une boîte de texte en bas au centre, les
+--             réponses et récompenses en cartes à droite (le style par défaut) ;
+--   face    : comme la scène, avec ton personnage à droite ; le texte en haut, les cartes en bas ;
+--   cinema  : deux bandes noires, le texte dans celle du bas, les cartes à droite.
+-- Le texte peut s'écrire lettre par lettre (option « machine »). Le style ne change que l'affichage.
 --
 -- Quand tu parles à un PNJ, la fenêtre du jeu (GossipFrame, QuestFrame) devient invisible et un
 -- bandeau sombre à bordure dorée prend sa place :
@@ -21,7 +28,7 @@
 --   - te laisser bloqué devant un PNJ : si l'affichage lève une erreur, la fenêtre du jeu est
 --     remontrée aussitôt, et le bouton « Fenêtre du jeu » du bandeau la rend à la demande.
 --
--- Commandes : /dial (réglages)   /dial jeu (bandeau ou fenêtre du jeu)   /dial test   /dial aide
+-- Commandes : /dial (réglages)   /dial jeu (affichage ou fenêtre du jeu)   /dial test   /dial style   /dial aide
 --
 -- Le fichier a deux parties : la logique pure (testée hors jeu, tests/Dialogues_simu.lua) puis
 -- tout ce qui parle au jeu.
@@ -34,9 +41,11 @@ local DEFAUTS = {
   morceaux = true,     -- le texte page par page (décoché : tout d'un coup)
   touches = true,      -- Espace, 1 à 9 et Échap
   conseil = true,      -- « Mieux pour toi » sous une récompense, quand Sacs rangés le dit
-  tailleTexte = 15,
-  largeur = 70,        -- en % de la largeur de l'écran
-  fenetreJeu = false,  -- vrai : on garde la fenêtre du jeu (le bandeau ne s'affiche pas)
+  style = "scene",     -- l'affichage : "bandeau", "scene", "face" ou "cinema" (voir ns.STYLES)
+  machine = true,      -- le texte s'écrit lettre par lettre (Espace affiche tout, puis avance)
+  tailleTexte = 17,
+  largeur = 70,        -- en % de la largeur de l'écran (style bandeau)
+  fenetreJeu = false,  -- vrai : on garde la fenêtre du jeu (rien de nous ne s'affiche)
   minimap = false,
 }
 
@@ -396,6 +405,82 @@ function ns.lignesListe(e)
   return l
 end
 
+-- Les styles d'affichage, dans l'ordre. Un nom inconnu (réglage abîmé) vaut "scene".
+ns.STYLES = { "bandeau", "scene", "face", "cinema" }
+local NOMS_STYLES = { bandeau = "bandeau", scene = "scène", face = "face à face", cinema = "cinéma" }
+local ALIAS_STYLES = {
+  bandeau = "bandeau", scene = "scene", ["scène"] = "scene", face = "face", ["face à face"] = "face",
+  ["face a face"] = "face", facealface = "face", cinema = "cinema", ["cinéma"] = "cinema",
+}
+
+function ns.styleValide(s)
+  for _, v in ipairs(ns.STYLES) do
+    if s == v then return v end
+  end
+  return "scene"
+end
+
+-- Le nom lisible d'un style : « scène », « face à face »…
+function ns.nomStyle(s) return NOMS_STYLES[ns.styleValide(s)] end
+
+-- Le style que désigne un texte tapé (« scene », « scène », « face à face »…), nil si inconnu.
+function ns.styleDepuisTexte(t)
+  if type(t) ~= "string" then return nil end
+  return ALIAS_STYLES[rogner(t):lower()]
+end
+
+-- Lit un texte caractère visible par caractère visible : un caractère accentué (2 à 4 octets) compte
+-- pour un, les codes couleur « |cAARRGGBB » et « |r » ne comptent pas, « || » compte pour un.
+-- S'arrête dès que `limite` caractères visibles sont lus. Rend l'index du premier octet non lu, le
+-- nombre de caractères visibles lus, et si une couleur est encore ouverte.
+local function balayer(texte, limite)
+  local i, len, vus, ouvert = 1, #texte, 0, false
+  while i <= len and vus < limite do
+    local c = texte:byte(i)
+    if c == 124 then -- le caractère |
+      local s = texte:sub(i + 1, i + 1)
+      if s == "c" and texte:sub(i + 2, i + 9):find("^%x%x%x%x%x%x%x%x$") then
+        i = i + 10
+        ouvert = true
+      elseif s == "r" then
+        i = i + 2
+        ouvert = false
+      elseif s == "|" then
+        i = i + 2
+        vus = vus + 1
+      else
+        i = i + 1
+        vus = vus + 1
+      end
+    else
+      i = i + ((c >= 240 and 4) or (c >= 224 and 3) or (c >= 192 and 2) or 1)
+      vus = vus + 1
+    end
+  end
+  return i, vus, ouvert
+end
+
+-- Le nombre de caractères visibles d'un texte (sans les codes couleur).
+function ns.longueurVisible(texte)
+  if type(texte) ~= "string" then return 0 end
+  local _, vus = balayer(texte, math.huge)
+  return vus
+end
+
+-- Les n premiers caractères visibles d'un texte, pour l'écrire lettre par lettre : jamais coupé au
+-- milieu d'un caractère UTF-8 ni d'un code couleur ; une couleur restée ouverte est refermée.
+-- n <= 0 : "" ; n au moins égal à la longueur visible : le texte entier.
+function ns.morceauTexte(texte, n)
+  if type(texte) ~= "string" then return "" end
+  n = math.floor(tonumber(n) or 0)
+  if n <= 0 then return "" end
+  local i, vus, ouvert = balayer(texte, n)
+  if vus < n then return texte end
+  local reste = texte:sub(i)
+  if ns.longueurVisible(reste) == 0 then return texte end
+  return texte:sub(1, i - 1) .. (ouvert and "|r" or "")
+end
+
 -- ---------------------------------------------------------------------------
 -- Tout ce qui parle au jeu
 -- ---------------------------------------------------------------------------
@@ -591,10 +676,10 @@ local function lireRecompenses()
   return rec
 end
 
-local largeurBandeau -- définie avec le bandeau, plus bas
+local largeurBandeau, largeurTexte -- définies avec l'affichage, plus bas
 
 local function tailleMax()
-  return ns.tailleMorceau(largeurBandeau() - 128 - 24, db.tailleTexte)
+  return ns.tailleMorceau(largeurTexte(), db.tailleTexte)
 end
 
 local function paginer(e)
@@ -661,14 +746,45 @@ local function lireEtape(etape)
   return e
 end
 
--- ------------------------------------------------------------ le bandeau
+-- ------------------------------------------------------------ l'affichage : quatre styles
+-- Le style ne change QUE l'affichage (jamais les événements, les touches, le repli sur la fenêtre du
+-- jeu ni le combat) :
+--   bandeau : le bandeau d'origine, en bas de l'écran ;
+--   scene   : un grand modèle 3D du PNJ à gauche, la boîte de texte en bas au centre, les réponses en
+--             cartes empilées à droite ;
+--   face    : comme la scène, avec en plus ton personnage à droite ; la boîte de texte passe en haut
+--             et les cartes en bas au centre ;
+--   cinema  : deux bandes noires, le texte dans celle du bas, le modèle du PNJ juste au-dessus, les
+--             cartes à droite entre les deux bandes.
+-- Tout est en strate "DIALOG" : sur la même strate que les fenêtres du jeu, la souris leur restait
+-- (vu en jeu). Les modèles 3D n'ont pas de souris, et tout ce qui les touche est protégé.
 local OR = { 0.80, 0.63, 0.30, 1 }
 local BORDURE_SOMBRE = { 0.30, 0.25, 0.15, 1 }
 local FOND_LIGNE = { 0.12, 0.10, 0.07, 0.95 }
 local FOND_LIGNE_CHOISIE = { 0.28, 0.21, 0.08, 0.98 }
+local FOND_CARTE = { 0.08, 0.065, 0.045, 0.97 }
+local FOND_BOITE = { 0.04, 0.035, 0.03, 0.97 }
+local NOIR = { 0, 0, 0, 1 }
+local TRANSPARENT = { 0, 0, 0, 0 }
 local LARGEUR_LISTE, NB_LIGNES_MAX = 430, 24
+local ANGLE_PNJ, ANGLE_JOUEUR = 0.4, -0.4 -- en radians : à régler en jeu si les regards ne se croisent pas
+local CARACTERES_PAR_SECONDE = 60
+local POLICE_TITRE = "Fonts\\MORPHEUS.TTF" -- la plus proche d'un italique dans le jeu
 
 local function police() return STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF" end
+
+-- Pose une police ; si le chemin est refusé, retombe sur la police du jeu (un texte sans police lève une erreur).
+local function poserPolice(fs, chemin, taille, drapeaux)
+  if not sur(fs.SetFont, fs, chemin, taille, drapeaux or "") then
+    sur(fs.SetFont, fs, police(), taille, drapeaux or "")
+  end
+end
+
+-- Met un cadre à nous sur la strate des fenêtres de dialogue.
+local function dialog(f)
+  if f and f.SetFrameStrata then sur(f.SetFrameStrata, f, "DIALOG") end
+  return f
+end
 
 -- Un disque : une texture avec son masque rond (sans masque, un carré : rien ne casse).
 local function arrondir(cadre, texture)
@@ -680,13 +796,48 @@ local function arrondir(cadre, texture)
   end
 end
 
+local function largeurEcran()
+  local l = (UIParent and entier(sur(UIParent.GetWidth, UIParent))) or 1920
+  if l <= 0 then l = 1920 end
+  return l
+end
+
+local function hauteurEcran()
+  local h = (UIParent and entier(sur(UIParent.GetHeight, UIParent))) or 1080
+  if h <= 0 then h = 1080 end
+  return h
+end
+
+local function styleActuel() return ns.styleValide(db and db.style) end
+
+-- La largeur de la boîte principale (le bandeau, la boîte de texte ou la bande du bas).
 largeurBandeau = function()
-  local ecran = (UIParent and entier(sur(UIParent.GetWidth, UIParent))) or 1920
-  if ecran <= 0 then ecran = 1920 end
-  local l = math.floor(ecran * ((tonumber(db and db.largeur) or 70) / 100))
+  local ecran = largeurEcran()
+  local style = styleActuel()
+  if style == "cinema" then return ecran end
+  local l
+  if style == "scene" or style == "face" then
+    l = math.floor(ecran * ((style == "face") and 0.5 or 0.45))
+  else
+    l = math.floor(ecran * ((tonumber(db and db.largeur) or 70) / 100))
+  end
   if l > ecran - 20 then l = ecran - 20 end
   if l < 480 then l = math.min(480, ecran - 20) end
   return l
+end
+
+-- La largeur du texte du PNJ, en pixels, selon le style.
+largeurTexte = function()
+  local style = styleActuel()
+  if style == "bandeau" then return largeurBandeau() - 152 end
+  if style == "cinema" then return math.floor(largeurEcran() * 0.5) end
+  return largeurBandeau() - 48
+end
+
+-- La largeur de la colonne des réponses (le bandeau : celle d'origine).
+local function largeurListe(style)
+  if style == "bandeau" then return LARGEUR_LISTE end
+  return math.max(300, math.floor(largeurEcran() * ((style == "face") and 0.36 or 0.26)))
 end
 
 local actionBouton, actionSecondaire, fermerEchange, choisirReponse, choisirRecompense, replierSurLeJeu
@@ -694,8 +845,17 @@ local echec -- définie plus bas ; déclarée ici pour que les gestionnaires du 
 
 local touchesPrises = {} -- les touches prises par le bandeau et encore enfoncées (pour ignorer la répétition)
 
+-- Une carte (ou une ligne) change de couleur au survol et quand elle est choisie : dorée.
+local function colorerCarte(l, survol)
+  local s = l.spec
+  if not l.carte or not s or s.type == "titre" or s.type == "texte" then return end
+  local fort = survol or s.choisi
+  ns.habiller(l, { fond = fort and FOND_LIGNE_CHOISIE or FOND_CARTE, bordure = fort and OR or BORDURE_SOMBRE })
+end
+
 local function creerLigne(i)
   local l = CreateFrame("Button", nil, liste, "BackdropTemplate")
+  dialog(l)
   l:SetHeight(24)
   l:SetWidth(LARGEUR_LISTE - 12)
   ns.habiller(l, { fond = FOND_LIGNE, bordure = BORDURE_SOMBRE })
@@ -721,6 +881,7 @@ local function creerLigne(i)
     if not ok then echec(err) end
   end)
   l:SetScript("OnEnter", function(self)
+    colorerCarte(self, true)
     local s = self.spec
     if not s or not (s.lien or s.test) or not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
@@ -736,10 +897,101 @@ local function creerLigne(i)
       if avis and etat then etat.conseils[s.genre .. s.indice] = avis; self.conseil:SetText(avis); self.conseil:Show() end
     end
   end)
-  l:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  l:SetScript("OnLeave", function(self)
+    colorerCarte(self, false)
+    if GameTooltip then GameTooltip:Hide() end
+  end)
   return l
 end
 
+-- ------------------------------------------------------------ l'écriture lettre par lettre
+-- Le texte de la page s'écrit à CARACTERES_PAR_SECONDE (option « machine »). L'état est dans
+-- l'échange (e.ecr) : la page, le temps écoulé, le nombre de caractères visibles. Seul un cadre
+-- à nous porte le script OnUpdate, et seulement pendant l'écriture.
+local function terminerEcriture()
+  local e, b = etat, bandeau
+  if not e or not b or not e.ecr or e.ecr.fini then return end
+  e.ecr.fini = true
+  b.ecrivain:SetScript("OnUpdate", nil)
+  b.texte:SetText(e.ecr.complet)
+end
+
+local function avancerEcriture(dt)
+  local e, b = etat, bandeau
+  if not b then return end
+  local ec = e and e.ecr
+  if not ec or ec.fini then b.ecrivain:SetScript("OnUpdate", nil) return end
+  ec.t = ec.t + (tonumber(dt) or 0)
+  local n = math.floor(ec.t * CARACTERES_PAR_SECONDE)
+  if n >= ec.total then terminerEcriture() return end
+  if n ~= ec.n then
+    ec.n = n
+    b.texte:SetText(ns.morceauTexte(ec.complet, n))
+  end
+end
+
+-- ------------------------------------------------------------ les modèles 3D
+-- Un modèle sans souris, sur la bonne strate, caché au départ ; nil si le jeu refuse de le créer.
+local function creerModele(nom, parent)
+  local ok, m = pcall(function()
+    local f = CreateFrame("PlayerModel", nom, parent)
+    dialog(f)
+    f:EnableMouse(false)
+    f:Hide()
+    return f
+  end)
+  if ok then return m end
+end
+
+-- Charge l'unité dans le modèle ; sans unité (PNJ disparu) ou si le jeu refuse, le modèle est caché.
+local function chargerModele(m, unite, angle)
+  if not m then return end
+  if not unite then
+    sur(m.ClearModel, m)
+    m:Hide()
+    return
+  end
+  local ok = pcall(function()
+    m:SetUnit(unite)
+    sur(m.SetPortraitZoom, m, 0)
+    sur(m.SetCamDistanceScale, m, 1)
+    sur(m.SetFacing, m, angle)
+  end)
+  if ok then m:Show() else m:Hide() end
+end
+
+-- Place les modèles selon le style et charge ce qui a changé (un échange, un style, une unité).
+local function majModeles(e, style)
+  local b = bandeau
+  local mp, mj = b.modelePNJ, b.modeleJoueur
+  if style == "bandeau" then
+    if mp then mp:Hide() end
+    if mj then mj:Hide() end
+    b.modeleCle = nil
+    return
+  end
+  local ecran, haut = largeurEcran(), hauteurEcran()
+  local hm = math.floor(haut * 0.40)
+  local lm = math.floor(hm * 0.6)
+  local function placer(m, point, x, y)
+    if not m then return end
+    m:ClearAllPoints()
+    m:SetSize(lm, hm)
+    m:SetPoint(point, UIParent, point, x, y)
+  end
+  local bas = (style == "cinema") and entier(sur(b.GetHeight, b)) or 0
+  placer(mp, "BOTTOMLEFT", math.floor(ecran * ((style == "scene") and 0.03 or 0.04)), bas)
+  if style == "face" then placer(mj, "BOTTOMRIGHT", -math.floor(ecran * 0.04), 0) end
+  local unite = e.test and "player" or unitePNJ()
+  local cle = style .. "|" .. tostring(unite) .. "|" .. (e.test and "t" or "r")
+  if b.modeleCle ~= cle then
+    b.modeleCle = cle
+    chargerModele(mp, unite, ANGLE_PNJ)
+    if style == "face" then chargerModele(mj, "player", ANGLE_JOUEUR) elseif mj then mj:Hide() end
+  end
+end
+
+-- ------------------------------------------------------------ le cadre principal
 local function creerBandeau()
   if bandeau then return bandeau end
   local b = CreateFrame("Frame", "DialoguesBandeau", UIParent, "BackdropTemplate")
@@ -748,9 +1000,12 @@ local function creerBandeau()
   b:EnableMouse(true)
   b:Hide()
   local _, croix = ns.habiller(b, { fermer = true, fond = { 0.06, 0.05, 0.04, 0.95 } })
-  if croix then croix:SetScript("OnClick", function() fermerEchange() end) end
+  if croix then
+    dialog(croix)
+    croix:SetScript("OnClick", function() fermerEchange() end)
+  end
 
-  -- Le portrait : un anneau doré et le visage du PNJ, tous deux ronds.
+  -- Le portrait (style bandeau) : un anneau doré et le visage du PNJ, tous deux ronds.
   b.anneau = b:CreateTexture(nil, "BACKGROUND")
   b.anneau:SetSize(92, 92)
   b.anneau:SetPoint("TOPLEFT", 20, -18)
@@ -775,20 +1030,20 @@ local function creerBandeau()
   b.compteur = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   b.compteur:SetPoint("BOTTOMLEFT", 128, 18)
 
-  b.bouton = ns.creerBouton(b, "Suivant", nil, function()
+  b.bouton = dialog(ns.creerBouton(b, "Suivant", nil, function()
     local ok, err = pcall(actionBouton)
     if not ok then echec(err) end
-  end, 190)
+  end, 190))
   b.bouton:SetHeight(30)
   b.bouton:SetPoint("BOTTOMRIGHT", -20, 14)
-  b.boutonDeux = ns.creerBouton(b, "Refuser", nil, function()
+  b.boutonDeux = dialog(ns.creerBouton(b, "Refuser", nil, function()
     local ok, err = pcall(actionSecondaire)
     if not ok then echec(err) end
-  end, 120)
+  end, 120))
   b.boutonDeux:SetHeight(30)
   b.boutonDeux:Hide()
   -- La touche du bouton d'action, dans une petite case à sa gauche.
-  b.caseTouche = CreateFrame("Frame", nil, b, "BackdropTemplate")
+  b.caseTouche = dialog(CreateFrame("Frame", nil, b, "BackdropTemplate"))
   b.caseTouche:SetSize(56, 24)
   b.caseTouche:SetPoint("RIGHT", b.bouton, "LEFT", -6, 0)
   ns.habiller(b.caseTouche, { fond = { 0.14, 0.12, 0.08, 1 }, bordure = OR })
@@ -798,8 +1053,8 @@ local function creerBandeau()
   b.boutonDeux:SetPoint("RIGHT", b.caseTouche, "LEFT", -16, 0)
 
   -- Le recours : rendre la main à la fenêtre du jeu pour cet échange.
-  b.boutonJeu = ns.creerBouton(b, "Fenêtre du jeu", "Montre la fenêtre de dialogue du jeu à la place du bandeau, jusqu'à la fin de cet échange.",
-    function() replierSurLeJeu() end, 110)
+  b.boutonJeu = dialog(ns.creerBouton(b, "Fenêtre du jeu", "Montre la fenêtre de dialogue du jeu à la place de l'affichage, jusqu'à la fin de cet échange.",
+    function() replierSurLeJeu() end, 110))
   b.boutonJeu:SetHeight(18)
   b.boutonJeu:SetPoint("TOPRIGHT", -30, -6)
 
@@ -822,31 +1077,195 @@ local function creerBandeau()
   end)
 
   liste = CreateFrame("Frame", "DialoguesListe", b, "BackdropTemplate")
+  dialog(liste)
   liste:SetWidth(LARGEUR_LISTE)
   liste:SetPoint("BOTTOMRIGHT", b, "TOPRIGHT", 0, 4)
   ns.habiller(liste, { fond = { 0.06, 0.05, 0.04, 0.95 } })
   liste:Hide()
   b.liste = liste
   b.lignes = {}
+
+  -- Style cinéma : la bande noire du haut. Les modèles 3D. Le cadre qui écrit le texte lettre par lettre.
+  b.bandeHaut = dialog(CreateFrame("Frame", "DialoguesBandeHaut", b, "BackdropTemplate"))
+  ns.habiller(b.bandeHaut, { fond = NOIR, bordure = TRANSPARENT })
+  b.bandeHaut:EnableMouse(false)
+  b.bandeHaut:Hide()
+  b.modelePNJ = creerModele("DialoguesModelePNJ", b)
+  b.modeleJoueur = creerModele("DialoguesModeleJoueur", b)
+  b.ecrivain = dialog(CreateFrame("Frame", "DialoguesEcrivain", b))
+  b.surEcriture = function(_, dt)
+    local ok, err = pcall(avancerEcriture, dt)
+    if not ok then echec(err) end
+  end
   bandeau = b
   return b
 end
 
--- Place et dimensionne le bandeau, applique la taille du texte.
+-- Place et dimensionne le cadre principal, la colonne des réponses, la bande du haut (cinéma).
 local function appliquerStyle()
   if not bandeau then return end
-  local largeur = largeurBandeau()
-  bandeau:SetWidth(largeur)
-  bandeau:ClearAllPoints()
-  bandeau:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 36)
-  bandeau.texte:SetWidth(largeur - 128 - 24)
-  local taille = tonumber(db.tailleTexte) or 15
-  bandeau.texte:SetFont(police(), taille, "")
-  bandeau.titreQuete:SetWidth(largeur - 128 - 60)
+  local b = bandeau
+  local style = styleActuel()
+  local ecran, haut = largeurEcran(), hauteurEcran()
+  local marge = math.floor(ecran * 0.012)
+  b:SetWidth(largeurBandeau())
+  b:ClearAllPoints()
+  liste:ClearAllPoints()
+  if style == "bandeau" then
+    b:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 36)
+    ns.habiller(b, { fermer = true, fond = { 0.06, 0.05, 0.04, 0.95 } })
+    liste:SetPoint("BOTTOMRIGHT", b, "TOPRIGHT", 0, 4)
+    ns.habiller(liste, { fond = { 0.06, 0.05, 0.04, 0.95 } })
+  else
+    if style == "cinema" then
+      b:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+      ns.habiller(b, { fermer = true, fond = NOIR, bordure = TRANSPARENT })
+      liste:SetPoint("RIGHT", UIParent, "RIGHT", -marge, math.floor(haut * 0.08))
+    elseif style == "face" then
+      b:SetPoint("TOP", UIParent, "TOP", 0, -40)
+      ns.habiller(b, { fermer = true, fond = FOND_BOITE, bordure = OR })
+      liste:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 40)
+    else
+      b:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 40)
+      ns.habiller(b, { fermer = true, fond = FOND_BOITE, bordure = OR })
+      liste:SetPoint("RIGHT", UIParent, "RIGHT", -marge, 0)
+    end
+    ns.habiller(liste, { fond = TRANSPARENT, bordure = TRANSPARENT })
+  end
+  liste:SetWidth(largeurListe(style))
+  b.anneau:SetShown(style == "bandeau")
+  b.bandeHaut:ClearAllPoints()
+  b.bandeHaut:SetSize(ecran, math.floor(haut * 0.12))
+  b.bandeHaut:SetPoint("TOP", UIParent, "TOP", 0, 0)
+  b.bandeHaut:SetShown(style == "cinema")
 end
 
--- Remplit la liste au-dessus du bandeau.
+-- Le contenu d'une ligne du style bandeau (celui d'origine). Rend la hauteur de la ligne.
+local function texteMarque(s)
+  if s.reponse.genre == "rendre" then return s.fini and "|cffffd200?|r" or "|cff999999?|r" end
+  return "|cffffd200!|r"
+end
+
+local function remplirLigneBandeau(l, s)
+  local avecObjet = (s.type == "choix" or s.type == "objet")
+  local haut = avecObjet and ((s.conseil and 40) or 30) or 24
+  if s.type == "titre" or s.type == "texte" then haut = 20 end
+  -- Fond : aucun pour un simple titre ou texte, doré pour la récompense choisie.
+  if s.type == "titre" or s.type == "texte" then
+    ns.habiller(l, { fond = { 0, 0, 0, 0 }, bordure = { 0, 0, 0, 0 } })
+  else
+    ns.habiller(l, { fond = s.choisi and FOND_LIGNE_CHOISIE or FOND_LIGNE, bordure = s.choisi and OR or BORDURE_SOMBRE })
+  end
+  l.numero:ClearAllPoints()
+  l.numero:SetPoint("LEFT", 8, 0)
+  l.marque:ClearAllPoints()
+  l.marque:SetPoint("LEFT", 26, 0)
+  l.icone:ClearAllPoints()
+  l.icone:SetSize(22, 22)
+  l.icone:SetPoint("LEFT", 28, 0)
+  l.numero:SetText(s.numero and tostring(s.numero) or "")
+  l.marque:SetText("")
+  l.icone:Hide()
+  l.conseil:ClearAllPoints()
+  l.conseil:SetText("")
+  l.conseil:Hide()
+  l.texte:ClearAllPoints()
+  if s.type == "titre" then
+    l.texte:SetPoint("LEFT", 8, 0)
+    l.texte:SetText(COULEUR_OR .. s.texte .. "|r")
+  elseif s.type == "texte" then
+    l.texte:SetPoint("LEFT", 8, 0)
+    l.texte:SetText("|cffdddddd" .. s.texte .. "|r")
+  elseif s.type == "reponse" then
+    local couleur = (s.reponse.genre == "rendre" and not s.fini) and "|cff999999" or "|cffffffff"
+    if s.marque ~= "" then
+      l.marque:SetText(texteMarque(s))
+      l.texte:SetPoint("LEFT", 46, 0)
+    else
+      l.texte:SetPoint("LEFT", 28, 0)
+    end
+    l.texte:SetText(couleur .. s.texte .. "|r")
+  else -- objet ou choix
+    if s.icone then l.icone:SetTexture(s.icone); l.icone:Show() end
+    l.texte:SetPoint("LEFT", 58, s.conseil and 7 or 0)
+    l.texte:SetText(s.texte)
+    if s.conseil then
+      l.conseil:SetPoint("LEFT", 58, -9)
+      l.conseil:SetText(s.conseil)
+      l.conseil:Show()
+    end
+  end
+  l.texte:SetWidth(LARGEUR_LISTE - 80)
+  return haut
+end
+
+-- Le contenu d'une carte (styles scène, face à face et cinéma) : numéro doré, icône, texte qui
+-- passe à la ligne, ligne verte « Mieux pour toi ». Rend la hauteur de la carte.
+local function remplirCarte(l, s, lw)
+  local larg = lw - 12
+  l.numero:ClearAllPoints()
+  l.marque:ClearAllPoints()
+  l.icone:ClearAllPoints()
+  l.texte:ClearAllPoints()
+  l.conseil:ClearAllPoints()
+  l.numero:SetText(s.numero and tostring(s.numero) or "")
+  l.marque:SetText("")
+  l.icone:Hide()
+  l.conseil:SetText("")
+  l.conseil:Hide()
+  sur(l.texte.SetWordWrap, l.texte, true)
+  if s.type == "titre" or s.type == "texte" then
+    ns.habiller(l, { fond = TRANSPARENT, bordure = TRANSPARENT })
+    l.texte:SetPoint("TOPLEFT", 8, -3)
+    l.texte:SetWidth(larg - 16)
+    l.texte:SetText(s.type == "titre" and (COULEUR_OR .. s.texte .. "|r") or ("|cffdddddd" .. s.texte .. "|r"))
+    return math.max(20, entier(sur(l.texte.GetStringHeight, l.texte)) + 8)
+  end
+  colorerCarte(l, false)
+  local x0 = s.numero and 30 or 10
+  if s.numero then l.numero:SetPoint("TOPLEFT", 10, -10) end
+  if s.type == "reponse" then
+    local couleur = (s.reponse.genre == "rendre" and not s.fini) and "|cff999999" or "|cffffffff"
+    local x = x0
+    if s.marque ~= "" then
+      l.marque:SetText(texteMarque(s))
+      l.marque:SetPoint("TOPLEFT", x0, -7)
+      x = x0 + 18
+    end
+    l.texte:SetPoint("TOPLEFT", x, -10)
+    l.texte:SetWidth(larg - x - 10)
+    l.texte:SetText(couleur .. s.texte .. "|r")
+    return math.max(38, entier(sur(l.texte.GetStringHeight, l.texte)) + 20)
+  end
+  -- objet ou choix
+  if s.icone then
+    l.icone:SetTexture(s.icone)
+    l.icone:SetSize(28, 28)
+    l.icone:SetPoint("TOPLEFT", x0, -8)
+    l.icone:Show()
+  end
+  local x = x0 + 34
+  l.texte:SetPoint("TOPLEFT", x, -9)
+  l.texte:SetWidth(larg - x - 10)
+  l.texte:SetText(s.texte)
+  l.conseil:SetPoint("TOPLEFT", l.texte, "BOTTOMLEFT", 0, -3)
+  l.conseil:SetWidth(larg - x - 10)
+  local extra = 0
+  if s.conseil then
+    l.conseil:SetText(s.conseil)
+    l.conseil:Show()
+    extra = 16
+  end
+  local mini = (s.type == "choix" and db.conseil) and 56 or 46
+  return math.max(mini, entier(sur(l.texte.GetStringHeight, l.texte)) + extra + 20)
+end
+
+-- Remplit la liste des réponses ou des récompenses (au-dessus du bandeau, ou en cartes).
 local function tracerListe(specs)
+  local style = styleActuel()
+  local cartes = style ~= "bandeau"
+  local lw = largeurListe(style)
+  liste:SetWidth(lw)
   local nb = math.min(#specs, NB_LIGNES_MAX)
   if nb == 0 then liste:Hide() return end
   local y = 8
@@ -855,54 +1274,15 @@ local function tracerListe(specs)
     local l = bandeau.lignes[i]
     if not l then l = creerLigne(i); bandeau.lignes[i] = l end
     l.spec = s
-    local avecObjet = (s.type == "choix" or s.type == "objet")
-    local haut = avecObjet and ((s.conseil and 40) or 30) or 24
-    if s.type == "titre" or s.type == "texte" then haut = 20 end
+    l.carte = cartes
+    l:SetWidth(lw - 12)
+    local clicable = (s.type == "reponse" or s.type == "choix")
+    l:EnableMouse(clicable or (s.lien ~= nil) or (s.test == true))
+    local haut = cartes and remplirCarte(l, s, lw) or remplirLigneBandeau(l, s)
     l:SetHeight(haut)
     l:ClearAllPoints()
     l:SetPoint("TOPLEFT", liste, "TOPLEFT", 6, -y)
-    y = y + haut + 3
-    local clicable = (s.type == "reponse" or s.type == "choix")
-    l:EnableMouse(clicable or (s.lien ~= nil) or (s.test == true))
-    -- Fond : aucun pour un simple titre ou texte, doré pour la récompense choisie.
-    if s.type == "titre" or s.type == "texte" then
-      ns.habiller(l, { fond = { 0, 0, 0, 0 }, bordure = { 0, 0, 0, 0 } })
-    else
-      ns.habiller(l, { fond = s.choisi and FOND_LIGNE_CHOISIE or FOND_LIGNE, bordure = s.choisi and OR or BORDURE_SOMBRE })
-    end
-    l.numero:SetText(s.numero and tostring(s.numero) or "")
-    l.marque:SetText("")
-    l.icone:Hide()
-    l.conseil:SetText("")
-    l.conseil:Hide()
-    l.texte:ClearAllPoints()
-    if s.type == "titre" then
-      l.texte:SetPoint("LEFT", 8, 0)
-      l.texte:SetText(COULEUR_OR .. s.texte .. "|r")
-    elseif s.type == "texte" then
-      l.texte:SetPoint("LEFT", 8, 0)
-      l.texte:SetText("|cffdddddd" .. s.texte .. "|r")
-    elseif s.type == "reponse" then
-      local couleur = (s.reponse.genre == "rendre" and not s.fini) and "|cff999999" or "|cffffffff"
-      if s.marque ~= "" then
-        l.marque:SetText((s.reponse.genre == "rendre" and (s.fini and "|cffffd200?|r" or "|cff999999?|r")) or "|cffffd200!|r")
-        l.texte:SetPoint("LEFT", 46, 0)
-      else
-        l.texte:SetPoint("LEFT", 28, 0)
-      end
-      l.texte:SetText(couleur .. s.texte .. "|r")
-    else -- objet ou choix
-      if s.icone then l.icone:SetTexture(s.icone); l.icone:Show() end
-      l.texte:SetPoint("LEFT", 58, s.conseil and 7 or 0)
-      l.texte:SetText(s.texte)
-      if s.conseil then
-        l.conseil:ClearAllPoints()
-        l.conseil:SetPoint("LEFT", 58, -9)
-        l.conseil:SetText(s.conseil)
-        l.conseil:Show()
-      end
-    end
-    l.texte:SetWidth(LARGEUR_LISTE - 80)
+    y = y + haut + (cartes and 5 or 3)
     l:Show()
   end
   for i = nb + 1, #bandeau.lignes do bandeau.lignes[i]:Hide() end
@@ -910,13 +1290,78 @@ local function tracerListe(specs)
   liste:Show()
 end
 
--- Dessine l'état courant dans le bandeau.
+-- Place le nom, le titre, le texte, le compteur et le bouton d'action selon le style, applique les
+-- polices et les couleurs. Rend la hauteur occupée au-dessus du texte.
+local function placerTextes(e, style)
+  local b = bandeau
+  local largeur = largeurBandeau()
+  local lt = largeurTexte()
+  local ecran = largeurEcran()
+  local gauche, droite, yNom, yTitre, yTexte
+  if style == "bandeau" then
+    gauche, droite, yNom, yTitre, yTexte = 128, 20, 14, 30, 56
+    sur(b.nomPNJ.SetFontObject, b.nomPNJ, _G.GameFontHighlightSmall)
+    b.nomPNJ:SetTextColor(1, 1, 1)
+    b.nomPNJ:SetWidth(0)
+    sur(b.titreQuete.SetFontObject, b.titreQuete, _G.GameFontNormalLarge)
+    b.texte:SetTextColor(1, 1, 1)
+  else
+    gauche = (style == "cinema") and math.floor(ecran * 0.25) or 24
+    droite = (style == "cinema") and gauche or 20
+    yNom, yTitre = 14, 46
+    yTexte = ((e.titre or "") ~= "") and 70 or 50
+    poserPolice(b.nomPNJ, police(), 22, "")
+    b.nomPNJ:SetTextColor(1, 0.82, 0.30)
+    b.nomPNJ:SetWidth(math.max(100, lt - 150))
+    poserPolice(b.titreQuete, POLICE_TITRE, 17, "")
+    b.texte:SetTextColor(0.95, 0.93, 0.88)
+  end
+  b.titreQuete:SetTextColor(1, 0.82, 0.30)
+  b.nomPNJ:ClearAllPoints()
+  b.nomPNJ:SetPoint("TOPLEFT", gauche, -yNom)
+  b.titreQuete:ClearAllPoints()
+  b.titreQuete:SetPoint("TOPLEFT", gauche, -yTitre)
+  b.titreQuete:SetWidth(lt - 36)
+  b.texte:ClearAllPoints()
+  b.texte:SetPoint("TOPLEFT", gauche, -yTexte)
+  b.texte:SetWidth(lt)
+  poserPolice(b.texte, police(), tonumber(db.tailleTexte) or 15, "")
+  b.compteur:ClearAllPoints()
+  b.compteur:SetPoint("BOTTOMLEFT", gauche, 18)
+  b.bouton:ClearAllPoints()
+  b.bouton:SetPoint("BOTTOMRIGHT", -droite, 14)
+  return yTexte
+end
+
+-- L'écriture lettre par lettre de la page : démarre quand la page change (pas à chaque tracé).
+local function gererEcriture(e, plein)
+  local b = bandeau
+  if db.machine and plein ~= "" then
+    local cle = e.page .. "|" .. plein
+    if not e.ecr or e.ecr.cle ~= cle then
+      e.ecr = { cle = cle, complet = plein, total = ns.longueurVisible(plein), t = 0, n = 0, fini = false }
+    end
+    if e.ecr.fini then
+      b.ecrivain:SetScript("OnUpdate", nil)
+    else
+      b.ecrivain:SetScript("OnUpdate", b.surEcriture)
+      b.texte:SetText(ns.morceauTexte(e.ecr.complet, e.ecr.n))
+    end
+  else
+    if e.ecr then e.ecr.fini = true end
+    b.ecrivain:SetScript("OnUpdate", nil)
+  end
+end
+
+-- Dessine l'état courant.
 local function tracer()
   local e, b = etat, bandeau
+  local style = styleActuel()
   local nb = #e.pages
+  local plein = e.pages[e.page] or ""
   b.nomPNJ:SetText(e.pnj or "")
   b.titreQuete:SetText(e.titre or "")
-  b.texte:SetText(e.pages[e.page] or "")
+  b.texte:SetText(plein) -- le texte entier d'abord : sa hauteur règle celle de la boîte
   b.compteur:SetText(ns.compteur(e.page, nb))
 
   local act = ns.boutonAction(e.etape, e.page, nb, e.completable, e.nbChoix, e.choix)
@@ -934,20 +1379,34 @@ local function tracer()
   b.caseTouche:SetShown(db.touches and true or false)
 
   local unite = e.test and "player" or e.unite
-  if unite then
+  if style == "bandeau" and unite then
     sur(SetPortraitTexture, b.portrait, unite)
     b.portrait:Show()
   else
     b.portrait:Hide()
   end
   tracerListe(ns.lignesListe(e))
+  local yTexte = placerTextes(e, style)
 
-  -- La hauteur suit celle du texte (plus de texte, un bandeau plus haut).
+  -- La hauteur suit celle du texte (plus de texte, une boîte plus haute).
   local h = entier(sur(b.texte.GetStringHeight, b.texte))
-  local total = 56 + math.max(h, 64) + 52
-  if total < 150 then total = 150 end
-  if total > 420 then total = 420 end
+  local total
+  if style == "bandeau" then
+    total = 56 + math.max(h, 64) + 52
+    if total < 150 then total = 150 end
+    if total > 420 then total = 420 end
+  else
+    total = yTexte + math.max(h, 60) + 56
+    if total < 140 then total = 140 end
+    if total > 460 then total = 460 end
+    if style == "cinema" then total = math.max(total, math.floor(hauteurEcran() * 0.28)) end
+  end
   b:SetHeight(total)
+
+  gererEcriture(e, plein)
+  -- Les modèles 3D : une panne ici ne doit jamais gêner le dialogue.
+  local okM, errM = pcall(majModeles, e, style)
+  if not okM then ns.erreurModele = tostring(errM) end
 end
 
 local function clavierActif()
@@ -1005,6 +1464,7 @@ end
 
 local function afficherEtat()
   creerBandeau()
+  bandeau.modeleCle = nil -- un nouvel échange : les modèles 3D sont rechargés (« npc » peut être un autre PNJ)
   appliquerStyle()
   paginer(etat)
   tracer()
@@ -1066,7 +1526,10 @@ local function lancerTest() end -- définie plus bas
 
 actionBouton = function()
   local e = etat
-  if not e or e.occupe or not e.action or not e.action.actif then return end
+  if not e or e.occupe then return end
+  -- Pendant l'écriture lettre par lettre, le premier appui affiche d'abord tout le texte.
+  if e.ecr and not e.ecr.fini then terminerEcriture() return end
+  if not e.action or not e.action.actif then return end
   local a = e.action.action
   if a == "suivant" then
     e.page = e.page + 1
@@ -1137,6 +1600,10 @@ function ns.surTouche(cadre, touche)
   sur(cadre.SetPropagateKeyboardInput, cadre, action == nil)
   if action == "bouton" then
     local ok, err = pcall(actionBouton)
+    if not ok then echec(err) end
+  elseif action == "ignorer" then
+    -- Bouton grisé : Espace ne fait rien, sauf finir d'écrire le texte.
+    local ok, err = pcall(terminerEcriture)
     if not ok then echec(err) end
   elseif action == "fermer" then
     fermerEchange()
@@ -1284,6 +1751,18 @@ end)
 -- Réglages
 -- ---------------------------------------------------------------------------
 
+-- Change le style d'affichage (sans /reload) et le dit dans le chat.
+local function choisirStyle(valeur)
+  if not db or not ns.reglages then return end
+  ns.reglages.changer("style", valeur)
+  dire("style « " .. ns.nomStyle(valeur) .. " ». /dial test pour le voir.")
+end
+
+-- Un bouton de réglages par style (l'API des réglages n'a pas de liste déroulante).
+local function boutonStyle(valeur, aide)
+  return { texte = "Style : " .. ns.nomStyle(valeur), aide = aide, action = function() choisirStyle(valeur) end }
+end
+
 ns.reglages = ns.creerReglages({
   titre = "Dialogues de quête",
   icone = "Interface\\GossipFrame\\GossipGossipIcon",
@@ -1295,6 +1774,8 @@ ns.reglages = ns.creerReglages({
       aide = "Un bandeau en bas de l'écran remplace la fenêtre de dialogue des PNJ. Coupé : la fenêtre du jeu revient tout de suite." },
     { cle = "morceaux", libelle = "Le texte par morceaux",
       aide = "Le texte du PNJ s'affiche une page à la fois (« 2 / 3 »). Décoché : tout le texte d'un coup." },
+    { cle = "machine", libelle = "Le texte lettre par lettre",
+      aide = "Le texte de la page s'écrit comme à la machine (environ 60 lettres par seconde). Espace affiche d'abord tout le texte, un second appui passe à la suite. Décoché : tout le texte d'un coup." },
     { cle = "touches", libelle = "Les touches du clavier",
       aide = "Espace = le bouton d'action, 1 à 9 = une réponse ou une récompense, Échap = fermer. Les autres touches passent au jeu. En combat, aucune touche n'est prise." },
     { cle = "conseil", libelle = "Récompense conseillée",
@@ -1304,15 +1785,19 @@ ns.reglages = ns.creerReglages({
       aide = "La taille des lettres du texte du PNJ. Le découpage en pages s'adapte." },
     { cle = "largeur", type = "nombre", libelle = "Largeur du bandeau", min = 40, max = 90, pas = 5,
       format = function(v) return v .. " %" end,
-      aide = "La largeur du bandeau, en pourcentage de la largeur de l'écran." },
+      aide = "La largeur du bandeau (style bandeau seulement), en pourcentage de la largeur de l'écran." },
     { titre = "Jeu" },
     { cle = "fenetreJeu", libelle = "Garder la fenêtre de dialogue du jeu",
       aide = "Coché : le bandeau ne s'affiche pas, la fenêtre du jeu fait tout (comme /dial jeu). Utile pour comparer ou en cas de souci." },
   },
   boutons = {
-    { texte = "Tester le bandeau", aide = "Affiche un faux dialogue, sans PNJ, pour voir le bandeau et essayer les touches.", action = function()
+    { texte = "Tester le dialogue", aide = "Affiche un faux dialogue, sans PNJ, dans le style choisi, pour le voir et essayer les touches.", action = function()
       afficherTest()
     end },
+    boutonStyle("bandeau", "Le bandeau d'origine, en bas de l'écran."),
+    boutonStyle("scene", "Un grand modèle 3D du PNJ à gauche, le texte en bas au centre, les réponses en cartes à droite."),
+    boutonStyle("face", "Comme la scène, avec ton personnage à droite ; le texte en haut, les réponses en bas."),
+    boutonStyle("cinema", "Deux bandes noires, le texte dans celle du bas, le modèle du PNJ au-dessus, les cartes à droite."),
   },
   astuce = "Espace passe à la page suivante puis accepte ; les chiffres choisissent une réponse ou une récompense ; Échap ferme. /dial jeu rend la fenêtre du jeu.",
   auChargement = function(d)
@@ -1358,11 +1843,20 @@ local function commande(texte)
     dire(db.fenetreJeu and "fenêtre du jeu rétablie (le bandeau ne s'affiche plus)." or "le bandeau est de retour.")
   elseif c == "test" then
     afficherTest()
+  elseif c == "style" or c:find("^style%s") then
+    local demande = strtrim(c:sub(6))
+    if demande == "" then
+      dire("style actuel : " .. ns.nomStyle(db and db.style) .. ". Pour en changer : /dial style bandeau, scene, face ou cinema.")
+    else
+      local v = ns.styleDepuisTexte(demande)
+      if v then choisirStyle(v) else dire("style inconnu : « " .. demande .. " ». Au choix : bandeau, scene, face, cinema.") end
+    end
   elseif c == "on" or c == "off" then
     if db and (c == "on") ~= (db.actif and true or false) then ns.reglages.basculer() end
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/dial : les réglages     /dial test : un faux dialogue pour essayer")
-    dire("/dial jeu : bascule entre le bandeau et la fenêtre du jeu     /dial on, /dial off : activer ou couper")
+    dire("/dial style bandeau, scene, face ou cinema : l'affichage     /dial style : le style actuel")
+    dire("/dial jeu : bascule entre l'affichage et la fenêtre du jeu     /dial on, /dial off : activer ou couper")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /dial aide donne la liste.")
   end

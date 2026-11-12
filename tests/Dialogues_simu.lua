@@ -23,7 +23,7 @@ verifie("toc : charge Reglages.lua puis Dialogues.lua", true, toc:find("Reglages
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: DialoguesDB", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : version 0.1.1", true, toc:find("## Version: 0.1.1", 1, true) ~= nil)
+verifie("toc : version 0.2.0", true, toc:find("## Version: 0.2.0", 1, true) ~= nil)
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)
@@ -242,6 +242,70 @@ verifie("liste : fin, le conseil suit l'objet", "Mieux pour toi : +5 %", lc[2].c
 verifie("liste : fin, un seul choix", "titre:Récompense :", resume(ns.lignesListe({ etape = "complete", page = 1, pages = { "a" }, recompenses = { choix = { objA } } })):match("^titre:Récompense :"))
 verifie("liste : état absent", 0, #ns.lignesListe(nil))
 
+-- ---- morceauTexte, longueurVisible, styles
+local outils = {}
+function outils.utf8Valide(t)
+  local i = 1
+  while i <= #t do
+    local c = t:byte(i)
+    local n = (c >= 240 and 4) or (c >= 224 and 3) or (c >= 192 and 2) or 1
+    if c >= 128 and c < 192 then return false end
+    for k = 1, n - 1 do
+      local d = t:byte(i + k)
+      if not d or d < 128 or d > 191 then return false end
+    end
+    i = i + n
+  end
+  return true
+end
+function outils.nbCodes(t, motif) local _, k = t:gsub(motif, "") return k end
+verifie("morceauTexte : texte simple", "Bon", ns.morceauTexte("Bonjour", 3))
+verifie("morceauTexte : n = 0", "", ns.morceauTexte("Bonjour", 0))
+verifie("morceauTexte : n négatif", "", ns.morceauTexte("Bonjour", -4))
+verifie("morceauTexte : n absent", "", ns.morceauTexte("Bonjour", nil))
+verifie("morceauTexte : n plus grand que le texte", "Bonjour", ns.morceauTexte("Bonjour", 99))
+verifie("morceauTexte : n égal à la longueur", "Bonjour", ns.morceauTexte("Bonjour", 7))
+verifie("morceauTexte : texte absent", "", ns.morceauTexte(nil, 3))
+verifie("morceauTexte : texte vide", "", ns.morceauTexte("", 3))
+verifie("morceauTexte : É entier (2 octets)", "É", ns.morceauTexte("Élève", 1))
+verifie("morceauTexte : Él", "Él", ns.morceauTexte("Élève", 2))
+verifie("morceauTexte : œ compte pour un", "œuf", ns.morceauTexte("œuf…", 3))
+verifie("morceauTexte : … (3 octets) entier", "œuf…", ns.morceauTexte("œuf…", 4))
+verifie("morceauTexte : couleur ouverte, refermée", "|cffffd200Obje|r", ns.morceauTexte("|cffffd200Objectif :|r Tuer", 4))
+verifie("morceauTexte : fin de la couleur, refermée", "|cffffd200Objectif :|r", ns.morceauTexte("|cffffd200Objectif :|r Tuer", 10))
+verifie("morceauTexte : après la couleur", "|cffffd200Objectif :|r T", ns.morceauTexte("|cffffd200Objectif :|r Tuer", 12))
+verifie("morceauTexte : tout est visible, codes de fin compris", "|cff112233ab|r", ns.morceauTexte("|cff112233ab|r", 2))
+verifie("morceauTexte : une barre doublée compte pour un", "a||", ns.morceauTexte("a||b", 2))
+do
+  local texteMelange = "|cffffd200Objectif :|r Élève à l'œuf… |cff00ff00ok|r fin"
+  local total = ns.longueurVisible(texteMelange)
+  local propre = true
+  for k = 0, total + 3 do
+    local r = ns.morceauTexte(texteMelange, k)
+    if not outils.utf8Valide(r) or r:find("|c%x?%x?%x?%x?%x?%x?%x?$") or r:find("|$") then propre = false end
+    if ns.longueurVisible(r) ~= math.min(k, total) then propre = false end
+    if outils.nbCodes(r, "|c%x%x%x%x%x%x%x%x") ~= outils.nbCodes(r, "|r") then propre = false end
+  end
+  verifie("morceauTexte : pour tout n, jamais coupé (UTF-8, codes) et couleurs équilibrées", true, propre)
+end
+verifie("longueurVisible : sans les codes couleur", 15, ns.longueurVisible("|cffffd200Objectif :|r Tuer"))
+verifie("longueurVisible : accents", 2, ns.longueurVisible("éé"))
+verifie("longueurVisible : absent", 0, ns.longueurVisible(nil))
+verifie("styles : quatre", 4, #ns.STYLES)
+verifie("styleValide : face", "face", ns.styleValide("face"))
+verifie("styleValide : inconnu = scène", "scene", ns.styleValide("zorglub"))
+verifie("styleValide : absent = scène", "scene", ns.styleValide(nil))
+verifie("styleValide : vide = scène", "scene", ns.styleValide(""))
+verifie("nomStyle : scène", "scène", ns.nomStyle("scene"))
+verifie("nomStyle : face à face", "face à face", ns.nomStyle("face"))
+verifie("styleDepuisTexte : scène avec accent", "scene", ns.styleDepuisTexte("scène"))
+verifie("styleDepuisTexte : majuscule", "scene", ns.styleDepuisTexte("Scene"))
+verifie("styleDepuisTexte : face à face", "face", ns.styleDepuisTexte("face à face"))
+verifie("styleDepuisTexte : cinéma", "cinema", ns.styleDepuisTexte("cinéma"))
+verifie("styleDepuisTexte : bandeau", "bandeau", ns.styleDepuisTexte(" bandeau "))
+verifie("styleDepuisTexte : inconnu", nil, ns.styleDepuisTexte("zorglub"))
+verifie("styleDepuisTexte : absent", nil, ns.styleDepuisTexte(nil))
+
 -- ============================================================================
 -- 2. Chargement simulé avec de faux cadres et un faux jeu.
 -- ============================================================================
@@ -256,6 +320,7 @@ print = function(...)
 end
 
 local toutes, enCombat, file, JEU, declencher
+local modelePanne = false -- vrai : SetUnit des modèles 3D lève une erreur
 local M = {}
 local metaF = {}
 function metaF.__index(t, k)
@@ -341,6 +406,17 @@ function M.EnableMouse(s, v)
 end
 function M.IsMouseEnabled(s) return s._souris end
 function M.EnableKeyboard(s, v) s._clavier = v end
+-- Les modèles 3D (CreateFrame("PlayerModel")) et la strate des cadres.
+function M.SetUnit(s, u)
+  if modelePanne then error("SetUnit impossible (panne simulée)") end
+  s._unite = u
+end
+function M.ClearModel(s) s._unite = nil end
+function M.SetFacing(s, a) s._angle = a end
+function M.SetCamDistanceScale(s, v) s._camera = v end
+function M.SetPortraitZoom(s, v) s._zoom = v end
+function M.SetFrameStrata(s, v) s._strate = v end
+function M.SetFont(s, f, t) s._police = f s._taillePolice = t return true end
 function M.SetPropagateKeyboardInput(s, v)
   if enCombat then error("ADDON_ACTION_BLOCKED SetPropagateKeyboardInput") end
   s._propage = v
@@ -351,6 +427,8 @@ local function installer()
   imprime = {}
   _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
   _G.DialoguesDB, _G.DialoguesBandeau, _G.DialoguesListe = nil, nil, nil
+  _G.DialoguesBandeHaut, _G.DialoguesModelePNJ, _G.DialoguesModeleJoueur, _G.DialoguesEcrivain = nil, nil, nil, nil
+  modelePanne = false
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920
   _G.GossipFrame = nouveau("Frame", "GossipFrame", UIParent)
@@ -469,13 +547,20 @@ local function avancer()
   local garde = 0
   while #file > 0 and garde < 1000 do garde = garde + 1; table.remove(file, 1)() end
 end
-local function demarrer()
+-- Charge l'addon. Par défaut, le style « bandeau » et l'écriture d'un bloc (les vérifications d'origine
+-- lisent le texte tout de suite) ; demarrer("scene", true) choisit le style et l'écriture lettre par lettre ;
+-- demarrer("defaut") garde les valeurs de départ de l'addon.
+local function demarrer(style, machine)
   local n = {}
   assert(loadfile(reglagesLua))("Dialogues", n)
   assert(loadfile(fichier))("Dialogues", n)
   declencher("ADDON_LOADED", "Dialogues")
   declencher("PLAYER_ENTERING_WORLD")
   avancer()
+  if style ~= "defaut" then
+    DialoguesDB.style = style or "bandeau"
+    DialoguesDB.machine = machine == true
+  end
   return n
 end
 
@@ -510,10 +595,14 @@ local function cles(f) local t = {} for k in pairs(f) do if type(k) == "string" 
 -- ---------------------------------------------------------------------------
 installer()
 local clesJeuAvant = cles(GossipFrame) .. "/" .. cles(QuestFrame)
-local n = demarrer()
+local n = demarrer("defaut")
 verifie("chargement : aucune erreur", nil, n.derniereErreur)
 verifie("chargement : réglages créés", true, n.reglages ~= nil and DialoguesDB ~= nil)
-verifie("chargement : valeurs de départ", "true,true,true,15,70", tostring(DialoguesDB.actif) .. "," .. tostring(DialoguesDB.morceaux) .. "," .. tostring(DialoguesDB.touches) .. "," .. DialoguesDB.tailleTexte .. "," .. DialoguesDB.largeur)
+verifie("chargement : valeurs de départ", "true,true,true,17,70", tostring(DialoguesDB.actif) .. "," .. tostring(DialoguesDB.morceaux) .. "," .. tostring(DialoguesDB.touches) .. "," .. DialoguesDB.tailleTexte .. "," .. DialoguesDB.largeur)
+verifie("chargement : style de départ = scène", "scene", DialoguesDB.style)
+verifie("chargement : écriture lettre par lettre par défaut", true, DialoguesDB.machine)
+-- Les vérifications qui suivent (2b à 2p) lisent le bandeau d'origine, texte entier : on les y met.
+DialoguesDB.style, DialoguesDB.machine = "bandeau", false
 verifie("chargement : fenêtre du jeu coupée par défaut", false, DialoguesDB.fenetreJeu)
 verifie("chargement : global du compartiment d'addons", "function", type(Dialogues_OuvrirReglages))
 verifie("chargement : commande /dial", "/dial", SLASH_DIALOGUES1)
@@ -1110,6 +1199,12 @@ local manques = {
   { "C_Timer", function() C_Timer = nil end },
   { "GameTooltip", function() GameTooltip = nil end },
   { "issecretvalue qui répond toujours oui", function() issecretvalue = function() return true end end },
+  { "CreateFrame sans PlayerModel", function()
+      local cf = CreateFrame
+      CreateFrame = function(g, ...) if g == "PlayerModel" then error("type de cadre inconnu") end return cf(g, ...) end
+    end },
+  { "SetUnit qui échoue", function() modelePanne = true end },
+  { "UIParent.GetHeight absurde", function() UIParent.GetHeight = function() return "bizarre" end end },
   { "un jeu qui répond n'importe quoi", function()
       C_GossipInfo.GetActiveQuests = function() return "pas une liste" end
       C_GossipInfo.GetOptions = function() return { 42, "x", {} } end
@@ -1118,12 +1213,13 @@ local manques = {
       GetNumQuestChoices = function() return "trois" end
     end },
 }
+for _, styleManque in ipairs({ "bandeau", "scene", "face", "cinema" }) do
 for _, m in ipairs(manques) do
   installer()
   m[2]()
   local nm
   local okM, err = pcall(function()
-    nm = demarrer()
+    nm = demarrer(styleManque, styleManque ~= "bandeau")
     for _, e in ipairs({ { "gossip", "GOSSIP_SHOW" }, { "greeting", "QUEST_GREETING" }, { "detail", "QUEST_DETAIL" },
                          { "progress", "QUEST_PROGRESS" }, { "complete", "QUEST_COMPLETE" } }) do
       JEU.etape = e[1]
@@ -1140,8 +1236,9 @@ for _, m in ipairs(manques) do
     pcall(toucher, "SPACE")
     avancer()
   end)
-  verifie("API manquante : " .. m[1] .. " : aucune erreur", true, okM)
+  verifie("API manquante (" .. styleManque .. ") : " .. m[1] .. " : aucune erreur", true, okM)
   if not okM then io.write("   " .. tostring(err) .. "\n") end
+end
 end
 
 -- Une action du jeu absente ou en erreur : la fenêtre du jeu reprend la main, rien ne plante.
@@ -1305,6 +1402,275 @@ declencher("GOSSIP_CLOSED") avancer()
 verifie("échange fini : souris remise", true, GossipFrame._souris)
 verifie("échange fini : échelle remise", 1, GossipFrame._scale)
 verifie("échange fini : opacité remise", 1, GossipFrame:GetAlpha())
+
+-- ---------------------------------------------------------------------------
+-- 2q. Les quatre styles d'affichage
+-- ---------------------------------------------------------------------------
+do
+  local function modelesVisibles(b)
+    return (b.modelePNJ and b.modelePNJ._shown and "1" or "0") .. (b.modeleJoueur and b.modeleJoueur._shown and "1" or "0")
+  end
+  local function toutesStrates(b)
+    local liste_ = { b, b.liste, b.bandeHaut, b.modelePNJ, b.modeleJoueur, b.ecrivain, b.bouton, b.boutonDeux, b.caseTouche, b.boutonJeu }
+    for _, l in ipairs(b.lignes) do liste_[#liste_ + 1] = l end
+    for _, f in ipairs(liste_) do if f._strate ~= "DIALOG" then return false end end
+    return true
+  end
+  local attendusStyles = {
+    bandeau = { point = "BOTTOM", liste = "BOTTOMRIGHT", modeles = "00", haut = false, largeur = 1344, cartes = false },
+    scene = { point = "BOTTOM", liste = "RIGHT", modeles = "10", haut = false, largeur = 864, cartes = true },
+    face = { point = "TOP", liste = "BOTTOM", modeles = "11", haut = false, largeur = 960, cartes = true },
+    cinema = { point = "BOTTOM", liste = "RIGHT", modeles = "10", haut = true, largeur = 1920, cartes = true },
+  }
+  local ORDRE_STYLES = { "bandeau", "scene", "face", "cinema" }
+  for _, st in ipairs(ORDRE_STYLES) do
+    local att = attendusStyles[st]
+    local pre = "style " .. st .. " : "
+    installer()
+    local clesAvant = cles(GossipFrame) .. "/" .. cles(QuestFrame)
+    local ns_ = demarrer(st, false)
+    ouvrir("gossip", "GOSSIP_SHOW")
+    local b = DialoguesBandeau
+    verifie(pre .. "affiché", true, bandeauVisible())
+    verifie(pre .. "nom du PNJ", "Garde Mortemine", b.nomPNJ._text)
+    verifie(pre .. "texte", "Bienvenue, voyageur.\nQue puis-je faire pour toi ?", b.texte._text)
+    verifie(pre .. "place du cadre principal", att.point, b._pt[1])
+    verifie(pre .. "largeur du cadre principal", att.largeur, b._w)
+    verifie(pre .. "place des réponses", att.liste, DialoguesListe._pt[1])
+    verifie(pre .. "modèles 3D visibles (PNJ, joueur)", att.modeles, modelesVisibles(b))
+    if att.modeles:sub(1, 1) == "1" then verifie(pre .. "le modèle du PNJ montre npc", "npc", b.modelePNJ._unite) end
+    verifie(pre .. "le modèle du joueur", att.modeles:sub(2, 2) == "1" and "player" or nil, b.modeleJoueur._unite)
+    verifie(pre .. "bande noire du haut", att.haut, b.bandeHaut._shown)
+    verifie(pre .. "tous les cadres sur la strate DIALOG", true, toutesStrates(b))
+    verifie(pre .. "les modèles n'ont pas de souris", true, b.modelePNJ._souris == false and b.modeleJoueur._souris == false)
+    verifie(pre .. "portrait rond seulement en bandeau", st == "bandeau", b.portrait._shown == true)
+    verifie(pre .. "première réponse", "|cffffffffLivraison urgente|r", texteLigne(1))
+    verifie(pre .. "quatre réponses, pas cinq", true, ligneListe(4) ~= nil and ligneListe(5) == nil)
+    verifie(pre .. "la liste est affichée", true, DialoguesListe._shown)
+    verifie(pre .. "couleur du titre de quête", "1,0.82,0.3", table.concat(b.titreQuete._couleur, ","))
+    toucher("3")
+    verifie(pre .. "la touche 3 prend la quête 20", "gossip.dispo:20", appels())
+    JEU.appels = {}
+    avancer()
+    -- Changer de style pendant le dialogue, sans /reload.
+    for _, autre in ipairs(ORDRE_STYLES) do
+      ns_.reglages.changer("style", autre)
+      local a2 = attendusStyles[autre]
+      verifie(pre .. "vers " .. autre .. " : sans erreur", nil, ns_.derniereErreur)
+      verifie(pre .. "vers " .. autre .. " : toujours affiché, même texte", true, bandeauVisible() and b.texte._text == "Bienvenue, voyageur.\nQue puis-je faire pour toi ?")
+      verifie(pre .. "vers " .. autre .. " : modèles", a2.modeles, modelesVisibles(b))
+      verifie(pre .. "vers " .. autre .. " : bande du haut", a2.haut, b.bandeHaut._shown)
+      verifie(pre .. "vers " .. autre .. " : cadre principal", a2.largeur .. a2.point, b._w .. b._pt[1])
+      verifie(pre .. "vers " .. autre .. " : réponses toujours là", "|cffffffffLivraison urgente|r", texteLigne(1))
+    end
+    ns_.reglages.changer("style", st)
+    declencher("GOSSIP_CLOSED") avancer()
+    -- La fin de quête : choix, surbrillance dorée au choix et au survol (cartes seulement pour le survol).
+    ouvrir("complete", "QUEST_COMPLETE")
+    verifie(pre .. "fin : bouton grisé", "Choisis une récompense", b.bouton._text)
+    verifie(pre .. "fin : choix numérotés", "1,2,3", ligneListe(2).numero._text .. "," .. ligneListe(3).numero._text .. "," .. ligneListe(4).numero._text)
+    toucher("2")
+    verifie(pre .. "fin : la touche 2 choisit", "Terminer la quête", b.bouton._text)
+    verifie(pre .. "fin : le choix est encadré d'or", "0.8,0.63,0.3,1", table.concat(ligneListe(3)._bordure, ","))
+    verifie(pre .. "fin : l'autre garde la bordure sombre", "0.3,0.25,0.15,1", table.concat(ligneListe(2)._bordure, ","))
+    ligneListe(2)._scripts.OnEnter(ligneListe(2))
+    verifie(pre .. "fin : au survol, la carte devient dorée (cartes seulement)", att.cartes and "0.8,0.63,0.3,1" or "0.3,0.25,0.15,1", table.concat(ligneListe(2)._bordure, ","))
+    ligneListe(2)._scripts.OnLeave(ligneListe(2))
+    verifie(pre .. "fin : la carte redevient sombre", "0.3,0.25,0.15,1", table.concat(ligneListe(2)._bordure, ","))
+    toucher("SPACE")
+    verifie(pre .. "fin : GetQuestReward(2)", "reward:2", appels())
+    JEU.appels = {}
+    declencher("QUEST_FINISHED") avancer()
+    -- Le dialogue d'essai montre le style choisi.
+    SlashCmdList.DIALOGUES("test")
+    verifie(pre .. "essai : affiché", true, bandeauVisible())
+    verifie(pre .. "essai : le même cadre, au même endroit", att.point, b._pt[1])
+    if st == "bandeau" then
+      verifie(pre .. "essai : portrait du joueur", "player", JEU.portraits[#JEU.portraits])
+    else
+      verifie(pre .. "essai : le modèle montre le joueur", "player", b.modelePNJ._unite)
+    end
+    verifie(pre .. "essai : modèles", att.modeles, modelesVisibles(b))
+    toucher("ESCAPE")
+    verifie(pre .. "essai : Échap ferme", false, bandeauVisible())
+    verifie(pre .. "aucune erreur d'affichage", nil, ns_.derniereErreur)
+    verifie(pre .. "aucun champ écrit sur les cadres du jeu", clesAvant, cles(GossipFrame) .. "/" .. cles(QuestFrame))
+  end
+
+  -- Un style abîmé en base vaut « scène » ; un PNJ qui disparaît cache son modèle.
+  installer()
+  demarrer("defaut")
+  DialoguesDB.style = "zorglub"
+  DialoguesDB.machine = false
+  ouvrir("gossip", "GOSSIP_SHOW")
+  verifie("style abîmé : traité comme la scène (modèle du PNJ, cartes à droite)", "10RIGHT", modelesVisibles(DialoguesBandeau) .. DialoguesListe._pt[1])
+  local uniteAvant = UnitExists
+  _G.UnitExists = function() return false end
+  SlashCmdList.DIALOGUES("style cinema")
+  verifie("PNJ disparu : le modèle est caché", "00", modelesVisibles(DialoguesBandeau))
+  _G.UnitExists = uniteAvant
+  declencher("GOSSIP_CLOSED") avancer()
+
+  -- /dial style et les boutons de style des réglages.
+  installer()
+  demarrer("defaut")
+  DialoguesDB.machine = false
+  verifie("/dial style : style de départ", "scene", DialoguesDB.style)
+  SlashCmdList.DIALOGUES("style face")
+  verifie("/dial style face", "face", DialoguesDB.style)
+  SlashCmdList.DIALOGUES("style Cinema")
+  verifie("/dial style Cinema (majuscule)", "cinema", DialoguesDB.style)
+  SlashCmdList.DIALOGUES("style scène")
+  verifie("/dial style scène (accent)", "scene", DialoguesDB.style)
+  SlashCmdList.DIALOGUES("style bandeau")
+  verifie("/dial style bandeau", "bandeau", DialoguesDB.style)
+  imprime = {}
+  SlashCmdList.DIALOGUES("style zorglub")
+  verifie("/dial style inconnu : le style ne change pas", "bandeau", DialoguesDB.style)
+  verifie("/dial style inconnu : message", true, lireImprime():find("style inconnu", 1, true) ~= nil)
+  SlashCmdList.DIALOGUES("style face")
+  imprime = {}
+  SlashCmdList.DIALOGUES("style")
+  verifie("/dial style seul : dit le style actuel", true, lireImprime():find("style actuel : face à face", 1, true) ~= nil)
+  verifie("/dial style seul : ne change rien", "face", DialoguesDB.style)
+  imprime = {}
+  SlashCmdList.DIALOGUES("aide")
+  verifie("/dial aide : parle de /dial style", true, lireImprime():find("/dial style", 1, true) ~= nil)
+  local function boutonNomme(texte) for _, f in ipairs(toutes) do if f._text == texte and f._scripts.OnClick then return f end end end
+  for _, v in ipairs({ { "Style : bandeau", "bandeau" }, { "Style : scène", "scene" }, { "Style : face à face", "face" }, { "Style : cinéma", "cinema" } }) do
+    local bt = boutonNomme(v[1])
+    if bt then bt._scripts.OnClick(bt) end
+    verifie("réglages : le bouton " .. v[1], v[2], DialoguesDB.style)
+  end
+  -- Un dialogue ouvert prend le style tapé tout de suite.
+  SlashCmdList.DIALOGUES("style scene")
+  ouvrir("gossip", "GOSSIP_SHOW")
+  SlashCmdList.DIALOGUES("style cinema")
+  verifie("/dial style pendant un dialogue : bande du haut", true, DialoguesBandeau.bandeHaut._shown)
+  verifie("/dial style pendant un dialogue : le dialogue reste", true, bandeauVisible())
+  declencher("GOSSIP_CLOSED") avancer()
+end
+
+-- ---------------------------------------------------------------------------
+-- 2r. Le texte lettre par lettre (option « machine »)
+-- ---------------------------------------------------------------------------
+do
+  local function pageCourante(b) return tonumber(b.compteur._text:match("^(%d+) /")) end
+  local function pagesTotal(b) return tonumber(b.compteur._text:match("/ (%d+)$")) end
+  installer()
+  local nm = demarrer("scene", true)
+  ouvrir("detail", "QUEST_DETAIL")
+  local bm = DialoguesBandeau
+  local ecr = bm.ecrivain
+  verifie("machine : le texte commence vide", "", bm.texte._text)
+  verifie("machine : le cadre qui écrit a son script", "function", type(ecr._scripts.OnUpdate))
+  ecr._scripts.OnUpdate(ecr, 0.5)
+  verifie("machine : 0,5 s = 30 caractères", 30, nm.longueurVisible(bm.texte._text))
+  ecr._scripts.OnUpdate(ecr, 100)
+  local pleine = bm.texte._text
+  verifie("machine : la page est écrite en entier", true, nm.longueurVisible(pleine) > 100 and pleine:find("^Les loups") ~= nil)
+  verifie("machine : l'écriture finie, le script est retiré", nil, ecr._scripts.OnUpdate)
+  verifie("machine : l'indicateur de page est là dès le début", true, pagesTotal(bm) ~= nil and pageCourante(bm) == 1)
+  -- Pas à pas : jamais un caractère coupé, jamais plus de deux caractères d'un coup.
+  declencher("QUEST_FINISHED") avancer()
+  ouvrir("detail", "QUEST_DETAIL")
+  local ecr2 = bm.ecrivain
+  local propre2, pas, dernier, saut = true, 0, 0, 0
+  while ecr2._scripts.OnUpdate and pas < 3000 do
+    pas = pas + 1
+    ecr2._scripts.OnUpdate(ecr2, 1 / 60)
+    local t = bm.texte._text
+    if not outils.utf8Valide(t) then propre2 = false end
+    local v = nm.longueurVisible(t)
+    if v - dernier > 2 then saut = saut + 1 end
+    dernier = v
+  end
+  verifie("machine : pas à pas, jamais de caractère coupé", true, propre2)
+  verifie("machine : pas à pas, une lettre à la fois", 0, saut)
+  verifie("machine : pas à pas, le même texte à la fin", pleine, bm.texte._text)
+  verifie("machine : environ 60 caractères par seconde", true, pas >= nm.longueurVisible(pleine) - 3 and pas <= nm.longueurVisible(pleine) + 3)
+  -- Espace pendant l'écriture : tout le texte d'abord, un second appui avance.
+  declencher("QUEST_FINISHED") avancer()
+  ouvrir("detail", "QUEST_DETAIL")
+  ecr = bm.ecrivain
+  ecr._scripts.OnUpdate(ecr, 0.2)
+  verifie("machine : à 0,2 s, 12 caractères", 12, nm.longueurVisible(bm.texte._text))
+  toucher("SPACE")
+  verifie("machine : Espace affiche d'abord tout le texte", pleine, bm.texte._text)
+  verifie("machine : sans changer de page", 1, pageCourante(bm))
+  verifie("machine : et sans rien faire au jeu", "", appels())
+  toucher("SPACE")
+  verifie("machine : le second appui passe à la page 2", 2, pageCourante(bm))
+  verifie("machine : la page 2 commence vide", "", bm.texte._text)
+  -- Jusqu'à la dernière page, avec son code couleur : toujours équilibré.
+  local garde = 0
+  while pageCourante(bm) < pagesTotal(bm) and garde < 40 do garde = garde + 1; toucher("SPACE"); toucher("SPACE") end
+  verifie("machine : dernière page atteinte", true, pageCourante(bm) == pagesTotal(bm))
+  ecr = bm.ecrivain
+  local equilibre, secu = true, 0
+  while ecr._scripts.OnUpdate and secu < 3000 do
+    secu = secu + 1
+    ecr._scripts.OnUpdate(ecr, 1 / 60)
+    local t = bm.texte._text
+    if outils.nbCodes(t, "|c%x%x%x%x%x%x%x%x") ~= outils.nbCodes(t, "|r") or not outils.utf8Valide(t) then equilibre = false end
+  end
+  verifie("machine : la page de l'objectif garde sa couleur équilibrée", true, equilibre)
+  verifie("machine : la page de l'objectif est entière", "|cffffd200Objectif :|r Tuez 4 loups.", bm.texte._text)
+  verifie("machine : Accepter à la dernière page", "Accepter", bm.bouton._text)
+  declencher("QUEST_FINISHED") avancer()
+  -- Couper l'option en cours d'écriture : tout s'affiche, et la remettre ne recommence pas.
+  ouvrir("detail", "QUEST_DETAIL")
+  ecr = bm.ecrivain
+  ecr._scripts.OnUpdate(ecr, 0.2)
+  nm.reglages.changer("machine", false)
+  verifie("machine coupée en route : tout le texte", pleine, bm.texte._text)
+  verifie("machine coupée en route : plus d'écriture", nil, ecr._scripts.OnUpdate)
+  nm.reglages.changer("machine", true)
+  verifie("machine remise : la page finie ne recommence pas", pleine, bm.texte._text)
+  declencher("QUEST_FINISHED") avancer()
+  -- Bouton grisé : Espace finit d'écrire sans rien faire d'autre. Un nouveau tracé ne relance pas l'écriture.
+  ouvrir("complete", "QUEST_COMPLETE")
+  ecr = bm.ecrivain
+  ecr._scripts.OnUpdate(ecr, 0.1)
+  verifie("machine : fin de quête, texte en cours d'écriture", 6, nm.longueurVisible(bm.texte._text))
+  toucher("SPACE")
+  verifie("machine : Espace (bouton grisé) finit le texte", "Merci, voyageur. Voici ta récompense.", bm.texte._text)
+  verifie("machine : Espace (bouton grisé) ne termine pas la quête", "", appels())
+  toucher("2")
+  verifie("machine : choisir une récompense ne réécrit pas le texte", "Merci, voyageur. Voici ta récompense.", bm.texte._text)
+  verifie("machine : ni ne relance l'écriture", nil, ecr._scripts.OnUpdate)
+  declencher("QUEST_FINISHED") avancer()
+  -- Le dialogue d'essai écrit aussi lettre par lettre ; Échap ferme en pleine écriture.
+  SlashCmdList.DIALOGUES("test")
+  verifie("machine : essai, le texte commence vide", "", bm.texte._text)
+  verifie("machine : essai, le modèle montre le joueur", "player", bm.modelePNJ._unite)
+  toucher("ESCAPE")
+  verifie("machine : Échap ferme en pleine écriture", false, bandeauVisible())
+  -- Le style bandeau écrit lettre par lettre sans changer la hauteur du bandeau (mesurée sur le texte entier).
+  installer()
+  demarrer("bandeau", false)
+  ouvrir("detail", "QUEST_DETAIL")
+  local hauteurEntier = DialoguesBandeau._h
+  installer()
+  demarrer("bandeau", true)
+  ouvrir("detail", "QUEST_DETAIL")
+  bm = DialoguesBandeau
+  verifie("machine, bandeau : texte vide au départ", "", bm.texte._text)
+  verifie("machine, bandeau : hauteur réglée sur le texte entier", hauteurEntier, bm._h)
+  bm.ecrivain._scripts.OnUpdate(bm.ecrivain, 100)
+  verifie("machine, bandeau : texte entier à la fin", true, bm.texte._text:find("^Les loups") ~= nil)
+  declencher("QUEST_FINISHED") avancer()
+  -- Un plantage dans l'écriture : la fenêtre du jeu reprend la main.
+  installer()
+  nm = demarrer("scene", true)
+  ouvrir("gossip", "GOSSIP_SHOW")
+  bm = DialoguesBandeau
+  nm.morceauTexte = function() error("panne d'écriture simulée") end
+  local okE2 = pcall(function() bm.ecrivain._scripts.OnUpdate(bm.ecrivain, 0.5) end)
+  verifie("écriture en panne : aucune erreur ne sort", true, okE2)
+  verifie("écriture en panne : la fenêtre du jeu reprend la main", 1, GossipFrame:GetAlpha())
+  declencher("GOSSIP_CLOSED") avancer()
+end
 
 print = printOrigine
 io.write(string.format("%d vérifications OK\n", nbOK))

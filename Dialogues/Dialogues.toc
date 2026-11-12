@@ -1,9 +1,9 @@
 ## Interface: 120105, 16001
 ## Title: Dialogues de quête
-## Notes: Remplace la fenêtre de dialogue des PNJ par un bandeau en bas de l'écran : portrait, nom, texte affiché par morceaux, réponses numérotées, récompenses à choisir, et le clavier (Espace, chiffres, Échap). La fenêtre du jeu reprend la main en cas de souci.
+## Notes: Remplace la fenêtre de dialogue des PNJ, en quatre styles au choix (bandeau, scène avec le PNJ en 3D, face à face, cinéma) : nom, texte écrit lettre par lettre et par morceaux, réponses et récompenses en cartes, et le clavier (Espace, chiffres, Échap). La fenêtre du jeu reprend la main en cas de souci.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.1
+## Version: 0.2.0
 ## IconTexture: Interface\GossipFrame\GossipGossipIcon
 ## SavedVariables: DialoguesDB
 ## AddonCompartmentFunc: Dialogues_OuvrirReglages
