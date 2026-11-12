@@ -1021,6 +1021,16 @@ end
 -- Le portrait du style compact : la tête du PNJ en 3D, cadrée de près. Sans modèle (le jeu refuse),
 -- l'image ronde du portrait prend la place dans le même carré.
 local function chargerTete(m, unite)
+  -- Le modèle se charge un peu après SetUnit et reprend alors l'orientation du PNJ (vu en jeu le
+  -- 12/11 : visage de profil quand le PNJ se tourne vers le joueur). Une fois chargé, on le remet
+  -- de face, cadré sur la tête.
+  if m.SetScript then
+    pcall(m.SetScript, m, "OnModelLoaded", function(self)
+      sur(self.SetPortraitZoom, self, 1)
+      sur(self.SetCamDistanceScale, self, 1)
+      sur(self.SetFacing, self, 0)
+    end)
+  end
   local ok = pcall(function()
     m:SetUnit(unite)
     sur(m.SetPortraitZoom, m, 1)
