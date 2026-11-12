@@ -23,7 +23,7 @@ verifie("toc : charge Reglages.lua puis Dialogues.lua", true, toc:find("Reglages
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: DialoguesDB", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : version 0.3.0", true, toc:find("## Version: 0.3.0", 1, true) ~= nil)
+verifie("toc : version 0.3.1", true, toc:find("## Version: 0.3.1", 1, true) ~= nil)
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)
@@ -1649,6 +1649,7 @@ do
   verifie("compact : portrait carré de 96 px", "96,96", b.cadrePortrait._w .. "," .. b.cadrePortrait._h)
   verifie("compact : portrait encadré d'or", "0.8,0.63,0.3,1", table.concat(b.cadrePortrait._bordure, ","))
   verifie("compact : la tête est dans le portrait", true, b.modeleTete._parent == b.cadrePortrait)
+  verifie("compact : portrait posé dans le coin haut gauche du cadre", "TOPLEFT,14,-12", (b.cadrePortrait._pt and (b.cadrePortrait._pt[1] .. "," .. b.cadrePortrait._pt[4] .. "," .. b.cadrePortrait._pt[5])) or "aucun point")
   verifie("compact : pile à droite du cadre, collée à son bord, sous son haut", "BOTTOMLEFT,TOPRIGHT,6,-38",
     DialoguesListe._pt[1] .. "," .. DialoguesListe._pt[3] .. "," .. DialoguesListe._pt[4] .. "," .. DialoguesListe._pt[5])
   verifie("compact : la pile est accrochée au cadre", true, DialoguesListe._pt[2] == b)

@@ -1559,6 +1559,10 @@ local function placerTextes(e, style)
     b.nomPNJ:SetWidth(math.max(100, lt - 110))
     poserPolice(b.titreQuete, police(), 13, "")
     b.texte:SetTextColor(0.95, 0.93, 0.88)
+    -- Le portrait se pose dans le coin haut gauche du cadre. Sans ce point, il restait accroché
+    -- nulle part et n'apparaissait pas (vu en jeu le 12/11).
+    b.cadrePortrait:ClearAllPoints()
+    b.cadrePortrait:SetPoint("TOPLEFT", b, "TOPLEFT", 14, -12)
   else
     gauche = (style == "cinema") and math.floor(ecran * 0.25) or 24
     droite = (style == "cinema") and gauche or 20
