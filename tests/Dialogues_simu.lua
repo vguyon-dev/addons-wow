@@ -23,7 +23,7 @@ verifie("toc : charge Reglages.lua puis Dialogues.lua", true, toc:find("Reglages
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: DialoguesDB", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : version 0.2.0", true, toc:find("## Version: 0.2.0", 1, true) ~= nil)
+verifie("toc : version 0.3.0", true, toc:find("## Version: 0.3.0", 1, true) ~= nil)
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)
@@ -291,11 +291,15 @@ end
 verifie("longueurVisible : sans les codes couleur", 15, ns.longueurVisible("|cffffd200Objectif :|r Tuer"))
 verifie("longueurVisible : accents", 2, ns.longueurVisible("éé"))
 verifie("longueurVisible : absent", 0, ns.longueurVisible(nil))
-verifie("styles : quatre", 4, #ns.STYLES)
+verifie("styles : cinq", 5, #ns.STYLES)
+verifie("styles : compact en premier", "compact", ns.STYLES[1])
 verifie("styleValide : face", "face", ns.styleValide("face"))
-verifie("styleValide : inconnu = scène", "scene", ns.styleValide("zorglub"))
-verifie("styleValide : absent = scène", "scene", ns.styleValide(nil))
-verifie("styleValide : vide = scène", "scene", ns.styleValide(""))
+verifie("styleValide : scène garde sa place", "scene", ns.styleValide("scene"))
+verifie("styleValide : inconnu = compact", "compact", ns.styleValide("zorglub"))
+verifie("styleValide : absent = compact", "compact", ns.styleValide(nil))
+verifie("styleValide : vide = compact", "compact", ns.styleValide(""))
+verifie("nomStyle : compact", "compact", ns.nomStyle("compact"))
+verifie("styleDepuisTexte : compact", "compact", ns.styleDepuisTexte("Compact"))
 verifie("nomStyle : scène", "scène", ns.nomStyle("scene"))
 verifie("nomStyle : face à face", "face à face", ns.nomStyle("face"))
 verifie("styleDepuisTexte : scène avec accent", "scene", ns.styleDepuisTexte("scène"))
@@ -305,6 +309,42 @@ verifie("styleDepuisTexte : cinéma", "cinema", ns.styleDepuisTexte("cinéma"))
 verifie("styleDepuisTexte : bandeau", "bandeau", ns.styleDepuisTexte(" bandeau "))
 verifie("styleDepuisTexte : inconnu", nil, ns.styleDepuisTexte("zorglub"))
 verifie("styleDepuisTexte : absent", nil, ns.styleDepuisTexte(nil))
+-- La pile du style compact : les boutons et les titres dans l'ordre, les lignes de texte réunies en une, en bas.
+do
+  local pile = ns.pileCompacte({
+    { type = "titre", texte = "Choisis ta récompense :" },
+    { type = "choix", texte = "Épée" },
+    { type = "texte", texte = "Or : 1 po" },
+    { type = "choix", texte = "Bouclier" },
+    { type = "texte", texte = "Expérience : 340" },
+  })
+  verifie("pileCompacte : titre, deux boutons, une ligne", 4, #pile)
+  verifie("pileCompacte : le titre reste en tête", "titre", pile[1].type)
+  verifie("pileCompacte : les boutons gardent leur ordre", "Épée,Bouclier", pile[2].texte .. "," .. pile[3].texte)
+  verifie("pileCompacte : or et expérience en une ligne tout en bas", "texte:Or : 1 po   Expérience : 340", pile[4].type .. ":" .. pile[4].texte)
+  verifie("pileCompacte : rien", 0, #ns.pileCompacte(nil))
+  verifie("pileCompacte : une ligne vide ne fait rien", 0, #ns.pileCompacte({ { type = "texte", texte = "" } }))
+end
+-- Plus de lignes par page : plus de caractères.
+verifie("tailleMorceau : 5 lignes > 4 lignes", true, ns.tailleMorceau(600, 15, 5) > ns.tailleMorceau(600, 15))
+verifie("tailleMorceau : 4 lignes par défaut", ns.tailleMorceau(600, 15, 4), ns.tailleMorceau(600, 15))
+-- La migration : « scene » passe une fois à « compact », compte et personnages compris.
+do
+  local d = { style = "scene", largeur = 70, compte = { style = "scene", largeur = 70 },
+    parPerso = { ["A-R"] = { style = "scene" }, ["B-R"] = { style = "face" } } }
+  verifie("migrerCompact : fait", true, ns.migrerCompact(d))
+  verifie("migrerCompact : style et largeur de départ", "compact,30", d.style .. "," .. d.largeur)
+  verifie("migrerCompact : le compte aussi", "compact,30", d.compte.style .. "," .. d.compte.largeur)
+  verifie("migrerCompact : un personnage en scène passe", "compact", d.parPerso["A-R"].style)
+  verifie("migrerCompact : un autre style reste", "face", d.parPerso["B-R"].style)
+  d.style = "scene"
+  verifie("migrerCompact : une seule fois", false, ns.migrerCompact(d))
+  verifie("migrerCompact : un choix explicite ensuite est gardé", "scene", d.style)
+  local e = { style = "bandeau", largeur = 70 }
+  ns.migrerCompact(e)
+  verifie("migrerCompact : le bandeau garde son style et sa largeur", "bandeau,70", e.style .. "," .. e.largeur)
+  verifie("migrerCompact : pas une table", false, ns.migrerCompact(nil))
+end
 
 -- ============================================================================
 -- 2. Chargement simulé avec de faux cadres et un faux jeu.
@@ -428,6 +468,7 @@ local function installer()
   _G.ValentinAddons, _G.ValentinAddonsReglages, _G.ValentinAddonsMinimap = nil, nil, nil
   _G.DialoguesDB, _G.DialoguesBandeau, _G.DialoguesListe = nil, nil, nil
   _G.DialoguesBandeHaut, _G.DialoguesModelePNJ, _G.DialoguesModeleJoueur, _G.DialoguesEcrivain = nil, nil, nil, nil
+  _G.DialoguesCadrePortrait, _G.DialoguesModeleTete = nil, nil
   modelePanne = false
   _G.UIParent = nouveau("Frame", "UIParent")
   UIParent._h, UIParent._w = 1080, 1920
@@ -560,6 +601,8 @@ local function demarrer(style, machine)
   if style ~= "defaut" then
     DialoguesDB.style = style or "bandeau"
     DialoguesDB.machine = machine == true
+    -- La largeur d'origine des vérifications (70 %) ; le style compact garde sa largeur de départ (30 %).
+    if DialoguesDB.style ~= "compact" then DialoguesDB.largeur = 70 end
   end
   return n
 end
@@ -598,11 +641,12 @@ local clesJeuAvant = cles(GossipFrame) .. "/" .. cles(QuestFrame)
 local n = demarrer("defaut")
 verifie("chargement : aucune erreur", nil, n.derniereErreur)
 verifie("chargement : réglages créés", true, n.reglages ~= nil and DialoguesDB ~= nil)
-verifie("chargement : valeurs de départ", "true,true,true,17,70", tostring(DialoguesDB.actif) .. "," .. tostring(DialoguesDB.morceaux) .. "," .. tostring(DialoguesDB.touches) .. "," .. DialoguesDB.tailleTexte .. "," .. DialoguesDB.largeur)
-verifie("chargement : style de départ = scène", "scene", DialoguesDB.style)
+verifie("chargement : valeurs de départ", "true,true,true,17,30", tostring(DialoguesDB.actif) .. "," .. tostring(DialoguesDB.morceaux) .. "," .. tostring(DialoguesDB.touches) .. "," .. DialoguesDB.tailleTexte .. "," .. DialoguesDB.largeur)
+verifie("chargement : style de départ = compact", "compact", DialoguesDB.style)
+verifie("chargement : migration notée", true, DialoguesDB.migreCompact)
 verifie("chargement : écriture lettre par lettre par défaut", true, DialoguesDB.machine)
 -- Les vérifications qui suivent (2b à 2p) lisent le bandeau d'origine, texte entier : on les y met.
-DialoguesDB.style, DialoguesDB.machine = "bandeau", false
+DialoguesDB.style, DialoguesDB.machine, DialoguesDB.largeur = "bandeau", false, 70
 verifie("chargement : fenêtre du jeu coupée par défaut", false, DialoguesDB.fenetreJeu)
 verifie("chargement : global du compartiment d'addons", "function", type(Dialogues_OuvrirReglages))
 verifie("chargement : commande /dial", "/dial", SLASH_DIALOGUES1)
@@ -1213,7 +1257,7 @@ local manques = {
       GetNumQuestChoices = function() return "trois" end
     end },
 }
-for _, styleManque in ipairs({ "bandeau", "scene", "face", "cinema" }) do
+for _, styleManque in ipairs({ "compact", "bandeau", "scene", "face", "cinema" }) do
 for _, m in ipairs(manques) do
   installer()
   m[2]()
@@ -1410,19 +1454,24 @@ do
   local function modelesVisibles(b)
     return (b.modelePNJ and b.modelePNJ._shown and "1" or "0") .. (b.modeleJoueur and b.modeleJoueur._shown and "1" or "0")
   end
+  local function largeurDe(att) return type(att.largeur) == "function" and att.largeur() or att.largeur end
   local function toutesStrates(b)
-    local liste_ = { b, b.liste, b.bandeHaut, b.modelePNJ, b.modeleJoueur, b.ecrivain, b.bouton, b.boutonDeux, b.caseTouche, b.boutonJeu }
+    local liste_ = { b, b.liste, b.bandeHaut, b.modelePNJ, b.modeleJoueur, b.ecrivain, b.bouton, b.boutonDeux, b.caseTouche, b.boutonJeu,
+      b.cadrePortrait, b.modeleTete }
     for _, l in ipairs(b.lignes) do liste_[#liste_ + 1] = l end
     for _, f in ipairs(liste_) do if f._strate ~= "DIALOG" then return false end end
     return true
   end
   local attendusStyles = {
-    bandeau = { point = "BOTTOM", liste = "BOTTOMRIGHT", modeles = "00", haut = false, largeur = 1344, cartes = false },
+    compact = { point = "BOTTOM", liste = "BOTTOMLEFT", modeles = "00", haut = false, cartes = true, tete = true,
+      largeur = function() return math.max(360, math.floor(1920 * DialoguesDB.largeur / 100)) end, couleurTitre = "1,0.9,0.62" },
+    bandeau = { point = "BOTTOM", liste = "BOTTOMRIGHT", modeles = "00", haut = false, cartes = false,
+      largeur = function() return math.max(640, math.floor(1920 * DialoguesDB.largeur / 100)) end },
     scene = { point = "BOTTOM", liste = "RIGHT", modeles = "10", haut = false, largeur = 864, cartes = true },
     face = { point = "TOP", liste = "BOTTOM", modeles = "11", haut = false, largeur = 960, cartes = true },
     cinema = { point = "BOTTOM", liste = "RIGHT", modeles = "10", haut = true, largeur = 1920, cartes = true },
   }
-  local ORDRE_STYLES = { "bandeau", "scene", "face", "cinema" }
+  local ORDRE_STYLES = { "compact", "bandeau", "scene", "face", "cinema" }
   for _, st in ipairs(ORDRE_STYLES) do
     local att = attendusStyles[st]
     local pre = "style " .. st .. " : "
@@ -1435,7 +1484,16 @@ do
     verifie(pre .. "nom du PNJ", "Garde Mortemine", b.nomPNJ._text)
     verifie(pre .. "texte", "Bienvenue, voyageur.\nQue puis-je faire pour toi ?", b.texte._text)
     verifie(pre .. "place du cadre principal", att.point, b._pt[1])
-    verifie(pre .. "largeur du cadre principal", att.largeur, b._w)
+    verifie(pre .. "largeur du cadre principal", largeurDe(att), b._w)
+    verifie(pre .. "portrait carré seulement en compact", att.tete == true, b.cadrePortrait._shown == true)
+    if att.tete then
+      verifie(pre .. "la tête du PNJ en 3D montre npc", "npc", b.modeleTete._unite)
+      verifie(pre .. "la tête : zoom du portrait 1, caméra 1", "1,1", b.modeleTete._zoom .. "," .. b.modeleTete._camera)
+      verifie(pre .. "la tête n'a pas de souris", false, b.modeleTete._souris)
+      verifie(pre .. "pas d'image de repli quand le modèle marche", false, b.teteTexture._shown == true)
+    else
+      verifie(pre .. "pas de tête 3D hors du style compact", false, b.modeleTete._shown == true)
+    end
     verifie(pre .. "place des réponses", att.liste, DialoguesListe._pt[1])
     verifie(pre .. "modèles 3D visibles (PNJ, joueur)", att.modeles, modelesVisibles(b))
     if att.modeles:sub(1, 1) == "1" then verifie(pre .. "le modèle du PNJ montre npc", "npc", b.modelePNJ._unite) end
@@ -1447,7 +1505,7 @@ do
     verifie(pre .. "première réponse", "|cffffffffLivraison urgente|r", texteLigne(1))
     verifie(pre .. "quatre réponses, pas cinq", true, ligneListe(4) ~= nil and ligneListe(5) == nil)
     verifie(pre .. "la liste est affichée", true, DialoguesListe._shown)
-    verifie(pre .. "couleur du titre de quête", "1,0.82,0.3", table.concat(b.titreQuete._couleur, ","))
+    verifie(pre .. "couleur du titre de quête", att.couleurTitre or "1,0.82,0.3", table.concat(b.titreQuete._couleur, ","))
     toucher("3")
     verifie(pre .. "la touche 3 prend la quête 20", "gossip.dispo:20", appels())
     JEU.appels = {}
@@ -1460,7 +1518,9 @@ do
       verifie(pre .. "vers " .. autre .. " : toujours affiché, même texte", true, bandeauVisible() and b.texte._text == "Bienvenue, voyageur.\nQue puis-je faire pour toi ?")
       verifie(pre .. "vers " .. autre .. " : modèles", a2.modeles, modelesVisibles(b))
       verifie(pre .. "vers " .. autre .. " : bande du haut", a2.haut, b.bandeHaut._shown)
-      verifie(pre .. "vers " .. autre .. " : cadre principal", a2.largeur .. a2.point, b._w .. b._pt[1])
+      verifie(pre .. "vers " .. autre .. " : cadre principal", largeurDe(a2) .. a2.point, b._w .. b._pt[1])
+      verifie(pre .. "vers " .. autre .. " : portrait carré", a2.tete == true, b.cadrePortrait._shown == true)
+      verifie(pre .. "vers " .. autre .. " : tête 3D", a2.tete and "npc" or false, a2.tete and b.modeleTete._unite or b.modeleTete._shown == true)
       verifie(pre .. "vers " .. autre .. " : réponses toujours là", "|cffffffffLivraison urgente|r", texteLigne(1))
     end
     ns_.reglages.changer("style", st)
@@ -1487,6 +1547,8 @@ do
     verifie(pre .. "essai : le même cadre, au même endroit", att.point, b._pt[1])
     if st == "bandeau" then
       verifie(pre .. "essai : portrait du joueur", "player", JEU.portraits[#JEU.portraits])
+    elseif st == "compact" then
+      verifie(pre .. "essai : la tête montre le joueur", "player", b.modeleTete._unite)
     else
       verifie(pre .. "essai : le modèle montre le joueur", "player", b.modelePNJ._unite)
     end
@@ -1497,15 +1559,23 @@ do
     verifie(pre .. "aucun champ écrit sur les cadres du jeu", clesAvant, cles(GossipFrame) .. "/" .. cles(QuestFrame))
   end
 
-  -- Un style abîmé en base vaut « scène » ; un PNJ qui disparaît cache son modèle.
+  -- Un style abîmé en base vaut « compact » ; un PNJ qui disparaît cache son modèle.
   installer()
   demarrer("defaut")
   DialoguesDB.style = "zorglub"
   DialoguesDB.machine = false
   ouvrir("gossip", "GOSSIP_SHOW")
-  verifie("style abîmé : traité comme la scène (modèle du PNJ, cartes à droite)", "10RIGHT", modelesVisibles(DialoguesBandeau) .. DialoguesListe._pt[1])
+  verifie("style abîmé : traité comme le compact (pas de grand modèle, pile à droite)", "00BOTTOMLEFT", modelesVisibles(DialoguesBandeau) .. DialoguesListe._pt[1])
+  verifie("style abîmé : la tête du PNJ", "npc", DialoguesBandeau.modeleTete._unite)
   local uniteAvant = UnitExists
   _G.UnitExists = function() return false end
+  DialoguesDB.style = "compact"
+  ouvrir("gossip", "GOSSIP_SHOW")
+  verifie("PNJ disparu : la tête 3D est cachée", false, DialoguesBandeau.modeleTete._shown)
+  verifie("PNJ disparu : pas d'image de repli non plus", false, DialoguesBandeau.teteTexture._shown)
+  SlashCmdList.DIALOGUES("style scene")
+  ouvrir("gossip", "GOSSIP_SHOW")
+  verifie("PNJ disparu : le grand modèle est caché", "00", modelesVisibles(DialoguesBandeau))
   SlashCmdList.DIALOGUES("style cinema")
   verifie("PNJ disparu : le modèle est caché", "00", modelesVisibles(DialoguesBandeau))
   _G.UnitExists = uniteAvant
@@ -1515,7 +1585,9 @@ do
   installer()
   demarrer("defaut")
   DialoguesDB.machine = false
-  verifie("/dial style : style de départ", "scene", DialoguesDB.style)
+  verifie("/dial style : style de départ", "compact", DialoguesDB.style)
+  SlashCmdList.DIALOGUES("style compact")
+  verifie("/dial style compact", "compact", DialoguesDB.style)
   SlashCmdList.DIALOGUES("style face")
   verifie("/dial style face", "face", DialoguesDB.style)
   SlashCmdList.DIALOGUES("style Cinema")
@@ -1536,11 +1608,22 @@ do
   imprime = {}
   SlashCmdList.DIALOGUES("aide")
   verifie("/dial aide : parle de /dial style", true, lireImprime():find("/dial style", 1, true) ~= nil)
+  verifie("/dial aide : cite le style compact", true, lireImprime():find("/dial style compact", 1, true) ~= nil)
   local function boutonNomme(texte) for _, f in ipairs(toutes) do if f._text == texte and f._scripts.OnClick then return f end end end
-  for _, v in ipairs({ { "Style : bandeau", "bandeau" }, { "Style : scène", "scene" }, { "Style : face à face", "face" }, { "Style : cinéma", "cinema" } }) do
+  for _, v in ipairs({ { "Style : compact (comme Immersion)", "compact" }, { "Style : bandeau", "bandeau" }, { "Style : scène", "scene" }, { "Style : face à face", "face" }, { "Style : cinéma", "cinema" } }) do
     local bt = boutonNomme(v[1])
+    verifie("réglages : le bouton existe : " .. v[1], true, bt ~= nil)
     if bt then bt._scripts.OnClick(bt) end
     verifie("réglages : le bouton " .. v[1], v[2], DialoguesDB.style)
+  end
+  do
+    local rang = {}
+    for i, f in ipairs(toutes) do
+      if type(f._text) == "string" and f._text:find("^Style : ") and f._scripts.OnClick and not rang[f._text] then rang[f._text] = i end
+    end
+    verifie("réglages : le bouton compact vient en premier", true,
+      rang["Style : compact (comme Immersion)"] ~= nil and rang["Style : compact (comme Immersion)"] < rang["Style : bandeau"]
+      and rang["Style : compact (comme Immersion)"] < rang["Style : scène"])
   end
   -- Un dialogue ouvert prend le style tapé tout de suite.
   SlashCmdList.DIALOGUES("style scene")
@@ -1549,6 +1632,211 @@ do
   verifie("/dial style pendant un dialogue : bande du haut", true, DialoguesBandeau.bandeHaut._shown)
   verifie("/dial style pendant un dialogue : le dialogue reste", true, bandeauVisible())
   declencher("GOSSIP_CLOSED") avancer()
+
+  -- ------------------------------------------------------------------------
+  -- Le style compact en détail
+  -- ------------------------------------------------------------------------
+  installer()
+  local nc = demarrer("defaut")
+  DialoguesDB.machine = false
+  local b = DialoguesBandeau
+  ouvrir("gossip", "GOSSIP_SHOW")
+  b = DialoguesBandeau
+  verifie("compact : le style par défaut est affiché", true, bandeauVisible() and DialoguesDB.style == "compact")
+  verifie("compact : largeur de départ 30 % de 1920", 576, b._w)
+  verifie("compact : centré, juste au-dessus des barres d'action (12 % de la hauteur)", "BOTTOM,0,129", b._pt[1] .. "," .. b._pt[4] .. "," .. b._pt[5])
+  verifie("compact : hauteur minimale = portrait + marges", true, b._h >= 124)
+  verifie("compact : portrait carré de 96 px", "96,96", b.cadrePortrait._w .. "," .. b.cadrePortrait._h)
+  verifie("compact : portrait encadré d'or", "0.8,0.63,0.3,1", table.concat(b.cadrePortrait._bordure, ","))
+  verifie("compact : la tête est dans le portrait", true, b.modeleTete._parent == b.cadrePortrait)
+  verifie("compact : pile à droite du cadre, collée à son bord, sous son haut", "BOTTOMLEFT,TOPRIGHT,6,-38",
+    DialoguesListe._pt[1] .. "," .. DialoguesListe._pt[3] .. "," .. DialoguesListe._pt[4] .. "," .. DialoguesListe._pt[5])
+  verifie("compact : la pile est accrochée au cadre", true, DialoguesListe._pt[2] == b)
+  verifie("compact : la pile est sans fond", "0,0,0,0", table.concat(DialoguesListe._fondCouleur, ","))
+  verifie("compact : boutons de 260 px", 260, ligneListe(1)._w)
+  verifie("compact : le nom du PNJ", "Garde Mortemine", b.nomPNJ._text)
+  verifie("compact : le nom en police de titre, taille 18", "Fonts\\MORPHEUS.TTF,18", tostring(b.nomPNJ._police) .. "," .. tostring(b.nomPNJ._taillePolice))
+  verifie("compact : le nom en doré", "1,0.82,0.3", table.concat(b.nomPNJ._couleur, ","))
+  verifie("compact : le texte à droite du portrait", true, b.texte._pt[2] == nil and b.texte._pt[4] >= 14 + 96)
+  verifie("compact : le texte avec la taille du réglage", DialoguesDB.tailleTexte, b.texte._taillePolice)
+  verifie("compact : pas de bande ni de grand modèle", "00,false", modelesVisibles(b) .. "," .. tostring(b.bandeHaut._shown))
+  -- Icônes et numéros de touche des réponses : ? doré (finie), ? gris (pas finie), ! doré, bulle.
+  verifie("compact : quête à rendre finie, le point d'interrogation doré", "Interface\\GossipFrame\\ActiveQuestIcon", ligneListe(1).icone._texture)
+  verifie("compact : quête à rendre pas finie, le point d'interrogation grisé", "Interface\\GossipFrame\\IncompleteQuestIcon", ligneListe(2).icone._texture)
+  verifie("compact : quête à prendre, le point d'exclamation doré", "Interface\\GossipFrame\\AvailableQuestIcon", ligneListe(3).icone._texture)
+  verifie("compact : phrase, la bulle de dialogue", "Interface\\GossipFrame\\GossipGossipIcon", ligneListe(4).icone._texture)
+  verifie("compact : les numéros de touche sont discrets mais là", "1,2,3,4",
+    ligneListe(1).numero._text .. "," .. ligneListe(2).numero._text .. "," .. ligneListe(3).numero._text .. "," .. ligneListe(4).numero._text)
+  verifie("compact : les boutons sont empilés sans chevauchement", true,
+    ligneListe(2)._pt[5] < ligneListe(1)._pt[5] and ligneListe(3)._pt[5] < ligneListe(2)._pt[5])
+  verifie("compact : le bouton d'action est une petite rangée en bas à droite", "BOTTOMRIGHT,26", b.bouton._pt[1] .. "," .. b.bouton._h)
+  verifie("compact : le bouton d'action : Au revoir", "Au revoir", b.bouton._text)
+  nc.reglages.changer("touches", false)
+  verifie("compact : sans l'option des touches, pas de numéro", "", ligneListe(1).numero._text)
+  verifie("compact : sans l'option des touches, pas de case de touche", false, b.caseTouche._shown)
+  nc.reglages.changer("touches", true)
+  verifie("compact : avec l'option des touches, les numéros reviennent", "1", ligneListe(1).numero._text)
+  -- Survol : la bordure devient dorée, la carte un peu plus claire.
+  ligneListe(1)._scripts.OnEnter(ligneListe(1))
+  verifie("compact : survol, bordure dorée", "0.8,0.63,0.3,1", table.concat(ligneListe(1)._bordure, ","))
+  verifie("compact : survol, fond plus clair", true, ligneListe(1)._fondCouleur[1] > ligneListe(2)._fondCouleur[1])
+  ligneListe(1)._scripts.OnLeave(ligneListe(1))
+  verifie("compact : fin du survol, bordure sombre", "0.3,0.25,0.15,1", table.concat(ligneListe(1)._bordure, ","))
+  declencher("GOSSIP_CLOSED") avancer()
+
+  -- La fin de quête : récompenses dans la pile, or et expérience en UNE ligne tout en bas.
+  ouvrir("complete", "QUEST_COMPLETE")
+  verifie("compact : fin, un titre, trois récompenses et une ligne", true, ligneListe(5) ~= nil and ligneListe(6) == nil or ligneListe(6)._shown == false)
+  verifie("compact : fin, le titre en doré", true, texteLigne(1):find("Choisis ta récompense", 1, true) ~= nil)
+  verifie("compact : fin, l'icône de l'objet", "Interface\\Icons\\INV_Sword_01", ligneListe(2).icone._texture)
+  verifie("compact : fin, le nom coloré selon la qualité", "|cff0070ddÉpée de garde|r", texteLigne(2))
+  verifie("compact : fin, or et expérience en une seule ligne", true,
+    texteLigne(5):find("Or : 1 po 25 pa", 1, true) ~= nil and texteLigne(5):find("Expérience : 340", 1, true) ~= nil)
+  verifie("compact : fin, la ligne d'or n'est pas cliquable", true, ligneListe(5)._souris ~= true)
+  verifie("compact : fin, la ligne d'or est sous la pile", true, ligneListe(5)._pt[5] < ligneListe(4)._pt[5])
+  declencher("QUEST_FINISHED") avancer()
+  -- L'avis de Sacs rangés sous l'objet.
+  JEU.bulles = { choice1 = { "Épée de garde", "|cff1eff00Mieux pour Vindicte : +5 % (Pawn)|r" } }
+  ouvrir("complete", "QUEST_COMPLETE")
+  verifie("compact : fin, « Mieux pour toi » sous l'épée", "Mieux pour toi : +5 % (Pawn)", ligneListe(2).conseil._text)
+  verifie("compact : fin, la ligne verte est montrée", true, ligneListe(2).conseil._shown)
+  verifie("compact : fin, le bouton avec l'avis est plus haut", true, ligneListe(2)._h > ligneListe(3)._h)
+  JEU.bulles = {}
+  declencher("QUEST_FINISHED") avancer()
+  -- Le détail d'une quête : l'objectif en dernière page, dans le cadre.
+  ouvrir("detail", "QUEST_DETAIL")
+  local gardeD = 0
+  while b.bouton._text == "Suivant" and gardeD < 20 do gardeD = gardeD + 1; toucher("SPACE") end
+  verifie("compact : détail, l'objectif en dernière page, dans le cadre", "|cffffd200Objectif :|r Tuez 4 loups.", b.texte._text)
+  verifie("compact : détail, le titre de la quête en doré pâle", "Les loups,1,0.9,0.62", b.titreQuete._text .. "," .. table.concat(b.titreQuete._couleur, ","))
+  verifie("compact : détail, Accepter et Refuser sur la même ligne", "Accepter,Refuser,true", b.bouton._text .. "," .. b.boutonDeux._text .. "," .. tostring(b.boutonDeux._shown))
+  verifie("compact : détail, la récompense fixe est dans la pile", true, texteLigne(2):find("Pain de voyage", 1, true) ~= nil)
+  verifie("compact : détail, or et expérience en une ligne", true, texteLigne(3):find("Expérience : 200", 1, true) ~= nil and texteLigne(3):find("Or :", 1, true) ~= nil)
+  toucher("ESCAPE")
+
+  -- Le cadre grandit vers le haut avec le texte, dans ses bornes (hauteur minimale, 40 % de l'écran).
+  local function hauteurAvecTexte(t)
+    JEU.gossip.texte = t
+    ouvrir("gossip", "GOSSIP_SHOW")
+    local h = DialoguesBandeau._h
+    local posBas = DialoguesBandeau._pt[5]
+    declencher("GOSSIP_CLOSED") avancer()
+    return h, posBas
+  end
+  local hCourt, basCourt = hauteurAvecTexte("Salut.")
+  local hMoyen = hauteurAvecTexte(string.rep("ligne\n", 8) .. "fin")
+  local hGeant, basGeant = hauteurAvecTexte(string.rep("x\n", 100))
+  verifie("compact : texte court, hauteur minimale", 124, hCourt)
+  verifie("compact : texte plus long, le cadre grandit", true, hMoyen > hCourt)
+  verifie("compact : texte géant, plafonné à 40 % de l'écran", math.floor(1080 * 0.40), hGeant)
+  verifie("compact : le cadre grandit vers le haut (le bas ne bouge pas)", true, basCourt == basGeant and basGeant == 129)
+  verifie("compact : jamais sous la hauteur minimale ni au-dessus du plafond", true, hCourt >= 124 and hGeant <= 432)
+  -- Largeur : réglable en %, jamais sous 360 px ni plus large que l'écran.
+  JEU.gossip.texte = "Bonjour."
+  ouvrir("gossip", "GOSSIP_SHOW")
+  nc.reglages.changer("largeur", 25)
+  verifie("compact : largeur 25 % de 1920 = 480", 480, DialoguesBandeau._w)
+  UIParent._w = 800
+  nc.reglages.changer("largeur", 20)
+  verifie("compact : écran étroit, jamais sous 360 px", 360, DialoguesBandeau._w)
+  verifie("compact : écran étroit, la pile passe au-dessus du cadre", "BOTTOMRIGHT,TOPRIGHT", DialoguesListe._pt[1] .. "," .. DialoguesListe._pt[3])
+  UIParent._w = 300
+  nc.reglages.changer("largeur", 25)
+  verifie("compact : écran minuscule, jamais plus large que l'écran", true, DialoguesBandeau._w <= 300)
+  UIParent._w = 1920
+  nc.reglages.changer("largeur", 30)
+  verifie("compact : largeur remise à 30 %", 576, DialoguesBandeau._w)
+  declencher("GOSSIP_CLOSED") avancer()
+
+  -- La pile ne dépasse jamais le haut de l'écran, même très longue sur un petit écran.
+  installer()
+  UIParent._h = 600
+  local np = demarrer("defaut")
+  DialoguesDB.machine = false
+  local gros = {}
+  for i = 1, 22 do gros[i] = { "Récompense " .. i, "Interface\\Icons\\INV_Misc_Food_01", 1, 2, "|cff1eff00|Hitem:" .. i .. "|h[R" .. i .. "]|h|r" } end
+  JEU.complete.choix = gros
+  ouvrir("complete", "QUEST_COMPLETE")
+  local bc, lc = DialoguesBandeau, DialoguesListe
+  local basPile = math.floor(600 * 0.12) + bc._h + lc._pt[5]
+  verifie("compact : pile de 22 récompenses, le haut ne dépasse pas l'écran", true, basPile + lc._h <= 600 - 8)
+  verifie("compact : pile longue, le bas reste à l'écran", true, basPile >= 8)
+  local visibles = 0
+  for _, l in ipairs(bc.lignes) do if l._shown then visibles = visibles + 1 end end
+  verifie("compact : pile longue, les premiers boutons restent", true, visibles >= 5 and visibles < 22)
+  verifie("compact : pile longue, aucune erreur", nil, np.derniereErreur)
+  declencher("QUEST_FINISHED") avancer()
+  installer()
+  UIParent._h = 1080
+  demarrer("defaut")
+  JEU.complete.choix = gros
+  ouvrir("complete", "QUEST_COMPLETE")
+  basPile = math.floor(1080 * 0.12) + DialoguesBandeau._h + DialoguesListe._pt[5]
+  verifie("compact : 22 récompenses sur 1080 px, le haut dans l'écran", true, basPile + DialoguesListe._h <= 1080 - 8)
+  declencher("QUEST_FINISHED") avancer()
+
+  -- Le modèle 3D qui échoue ou qui manque : l'image du portrait prend la place dans le même carré.
+  installer()
+  modelePanne = true
+  local nm2 = demarrer("compact", false)
+  ouvrir("gossip", "GOSSIP_SHOW")
+  verifie("compact : SetUnit échoue, la tête 3D est cachée", false, DialoguesBandeau.modeleTete._shown)
+  verifie("compact : SetUnit échoue, l'image du portrait la remplace", "npc", JEU.portraits[#JEU.portraits])
+  verifie("compact : SetUnit échoue, l'image est montrée", true, DialoguesBandeau.teteTexture._shown)
+  verifie("compact : SetUnit échoue, le dialogue reste", true, bandeauVisible())
+  verifie("compact : SetUnit échoue, aucune erreur d'affichage", nil, nm2.derniereErreur)
+  declencher("GOSSIP_CLOSED") avancer()
+  installer()
+  do
+    local cf = CreateFrame
+    CreateFrame = function(g, ...) if g == "PlayerModel" then error("type de cadre inconnu") end return cf(g, ...) end
+  end
+  nm2 = demarrer("compact", false)
+  ouvrir("gossip", "GOSSIP_SHOW")
+  verifie("compact : pas de PlayerModel, l'image du portrait", true, DialoguesBandeau.modeleTete == nil and DialoguesBandeau.teteTexture._shown == true)
+  verifie("compact : pas de PlayerModel, aucune erreur d'affichage", nil, nm2.derniereErreur)
+  declencher("GOSSIP_CLOSED") avancer()
+  -- Écriture lettre par lettre dans le cadre compact.
+  installer()
+  local nl = demarrer("compact", true)
+  ouvrir("detail", "QUEST_DETAIL")
+  local bl = DialoguesBandeau
+  verifie("compact : lettre par lettre, le texte commence vide", "", bl.texte._text)
+  bl.ecrivain._scripts.OnUpdate(bl.ecrivain, 0.5)
+  verifie("compact : lettre par lettre, 0,5 s = 30 caractères", 30, nl.longueurVisible(bl.texte._text))
+  declencher("QUEST_FINISHED") avancer()
+end
+
+-- ---------------------------------------------------------------------------
+-- 2s. La migration du style, dans le jeu : une seule fois
+-- ---------------------------------------------------------------------------
+do
+  installer()
+  _G.DialoguesDB = { style = "scene", largeur = 70, machine = true }
+  local nmig = demarrer("defaut")
+  verifie("migration : l'ancien défaut « scène » passe à compact", "compact", DialoguesDB.style)
+  verifie("migration : la largeur d'origine passe à 30 %", 30, DialoguesDB.largeur)
+  verifie("migration : notée", true, DialoguesDB.migreCompact)
+  nmig.reglages.changer("style", "scene")
+  verifie("migration : un choix explicite de scène est gardé", "scene", DialoguesDB.style)
+  local sauve = DialoguesDB
+  installer()
+  _G.DialoguesDB = sauve
+  demarrer("defaut")
+  verifie("migration : au chargement suivant, la scène reste", "scene", DialoguesDB.style)
+  installer()
+  _G.DialoguesDB = sauve
+  demarrer("defaut")
+  verifie("migration : et encore au suivant", "scene", DialoguesDB.style)
+  -- Un style déjà choisi (face à face) ne bouge pas.
+  installer()
+  _G.DialoguesDB = { style = "face" }
+  demarrer("defaut")
+  verifie("migration : face à face reste face à face", "face", DialoguesDB.style)
+  -- Une installation neuve démarre en compact.
+  installer()
+  demarrer("defaut")
+  verifie("migration : installation neuve = compact", "compact", DialoguesDB.style)
 end
 
 -- ---------------------------------------------------------------------------

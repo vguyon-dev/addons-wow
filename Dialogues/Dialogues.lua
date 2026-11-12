@@ -1,9 +1,12 @@
 -- ============================================================================
--- Dialogues de quête : un affichage à la place de la fenêtre de dialogue des PNJ, en quatre styles
--- (réglage « style », changeable sans /reload : /dial style bandeau, scene, face ou cinema) :
+-- Dialogues de quête : un affichage à la place de la fenêtre de dialogue des PNJ, en cinq styles
+-- (réglage « style », changeable sans /reload : /dial style compact, bandeau, scene, face ou cinema) :
+--   compact : UN SEUL cadre compact au centre, juste au-dessus des barres d'action : la tête du PNJ en
+--             3D à gauche, son nom, le titre de la quête et le texte à droite ; les réponses et les
+--             récompenses en boutons empilés à droite du cadre (le style par défaut) ;
 --   bandeau : le bandeau d'origine, décrit ci-dessous ;
 --   scene   : un grand modèle 3D animé du PNJ à gauche, une boîte de texte en bas au centre, les
---             réponses et récompenses en cartes à droite (le style par défaut) ;
+--             réponses et récompenses en cartes à droite ;
 --   face    : comme la scène, avec ton personnage à droite ; le texte en haut, les cartes en bas ;
 --   cinema  : deux bandes noires, le texte dans celle du bas, les cartes à droite.
 -- Le texte peut s'écrire lettre par lettre (option « machine »). Le style ne change que l'affichage.
@@ -41,10 +44,10 @@ local DEFAUTS = {
   morceaux = true,     -- le texte page par page (décoché : tout d'un coup)
   touches = true,      -- Espace, 1 à 9 et Échap
   conseil = true,      -- « Mieux pour toi » sous une récompense, quand Sacs rangés le dit
-  style = "scene",     -- l'affichage : "bandeau", "scene", "face" ou "cinema" (voir ns.STYLES)
+  style = "compact",   -- l'affichage : "compact", "bandeau", "scene", "face" ou "cinema" (voir ns.STYLES)
   machine = true,      -- le texte s'écrit lettre par lettre (Espace affiche tout, puis avance)
   tailleTexte = 17,
-  largeur = 70,        -- en % de la largeur de l'écran (style bandeau)
+  largeur = 30,        -- en % de la largeur de l'écran (styles compact et bandeau)
   fenetreJeu = false,  -- vrai : on garde la fenêtre du jeu (rien de nous ne s'affiche)
   minimap = false,
 }
@@ -179,13 +182,16 @@ function ns.decouper(texte, tailleMax)
 end
 
 -- Combien de caractères tiennent sur une page : la largeur du texte (en pixels) divisée par la
--- largeur moyenne d'un caractère (environ 0,52 fois la taille de la police), sur 4 lignes.
-function ns.tailleMorceau(largeurTexte, taille)
+-- largeur moyenne d'un caractère (environ 0,52 fois la taille de la police), sur 4 lignes (ou le
+-- nombre de lignes demandé).
+function ns.tailleMorceau(largeurTexte, taille, lignes)
   largeurTexte = tonumber(largeurTexte) or 600
   taille = tonumber(taille) or 15
+  lignes = tonumber(lignes) or 4
+  if lignes < 1 then lignes = 1 end
   if taille < 8 then taille = 8 end
   local parLigne = math.floor(largeurTexte / (taille * 0.52))
-  local n = math.floor(parLigne * 4 * 0.9)
+  local n = math.floor(parLigne * lignes * 0.9)
   if n < 120 then n = 120 end
   if n > 700 then n = 700 end
   return n
@@ -405,11 +411,11 @@ function ns.lignesListe(e)
   return l
 end
 
--- Les styles d'affichage, dans l'ordre. Un nom inconnu (réglage abîmé) vaut "scene".
-ns.STYLES = { "bandeau", "scene", "face", "cinema" }
-local NOMS_STYLES = { bandeau = "bandeau", scene = "scène", face = "face à face", cinema = "cinéma" }
+-- Les styles d'affichage, dans l'ordre. Un nom inconnu (réglage abîmé) vaut "compact".
+ns.STYLES = { "compact", "bandeau", "scene", "face", "cinema" }
+local NOMS_STYLES = { compact = "compact", bandeau = "bandeau", scene = "scène", face = "face à face", cinema = "cinéma" }
 local ALIAS_STYLES = {
-  bandeau = "bandeau", scene = "scene", ["scène"] = "scene", face = "face", ["face à face"] = "face",
+  compact = "compact", bandeau = "bandeau", scene = "scene", ["scène"] = "scene", face = "face", ["face à face"] = "face",
   ["face a face"] = "face", facealface = "face", cinema = "cinema", ["cinéma"] = "cinema",
 }
 
@@ -417,7 +423,43 @@ function ns.styleValide(s)
   for _, v in ipairs(ns.STYLES) do
     if s == v then return v end
   end
-  return "scene"
+  return "compact"
+end
+
+-- Les réponses et récompenses du style compact : les boutons et les titres dans l'ordre, puis toutes
+-- les lignes de texte simple (or, expérience, « + 2 autres ») réunies en UNE ligne discrète tout en bas.
+function ns.pileCompacte(specs)
+  local pile, lignes = {}, {}
+  for _, s in ipairs(type(specs) == "table" and specs or {}) do
+    if type(s) == "table" then
+      if s.type == "texte" then
+        if type(s.texte) == "string" and s.texte ~= "" then lignes[#lignes + 1] = s.texte end
+      else
+        pile[#pile + 1] = s
+      end
+    end
+  end
+  if #lignes > 0 then pile[#pile + 1] = { type = "texte", texte = table.concat(lignes, "   ") } end
+  return pile
+end
+
+-- Passe une fois du style « scene » (l'ancien style par défaut) au style « compact », dans les
+-- réglages du compte et dans ceux de chaque personnage. Ensuite, un choix explicite de « scene » reste.
+function ns.migrerCompact(d)
+  if type(d) ~= "table" or d.migreCompact then return false end
+  d.migreCompact = true
+  local function passer(t)
+    if type(t) == "table" and t.style == "scene" then
+      t.style = "compact"
+      if t.largeur == 70 then t.largeur = 30 end -- l'ancien défaut de la largeur
+    end
+  end
+  passer(d)
+  passer(d.compte)
+  if type(d.parPerso) == "table" then
+    for _, p in pairs(d.parPerso) do passer(p) end
+  end
+  return true
 end
 
 -- Le nom lisible d'un style : « scène », « face à face »…
@@ -678,8 +720,11 @@ end
 
 local largeurBandeau, largeurTexte -- définies avec l'affichage, plus bas
 
+local styleActuel -- définie avec l'affichage, plus bas
+
 local function tailleMax()
-  return ns.tailleMorceau(largeurTexte(), db.tailleTexte)
+  -- Le style compact a un cadre qui grandit : cinq lignes par page au lieu de quatre.
+  return ns.tailleMorceau(largeurTexte(), db.tailleTexte, (styleActuel() == "compact") and 5 or 4)
 end
 
 local function paginer(e)
@@ -764,9 +809,12 @@ local FOND_LIGNE = { 0.12, 0.10, 0.07, 0.95 }
 local FOND_LIGNE_CHOISIE = { 0.28, 0.21, 0.08, 0.98 }
 local FOND_CARTE = { 0.08, 0.065, 0.045, 0.97 }
 local FOND_BOITE = { 0.04, 0.035, 0.03, 0.97 }
+local FOND_COMPACT = { 0.035, 0.03, 0.025, 0.97 }
 local NOIR = { 0, 0, 0, 1 }
 local TRANSPARENT = { 0, 0, 0, 0 }
 local LARGEUR_LISTE, NB_LIGNES_MAX = 430, 24
+local LARGEUR_PILE = 260       -- style compact : la largeur d'un bouton de la pile
+local TETE = 96                -- style compact : le côté du portrait carré
 local ANGLE_PNJ, ANGLE_JOUEUR = 0.4, -0.4 -- en radians : à régler en jeu si les regards ne se croisent pas
 local CARACTERES_PAR_SECONDE = 60
 local POLICE_TITRE = "Fonts\\MORPHEUS.TTF" -- la plus proche d'un italique dans le jeu
@@ -808,14 +856,21 @@ local function hauteurEcran()
   return h
 end
 
-local function styleActuel() return ns.styleValide(db and db.style) end
+styleActuel = function() return ns.styleValide(db and db.style) end
 
 -- La largeur de la boîte principale (le bandeau, la boîte de texte ou la bande du bas).
-largeurBandeau = function()
+local function largeurBandeau()
   local ecran = largeurEcran()
   local style = styleActuel()
   if style == "cinema" then return ecran end
   local l
+  if style == "compact" then
+    -- Un cadre étroit : 30 % de l'écran par défaut, 360 px au moins, jamais plus large que l'écran.
+    l = math.floor(ecran * ((tonumber(db and db.largeur) or 30) / 100))
+    if l < 360 then l = 360 end
+    if l > ecran - 20 then l = ecran - 20 end
+    return l
+  end
   if style == "scene" or style == "face" then
     l = math.floor(ecran * ((style == "face") and 0.5 or 0.45))
   else
@@ -823,6 +878,7 @@ largeurBandeau = function()
   end
   if l > ecran - 20 then l = ecran - 20 end
   if l < 480 then l = math.min(480, ecran - 20) end
+  if style == "bandeau" and l < 640 then l = math.min(640, ecran - 20) end
   return l
 end
 
@@ -830,6 +886,7 @@ end
 largeurTexte = function()
   local style = styleActuel()
   if style == "bandeau" then return largeurBandeau() - 152 end
+  if style == "compact" then return largeurBandeau() - 140 end
   if style == "cinema" then return math.floor(largeurEcran() * 0.5) end
   return largeurBandeau() - 48
 end
@@ -837,6 +894,7 @@ end
 -- La largeur de la colonne des réponses (le bandeau : celle d'origine).
 local function largeurListe(style)
   if style == "bandeau" then return LARGEUR_LISTE end
+  if style == "compact" then return LARGEUR_PILE + 12 end
   return math.max(300, math.floor(largeurEcran() * ((style == "face") and 0.36 or 0.26)))
 end
 
@@ -884,7 +942,7 @@ local function creerLigne(i)
     colorerCarte(self, true)
     local s = self.spec
     if not s or not (s.lien or s.test) or not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:SetOwner(self, (styleActuel() == "compact") and "ANCHOR_RIGHT" or "ANCHOR_LEFT")
     if s.test then
       GameTooltip:AddLine("Un objet pour essayer")
     elseif s.genre then
@@ -960,16 +1018,60 @@ local function chargerModele(m, unite, angle)
   if ok then m:Show() else m:Hide() end
 end
 
+-- Le portrait du style compact : la tête du PNJ en 3D, cadrée de près. Sans modèle (le jeu refuse),
+-- l'image ronde du portrait prend la place dans le même carré.
+local function chargerTete(m, unite)
+  local ok = pcall(function()
+    m:SetUnit(unite)
+    sur(m.SetPortraitZoom, m, 1)
+    sur(m.SetCamDistanceScale, m, 1)
+    sur(m.SetFacing, m, 0)
+  end)
+  if ok then m:Show() else m:Hide() end
+  return ok
+end
+
+local function majTete(e)
+  local b = bandeau
+  if not b.cadrePortrait then return end
+  b.cadrePortrait:Show()
+  local unite = e.test and "player" or unitePNJ()
+  local cle = tostring(unite) .. "|" .. (e.test and "t" or "r")
+  if b.teteCle == cle then return end
+  b.teteCle = cle
+  local ok = false
+  if b.modeleTete and unite then ok = chargerTete(b.modeleTete, unite) end
+  if ok then
+    b.teteTexture:Hide()
+    return
+  end
+  if b.modeleTete then b.modeleTete:Hide() end
+  if unite then
+    sur(SetPortraitTexture, b.teteTexture, unite)
+    b.teteTexture:Show()
+  else
+    b.teteTexture:Hide()
+  end
+end
+
 -- Place les modèles selon le style et charge ce qui a changé (un échange, un style, une unité).
 local function majModeles(e, style)
   local b = bandeau
   local mp, mj = b.modelePNJ, b.modeleJoueur
-  if style == "bandeau" then
+  if style == "bandeau" or style == "compact" then
     if mp then mp:Hide() end
     if mj then mj:Hide() end
     b.modeleCle = nil
+    if style == "compact" then
+      majTete(e)
+    else
+      if b.modeleTete then b.modeleTete:Hide() end
+      b.teteCle = nil
+    end
     return
   end
+  if b.modeleTete then b.modeleTete:Hide() end
+  b.teteCle = nil
   local ecran, haut = largeurEcran(), hauteurEcran()
   local hm = math.floor(haut * 0.40)
   local lm = math.floor(hm * 0.6)
@@ -1092,6 +1194,21 @@ local function creerBandeau()
   b.bandeHaut:Hide()
   b.modelePNJ = creerModele("DialoguesModelePNJ", b)
   b.modeleJoueur = creerModele("DialoguesModeleJoueur", b)
+  -- Style compact : le portrait carré (cadre doré, fond sombre) avec la tête du PNJ en 3D dedans.
+  b.cadrePortrait = dialog(CreateFrame("Frame", "DialoguesCadrePortrait", b, "BackdropTemplate"))
+  b.cadrePortrait:SetSize(TETE, TETE)
+  b.cadrePortrait:EnableMouse(false)
+  ns.habiller(b.cadrePortrait, { fond = { 0.03, 0.025, 0.02, 1 }, bordure = OR })
+  b.cadrePortrait:Hide()
+  b.teteTexture = b.cadrePortrait:CreateTexture(nil, "ARTWORK")
+  b.teteTexture:SetPoint("TOPLEFT", 4, -4)
+  b.teteTexture:SetPoint("BOTTOMRIGHT", -4, 4)
+  b.teteTexture:Hide()
+  b.modeleTete = creerModele("DialoguesModeleTete", b.cadrePortrait)
+  if b.modeleTete then
+    b.modeleTete:SetPoint("TOPLEFT", 4, -4)
+    b.modeleTete:SetPoint("BOTTOMRIGHT", -4, 4)
+  end
   b.ecrivain = dialog(CreateFrame("Frame", "DialoguesEcrivain", b))
   b.surEcriture = function(_, dt)
     local ok, err = pcall(avancerEcriture, dt)
@@ -1116,6 +1233,12 @@ local function appliquerStyle()
     ns.habiller(b, { fermer = true, fond = { 0.06, 0.05, 0.04, 0.95 } })
     liste:SetPoint("BOTTOMRIGHT", b, "TOPRIGHT", 0, 4)
     ns.habiller(liste, { fond = { 0.06, 0.05, 0.04, 0.95 } })
+  elseif style == "compact" then
+    -- Juste au-dessus des barres d'action ; la pile de réponses se place à droite à chaque tracé.
+    b:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, math.floor(haut * 0.12))
+    ns.habiller(b, { fermer = true, fond = FOND_COMPACT, bordure = OR })
+    liste:SetPoint("BOTTOMLEFT", b, "TOPRIGHT", 6, -38)
+    ns.habiller(liste, { fond = TRANSPARENT, bordure = TRANSPARENT })
   else
     if style == "cinema" then
       b:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
@@ -1134,6 +1257,7 @@ local function appliquerStyle()
   end
   liste:SetWidth(largeurListe(style))
   b.anneau:SetShown(style == "bandeau")
+  b.cadrePortrait:SetShown(style == "compact")
   b.bandeHaut:ClearAllPoints()
   b.bandeHaut:SetSize(ecran, math.floor(haut * 0.12))
   b.bandeHaut:SetPoint("TOP", UIParent, "TOP", 0, 0)
@@ -1164,6 +1288,8 @@ local function remplirLigneBandeau(l, s)
   l.icone:SetSize(22, 22)
   l.icone:SetPoint("LEFT", 28, 0)
   l.numero:SetText(s.numero and tostring(s.numero) or "")
+  l.numero:SetTextColor(1, 0.82, 0)
+  sur(l.numero.SetFontObject, l.numero, _G.GameFontNormal)
   l.marque:SetText("")
   l.icone:Hide()
   l.conseil:ClearAllPoints()
@@ -1209,6 +1335,8 @@ local function remplirCarte(l, s, lw)
   l.texte:ClearAllPoints()
   l.conseil:ClearAllPoints()
   l.numero:SetText(s.numero and tostring(s.numero) or "")
+  l.numero:SetTextColor(1, 0.82, 0)
+  sur(l.numero.SetFontObject, l.numero, _G.GameFontNormal)
   l.marque:SetText("")
   l.icone:Hide()
   l.conseil:SetText("")
@@ -1260,15 +1388,101 @@ local function remplirCarte(l, s, lw)
   return math.max(mini, entier(sur(l.texte.GetStringHeight, l.texte)) + extra + 20)
 end
 
--- Remplit la liste des réponses ou des récompenses (au-dessus du bandeau, ou en cartes).
+-- Les petites icônes du jeu pour les boutons du style compact.
+local ICONE_PRENDRE = "Interface\\GossipFrame\\AvailableQuestIcon"       -- le point d'exclamation doré
+local ICONE_RENDRE = "Interface\\GossipFrame\\ActiveQuestIcon"            -- le point d'interrogation doré
+local ICONE_RENDRE_GRIS = "Interface\\GossipFrame\\IncompleteQuestIcon"   -- le même, grisé (quête pas finie)
+local ICONE_PHRASE = "Interface\\GossipFrame\\GossipGossipIcon"           -- la bulle de dialogue
+
+-- Le contenu d'un bouton de la pile du style compact (260 px de large) : icône à gauche, texte clair
+-- qui passe à la ligne, numéro de touche discret à droite, ligne verte « Mieux pour toi » sous un
+-- objet. Un titre ou la ligne d'or et d'expérience n'ont ni fond ni bordure. Rend la hauteur.
+local function remplirBoutonCompact(l, s)
+  local larg = LARGEUR_PILE
+  l.numero:ClearAllPoints()
+  l.marque:ClearAllPoints()
+  l.icone:ClearAllPoints()
+  l.texte:ClearAllPoints()
+  l.conseil:ClearAllPoints()
+  l.numero:SetText("")
+  l.marque:SetText("")
+  l.icone:Hide()
+  l.conseil:SetText("")
+  l.conseil:Hide()
+  sur(l.texte.SetWordWrap, l.texte, true)
+  if s.type == "titre" or s.type == "texte" then
+    ns.habiller(l, { fond = TRANSPARENT, bordure = TRANSPARENT })
+    l.texte:SetPoint("TOPLEFT", 4, -2)
+    l.texte:SetWidth(larg - 8)
+    l.texte:SetText(s.type == "titre" and (COULEUR_OR .. s.texte .. "|r") or ("|cffb8b09c" .. s.texte .. "|r"))
+    return math.max(18, entier(sur(l.texte.GetStringHeight, l.texte)) + 6)
+  end
+  colorerCarte(l, false)
+  local droite = (db.touches and s.numero) and 28 or 10
+  if db.touches and s.numero then
+    sur(l.numero.SetFontObject, l.numero, _G.GameFontNormalSmall)
+    l.numero:SetTextColor(0.72, 0.64, 0.42)
+    l.numero:SetText(tostring(s.numero))
+    l.numero:SetPoint("RIGHT", -9, 0)
+  end
+  local x, haut
+  if s.type == "reponse" then
+    local chemin = ICONE_PHRASE
+    if s.reponse.genre == "prendre" then
+      chemin = ICONE_PRENDRE
+    elseif s.reponse.genre == "rendre" then
+      chemin = s.fini and ICONE_RENDRE or ICONE_RENDRE_GRIS
+    end
+    l.icone:SetTexture(chemin)
+    l.icone:SetSize(20, 20)
+    l.icone:SetPoint("LEFT", 8, 0)
+    l.icone:Show()
+    x = 36
+    local couleur = (s.reponse.genre == "rendre" and not s.fini) and "|cff999999" or "|cffffffff"
+    l.texte:SetWidth(larg - x - droite)
+    l.texte:SetText(couleur .. s.texte .. "|r")
+    local ht = entier(sur(l.texte.GetStringHeight, l.texte))
+    if ht <= 18 then l.texte:SetPoint("LEFT", x, 0) else l.texte:SetPoint("TOPLEFT", x, -7) end
+    haut = math.max(30, ht + 14)
+  else -- un objet (récompense ou demandé)
+    if s.icone then
+      l.icone:SetTexture(s.icone)
+      l.icone:SetSize(26, 26)
+      l.icone:SetPoint("LEFT", 6, 0)
+      l.icone:Show()
+    end
+    x = 38
+    l.texte:SetWidth(larg - x - droite)
+    l.texte:SetText(s.texte)
+    local ht = entier(sur(l.texte.GetStringHeight, l.texte))
+    local extra = 0
+    if s.conseil then
+      l.conseil:SetPoint("TOPLEFT", l.texte, "BOTTOMLEFT", 0, -2)
+      l.conseil:SetWidth(larg - x - droite)
+      l.conseil:SetText(s.conseil)
+      l.conseil:Show()
+      extra = 16
+    end
+    if ht <= 18 and extra == 0 then l.texte:SetPoint("LEFT", x, 0) else l.texte:SetPoint("TOPLEFT", x, -7) end
+    haut = math.max(extra > 0 and 46 or 32, ht + extra + 14)
+  end
+  return haut
+end
+
+-- Remplit la liste des réponses ou des récompenses (au-dessus du bandeau, en cartes, ou en pile de
+-- boutons à droite du cadre dans le style compact).
 local function tracerListe(specs)
   local style = styleActuel()
   local cartes = style ~= "bandeau"
+  local compact = style == "compact"
+  if compact then specs = ns.pileCompacte(specs) end
   local lw = largeurListe(style)
   liste:SetWidth(lw)
   local nb = math.min(#specs, NB_LIGNES_MAX)
   if nb == 0 then liste:Hide() return end
-  local y = 8
+  local y = compact and 0 or 8
+  local limite = hauteurEcran() - 16 -- la pile ne dépasse jamais le haut de l'écran
+  local affiches = 0
   for i = 1, nb do
     local s = specs[i]
     local l = bandeau.lignes[i]
@@ -1278,16 +1492,46 @@ local function tracerListe(specs)
     l:SetWidth(lw - 12)
     local clicable = (s.type == "reponse" or s.type == "choix")
     l:EnableMouse(clicable or (s.lien ~= nil) or (s.test == true))
-    local haut = cartes and remplirCarte(l, s, lw) or remplirLigneBandeau(l, s)
+    local haut
+    if compact then haut = remplirBoutonCompact(l, s)
+    elseif cartes then haut = remplirCarte(l, s, lw)
+    else haut = remplirLigneBandeau(l, s) end
+    if compact and i > 1 and y + haut > limite then break end
     l:SetHeight(haut)
     l:ClearAllPoints()
     l:SetPoint("TOPLEFT", liste, "TOPLEFT", 6, -y)
-    y = y + haut + (cartes and 5 or 3)
+    y = y + haut + (compact and 4 or (cartes and 5 or 3))
     l:Show()
+    affiches = i
   end
-  for i = nb + 1, #bandeau.lignes do bandeau.lignes[i]:Hide() end
-  liste:SetHeight(y + 5)
+  for i = affiches + 1, #bandeau.lignes do bandeau.lignes[i]:Hide() end
+  liste:SetHeight(compact and math.max(y - 4, 1) or (y + 5))
   liste:Show()
+end
+
+-- Style compact : la pile à droite du cadre, collée à son bord droit, son bas un peu sous le haut du
+-- cadre (le premier bouton est donc à la hauteur du haut du cadre) ; elle monte vers le haut. Son haut
+-- ne dépasse jamais celui de l'écran : sinon on la descend. Écran trop étroit pour la mettre à
+-- droite : elle passe au-dessus du cadre.
+local function placerPileCompacte()
+  local b = bandeau
+  if not b or not liste or styleActuel() ~= "compact" then return end
+  local ecran, haut = largeurEcran(), hauteurEcran()
+  local bas = math.floor(haut * 0.12)
+  local hb = entier(sur(b.GetHeight, b))
+  local hl = entier(sur(liste.GetHeight, liste))
+  local lw = largeurListe("compact")
+  local droiteCadre = math.floor(ecran / 2 + largeurBandeau() / 2)
+  liste:ClearAllPoints()
+  if droiteCadre + 6 + lw <= ecran - 8 then
+    local decal = -38
+    if bas + hb + decal + hl > haut - 8 then
+      decal = math.max(8 - (bas + hb), (haut - 8 - hl) - (bas + hb))
+    end
+    liste:SetPoint("BOTTOMLEFT", b, "TOPRIGHT", 6, decal)
+  else
+    liste:SetPoint("BOTTOMRIGHT", b, "TOPRIGHT", 0, 4)
+  end
 end
 
 -- Place le nom, le titre, le texte, le compteur et le bouton d'action selon le style, applique les
@@ -1305,6 +1549,16 @@ local function placerTextes(e, style)
     b.nomPNJ:SetWidth(0)
     sur(b.titreQuete.SetFontObject, b.titreQuete, _G.GameFontNormalLarge)
     b.texte:SetTextColor(1, 1, 1)
+  elseif style == "compact" then
+    -- À droite du portrait carré : le nom, le titre de la quête (plus petit), puis le texte.
+    gauche, droite = 14 + TETE + 14, 12
+    yNom, yTitre = 10, 33
+    yTexte = ((e.titre or "") ~= "") and 53 or 36
+    poserPolice(b.nomPNJ, POLICE_TITRE, 18, "")
+    b.nomPNJ:SetTextColor(1, 0.82, 0.30)
+    b.nomPNJ:SetWidth(math.max(100, lt - 110))
+    poserPolice(b.titreQuete, police(), 13, "")
+    b.texte:SetTextColor(0.95, 0.93, 0.88)
   else
     gauche = (style == "cinema") and math.floor(ecran * 0.25) or 24
     droite = (style == "cinema") and gauche or 20
@@ -1317,6 +1571,7 @@ local function placerTextes(e, style)
     b.texte:SetTextColor(0.95, 0.93, 0.88)
   end
   b.titreQuete:SetTextColor(1, 0.82, 0.30)
+  if style == "compact" then b.titreQuete:SetTextColor(1, 0.9, 0.62) end -- doré pâle
   b.nomPNJ:ClearAllPoints()
   b.nomPNJ:SetPoint("TOPLEFT", gauche, -yNom)
   b.titreQuete:ClearAllPoints()
@@ -1326,10 +1581,33 @@ local function placerTextes(e, style)
   b.texte:SetPoint("TOPLEFT", gauche, -yTexte)
   b.texte:SetWidth(lt)
   poserPolice(b.texte, police(), tonumber(db.tailleTexte) or 15, "")
-  b.compteur:ClearAllPoints()
-  b.compteur:SetPoint("BOTTOMLEFT", gauche, 18)
   b.bouton:ClearAllPoints()
-  b.bouton:SetPoint("BOTTOMRIGHT", -droite, 14)
+  b.boutonDeux:ClearAllPoints()
+  b.boutonJeu:ClearAllPoints()
+  b.compteur:ClearAllPoints()
+  if style == "compact" then
+    -- Une rangée de petits boutons en bas à droite ; le compteur discret juste à leur gauche.
+    b.bouton:SetSize(150, 26)
+    b.bouton:SetPoint("BOTTOMRIGHT", -droite, 10)
+    b.caseTouche:SetSize(46, 22)
+    b.boutonDeux:SetSize(86, 26)
+    b.boutonDeux:SetPoint("RIGHT", b.caseTouche:IsShown() and b.caseTouche or b.bouton, "LEFT", -8, 0)
+    b.boutonJeu:SetSize(96, 18)
+    b.boutonJeu:SetPoint("TOPRIGHT", -30, -5)
+    local repere = b.bouton
+    if b.caseTouche:IsShown() then repere = b.caseTouche end
+    if b.boutonDeux:IsShown() then repere = b.boutonDeux end
+    b.compteur:SetPoint("RIGHT", repere, "LEFT", -10, 0)
+  else
+    b.bouton:SetSize(190, 30)
+    b.bouton:SetPoint("BOTTOMRIGHT", -droite, 14)
+    b.caseTouche:SetSize(56, 24)
+    b.boutonDeux:SetSize(120, 30)
+    b.boutonDeux:SetPoint("RIGHT", b.caseTouche, "LEFT", -16, 0)
+    b.boutonJeu:SetSize(110, 18)
+    b.boutonJeu:SetPoint("TOPRIGHT", -30, -6)
+    b.compteur:SetPoint("BOTTOMLEFT", gauche, 18)
+  end
   return yTexte
 end
 
@@ -1395,6 +1673,14 @@ local function tracer()
     total = 56 + math.max(h, 64) + 52
     if total < 150 then total = 150 end
     if total > 420 then total = 420 end
+  elseif style == "compact" then
+    -- Hauteur minimale : le portrait et ses marges ; le cadre grandit vers le haut avec le texte,
+    -- jusqu'à 40 % de la hauteur de l'écran.
+    total = yTexte + math.max(h, 34) + 44
+    local mini = TETE + 28
+    local maxi = math.max(mini, math.floor(hauteurEcran() * 0.40))
+    if total < mini then total = mini end
+    if total > maxi then total = maxi end
   else
     total = yTexte + math.max(h, 60) + 56
     if total < 140 then total = 140 end
@@ -1402,6 +1688,7 @@ local function tracer()
     if style == "cinema" then total = math.max(total, math.floor(hauteurEcran() * 0.28)) end
   end
   b:SetHeight(total)
+  if style == "compact" then placerPileCompacte() end
 
   gererEcriture(e, plein)
   -- Les modèles 3D : une panne ici ne doit jamais gêner le dialogue.
@@ -1465,6 +1752,7 @@ end
 local function afficherEtat()
   creerBandeau()
   bandeau.modeleCle = nil -- un nouvel échange : les modèles 3D sont rechargés (« npc » peut être un autre PNJ)
+  bandeau.teteCle = nil
   appliquerStyle()
   paginer(etat)
   tracer()
@@ -1759,8 +2047,8 @@ local function choisirStyle(valeur)
 end
 
 -- Un bouton de réglages par style (l'API des réglages n'a pas de liste déroulante).
-local function boutonStyle(valeur, aide)
-  return { texte = "Style : " .. ns.nomStyle(valeur), aide = aide, action = function() choisirStyle(valeur) end }
+local function boutonStyle(valeur, aide, texte)
+  return { texte = texte or ("Style : " .. ns.nomStyle(valeur)), aide = aide, action = function() choisirStyle(valeur) end }
 end
 
 ns.reglages = ns.creerReglages({
@@ -1771,7 +2059,7 @@ ns.reglages = ns.creerReglages({
   options = {
     { titre = "Affichage" },
     { cle = "actif", libelle = "Activer les dialogues de quête",
-      aide = "Un bandeau en bas de l'écran remplace la fenêtre de dialogue des PNJ. Coupé : la fenêtre du jeu revient tout de suite." },
+      aide = "Un cadre en bas de l'écran remplace la fenêtre de dialogue des PNJ. Coupé : la fenêtre du jeu revient tout de suite." },
     { cle = "morceaux", libelle = "Le texte par morceaux",
       aide = "Le texte du PNJ s'affiche une page à la fois (« 2 / 3 »). Décoché : tout le texte d'un coup." },
     { cle = "machine", libelle = "Le texte lettre par lettre",
@@ -1783,9 +2071,9 @@ ns.reglages = ns.creerReglages({
     { cle = "tailleTexte", type = "nombre", libelle = "Taille du texte", min = 12, max = 22, pas = 1,
       format = function(v) return v .. " px" end,
       aide = "La taille des lettres du texte du PNJ. Le découpage en pages s'adapte." },
-    { cle = "largeur", type = "nombre", libelle = "Largeur du bandeau", min = 40, max = 90, pas = 5,
+    { cle = "largeur", type = "nombre", libelle = "Largeur du cadre", min = 20, max = 90, pas = 5,
       format = function(v) return v .. " %" end,
-      aide = "La largeur du bandeau (style bandeau seulement), en pourcentage de la largeur de l'écran." },
+      aide = "La largeur du cadre (styles compact et bandeau), en pourcentage de la largeur de l'écran. Le style compact ne descend pas sous 360 pixels." },
     { titre = "Jeu" },
     { cle = "fenetreJeu", libelle = "Garder la fenêtre de dialogue du jeu",
       aide = "Coché : le bandeau ne s'affiche pas, la fenêtre du jeu fait tout (comme /dial jeu). Utile pour comparer ou en cas de souci." },
@@ -1794,6 +2082,7 @@ ns.reglages = ns.creerReglages({
     { texte = "Tester le dialogue", aide = "Affiche un faux dialogue, sans PNJ, dans le style choisi, pour le voir et essayer les touches.", action = function()
       afficherTest()
     end },
+    boutonStyle("compact", "Un seul cadre compact au-dessus des barres d'action : la tête du PNJ en 3D, son nom et son texte ; les réponses en boutons empilés à droite du cadre. Le style par défaut.", "Style : compact (comme Immersion)"),
     boutonStyle("bandeau", "Le bandeau d'origine, en bas de l'écran."),
     boutonStyle("scene", "Un grand modèle 3D du PNJ à gauche, le texte en bas au centre, les réponses en cartes à droite."),
     boutonStyle("face", "Comme la scène, avec ton personnage à droite ; le texte en haut, les réponses en bas."),
@@ -1802,6 +2091,7 @@ ns.reglages = ns.creerReglages({
   astuce = "Espace passe à la page suivante puis accepte ; les chiffres choisissent une réponse ou une récompense ; Échap ferme. /dial jeu rend la fenêtre du jeu.",
   auChargement = function(d)
     db = d
+    ns.migrerCompact(d) -- une fois : l'ancien style par défaut (scène) passe au style compact
   end,
   surChangement = function()
     if not db then return end
@@ -1846,16 +2136,16 @@ local function commande(texte)
   elseif c == "style" or c:find("^style%s") then
     local demande = strtrim(c:sub(6))
     if demande == "" then
-      dire("style actuel : " .. ns.nomStyle(db and db.style) .. ". Pour en changer : /dial style bandeau, scene, face ou cinema.")
+      dire("style actuel : " .. ns.nomStyle(db and db.style) .. ". Pour en changer : /dial style compact, bandeau, scene, face ou cinema.")
     else
       local v = ns.styleDepuisTexte(demande)
-      if v then choisirStyle(v) else dire("style inconnu : « " .. demande .. " ». Au choix : bandeau, scene, face, cinema.") end
+      if v then choisirStyle(v) else dire("style inconnu : « " .. demande .. " ». Au choix : compact, bandeau, scene, face, cinema.") end
     end
   elseif c == "on" or c == "off" then
     if db and (c == "on") ~= (db.actif and true or false) then ns.reglages.basculer() end
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/dial : les réglages     /dial test : un faux dialogue pour essayer")
-    dire("/dial style bandeau, scene, face ou cinema : l'affichage     /dial style : le style actuel")
+    dire("/dial style compact, bandeau, scene, face ou cinema : l'affichage     /dial style : le style actuel")
     dire("/dial jeu : bascule entre l'affichage et la fenêtre du jeu     /dial on, /dial off : activer ou couper")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /dial aide donne la liste.")
