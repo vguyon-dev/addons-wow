@@ -167,6 +167,13 @@ function ns.deuxEcrans(largeur, hauteur)
   return type(largeur) == "number" and type(hauteur) == "number" and hauteur > 0 and largeur / hauteur >= 2.9
 end
 
+-- La taille de fenêtre du jeu pour couvrir deux écrans (« 3840x1080 ») ; nil si la taille est inconnue.
+function ns.resolutionDouble(largeur, hauteur)
+  if type(largeur) ~= "number" or type(hauteur) ~= "number" or largeur <= 0 or hauteur <= 0 then return nil end
+  if ns.deuxEcrans(largeur, hauteur) then return math.floor(largeur) .. "x" .. math.floor(hauteur) end
+  return math.floor(largeur * 2) .. "x" .. math.floor(hauteur)
+end
+
 -- Second écran : les bornes d'une fenêtre. L'interface (UIParent) n'occupe qu'un écran ; l'autre est à
 -- gauche (le jeu à droite) ou à droite (le jeu à gauche). Rend x, y bornés sur les DEUX écrans.
 function ns.bornerDeux(x, y, largeur, hauteur, largeurEcran, hauteurEcran, mondeAGauche)
@@ -1040,6 +1047,12 @@ ns.reglages = ns.creerReglages({
       aide = "Sur la barre de titre d'une fenêtre : de 50 à 150 %, par pas de 5 %. La taille est gardée comme la place." },
   },
   boutons = {
+    { texte = "Passer au second écran", largeur = 190,
+      aide = "Le jeu passe en fenêtre deux fois plus large que l'écran ; outils\second-ecran.ps1 -Surveiller l'étale sur deux écrans. Le monde et l'interface restent sur un écran, l'autre reçoit les fenêtres que tu y glisses.",
+      action = function() ns.passerSecondEcran(true) end },
+    { texte = "Revenir à un seul écran", largeur = 190,
+      aide = "Le jeu revient en plein écran fenêtré habituel, sur un seul écran.",
+      action = function() ns.passerSecondEcran(false) end },
     { texte = "Tout remettre à sa place d'origine", largeur = 240,
       aide = "Oublie toutes les places et les tailles gardées : les fenêtres reprennent leur place d'origine.",
       action = function()
@@ -1148,6 +1161,48 @@ local function appliquerSecondEcran()
 end
 ns.appliquerSecondEcran = appliquerSecondEcran
 
+-- Passer au second écran, ou revenir à un seul, depuis le jeu : on change le mode d'affichage du jeu.
+--   second écran : mode « fenêtré » (gxMaximize 0) deux fois plus large que l'écran ; le petit programme
+--                  outils\second-ecran.ps1 -Surveiller (lancé avec Windows) étire alors la fenêtre sur
+--                  les deux écrans, sans bordure. Un addon ne peut pas déplacer la fenêtre du jeu lui-même.
+--   un écran     : mode « plein écran fenêtré » habituel (gxMaximize 1).
+-- Vu en jeu le 12/11 : en plein écran fenêtré, Windows ne montre le jeu que sur un écran.
+
+local function relancerAffichage()
+  if RestartGx then pcall(RestartGx) elseif ConsoleExec then pcall(ConsoleExec, "gxRestart") end
+end
+
+local function poserCVar(nom, valeur)
+  if C_CVar and C_CVar.SetCVar then return pcall(C_CVar.SetCVar, nom, valeur) end
+  if SetCVar then return pcall(SetCVar, nom, valeur) end
+end
+
+function ns.passerSecondEcran(actif)
+  if not db then return end
+  if InCombatLockdown and InCombatLockdown() then
+    dire("pas en combat : l'affichage du jeu se change après le combat.")
+    return
+  end
+  if actif then
+    local largeur, hauteur
+    if GetPhysicalScreenSize then largeur, hauteur = GetPhysicalScreenSize() end
+    local double = ns.resolutionDouble(largeur, hauteur)
+    if not double then dire("la taille de l'écran est inconnue : rien n'a été changé.") return end
+    ns.reglages.changer("secondEcran", true)
+    poserCVar("gxWindowedResolution", double)
+    poserCVar("gxMaximize", "0")
+    relancerAffichage()
+    dire("second écran : le jeu passe en fenêtre de " .. double .. ". Si elle ne s'étale pas seule sur les deux écrans, "
+      .. "lance outils\\second-ecran.ps1 (ou laisse tourner outils\\second-ecran.ps1 -Surveiller).")
+  else
+    ns.reglages.changer("secondEcran", false)
+    appliquerSecondEcran()
+    poserCVar("gxMaximize", "1")
+    relancerAffichage()
+    dire("un seul écran : le jeu revient en plein écran fenêtré.")
+  end
+end
+
 -- Le combat est fini : on fait ce qu'on avait dû remettre à plus tard.
 local function rattraper()
   messageCombatDit = false
@@ -1225,11 +1280,11 @@ local function commande(texte)
     if not db then return end
     if c == "second gauche" or c == "second droite" then
       ns.reglages.changer("mondeAGauche", c == "second gauche")
-      ns.reglages.changer("secondEcran", true)
+      ns.passerSecondEcran(true)
     elseif c == "second" then
-      ns.reglages.changer("secondEcran", not db.secondEcran)
+      ns.passerSecondEcran(not db.secondEcran)
     else
-      ns.reglages.changer("secondEcran", c == "second on")
+      ns.passerSecondEcran(c == "second on")
     end
     appliquerSecondEcran()
     local largeur, hauteur

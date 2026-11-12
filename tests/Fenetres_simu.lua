@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.2.2", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.3.0", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -1345,6 +1345,9 @@ scenario("second écran : calculs", function()
   verifie("jeu à droite : pas plus loin que le bord gauche", -1920, x)
   x = ns.bornerDeux(2500, -100, 600, 500, 1920, 1080, true)
   verifie("jeu à gauche : une fenêtre peut aller sur l'écran de droite", 2500, x)
+  verifie("résolution double : un écran", "3840x1080", ns.resolutionDouble(1920, 1080))
+  verifie("résolution double : déjà deux écrans", "3840x1080", ns.resolutionDouble(3840, 1080))
+  verifie("résolution double : inconnue", nil, ns.resolutionDouble(nil, 1080))
 end)
 
 -- ----- 16. nettoyage : rien ne reste dans le monde global de ce qui n'est pas à nous
