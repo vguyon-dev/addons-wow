@@ -1021,7 +1021,6 @@ ns.reglages = ns.creerReglages({
       aide = "La fenêtre revient là où tu l'as laissée, à chaque ouverture et à chaque session. Décoché : elle suit la souris mais retrouve sa place d'origine à la prochaine ouverture." },
     { cle = "dansEcran", libelle = "Garder les fenêtres dans l'écran",
       aide = "Une fenêtre ne peut pas sortir de l'écran, et une place gardée hors de l'écran (résolution changée) est ramenée dedans. À décocher pour poser des fenêtres sur un second écran." },
-    { titre = "Second écran" },
     { cle = "secondEcran", libelle = "Le jeu sur un écran, les fenêtres sur l'autre",
       aide = "Pour une fenêtre du jeu étirée sur deux écrans (outils\\second-ecran.ps1 le fait) : le monde et toute l'interface restent sur un écran, l'autre est libre ; glisse-y les fenêtres. Sans effet si la fenêtre du jeu ne couvre qu'un écran. Jamais appliqué en plein combat : à la fin du combat." },
     { cle = "mondeAGauche", libelle = "Le jeu sur l'écran de gauche", dependDe = "secondEcran",
@@ -1211,8 +1210,27 @@ local function commande(texte)
     commandeEtat()
   elseif c == "on" or c == "off" then
     if db and (c == "on") ~= (db.actif and true or false) then ns.reglages.basculer() end
+  elseif c == "second" or c == "second on" or c == "second off" or c == "second gauche" or c == "second droite" then
+    if not db then return end
+    if c == "second gauche" or c == "second droite" then
+      ns.reglages.changer("mondeAGauche", c == "second gauche")
+      ns.reglages.changer("secondEcran", true)
+    elseif c == "second" then
+      ns.reglages.changer("secondEcran", not db.secondEcran)
+    else
+      ns.reglages.changer("secondEcran", c == "second on")
+    end
+    appliquerSecondEcran()
+    local largeur, hauteur
+    if GetPhysicalScreenSize then largeur, hauteur = GetPhysicalScreenSize() end
+    if db.secondEcran and not ns.deuxEcrans(largeur, hauteur) then
+      dire("second écran coché, mais la fenêtre du jeu ne couvre qu'un écran : lance outils\\second-ecran.ps1.")
+    else
+      dire("second écran : " .. (db.secondEcran and ("le jeu sur l'écran de " .. (db.mondeAGauche and "gauche" or "droite")) or "coupé") .. ".")
+    end
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/fen : les réglages     /fen reset : tout remettre à sa place d'origine     /fen etat : l'état")
+    dire("/fen second : le jeu sur un écran, les fenêtres sur l'autre (second on, second off, second gauche, second droite)")
     dire("Glisser la barre de titre : déplacer. Ctrl + molette : la taille. Clic droit : menu de la fenêtre.")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /fen aide donne la liste.")
