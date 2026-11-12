@@ -431,9 +431,56 @@ local function majPoignee(rec)
   if visible then p:Show() else p:Hide() end
 end
 
+-- ----- le glisser
+-- On demande d'abord au jeu de faire suivre la souris (StartMoving). En jeu sur Forever (12/11), la
+-- taille changeait mais la fenêtre ne bougeait pas : le jeu ignorait StartMoving sur ses fenêtres.
+-- Donc on surveille : si la souris a bougé et pas la fenêtre, on passe au glisser « à la main » :
+-- à chaque image, on pose nous-mêmes la fenêtre sous la souris (SetPoint, comme pour la taille).
+local function deplacerSousSouris(rec)
+  local g, f = rec.glisse, rec.fenetre
+  if not g or estBloque(f) or not GetCursorPosition then return end
+  local cx, cy = GetCursorPosition()
+  local ef, ep = sur(f.GetEffectiveScale, f), sur(UIParent.GetEffectiveScale, UIParent)
+  if not (nb(cx) and nb(cy) and nb(ef) and nb(ep) and ef > 0) then return end
+  local gauche, haut = g.gauche + (cx - g.cx) / ef, g.haut + (cy - g.cy) / ef
+  local pt = ns.pointDepuis(gauche, haut, ef, ep, UIParent:GetWidth(), UIParent:GetHeight())
+  if not pt then return end
+  local ox, oy = ns.decalageDepuis(pt.x, pt.y, ef, ep)
+  rec.occupe = true
+  pcall(function()
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", ox, oy)
+  end)
+  rec.occupe = false
+end
+
+local function suivreSouris(rec)
+  local g, f = rec.glisse, rec.fenetre
+  if not g then return end
+  if g.manuel then deplacerSousSouris(rec) return end
+  if not GetCursorPosition then return end
+  local cx, cy = GetCursorPosition()
+  local ef = sur(f.GetEffectiveScale, f)
+  if not (nb(cx) and nb(cy) and nb(ef) and ef > 0) then return end
+  -- La souris a bougé de plus de 3 points, et la fenêtre est restée où elle était : le jeu ne la fait
+  -- pas suivre, on prend le relais.
+  if math.abs(cx - g.cx) / ef + math.abs(cy - g.cy) / ef > 3 then
+    local gauche, haut = sur(f.GetLeft, f), sur(f.GetTop, f)
+    if nb(gauche) and nb(haut) and math.abs(gauche - g.gauche) < 0.5 and math.abs(haut - g.haut) < 0.5 then
+      g.manuel = true
+      sur(f.StopMovingOrSizing, f)
+      ns.glisserManuel = (ns.glisserManuel or 0) + 1
+      deplacerSousSouris(rec)
+    end
+  end
+end
+
 local function finirDeplacement(rec)
   if not rec.deplace then return end
   rec.deplace = false
+  local g = rec.glisse
+  rec.glisse = nil
+  if rec.poignee then rec.poignee:SetScript("OnUpdate", nil) end
   local f = rec.fenetre
   -- Un combat a pu commencer pendant le glisser : sur une fenêtre protégée on ne touche plus à rien
   -- (le jeu refuserait). On le note, et on remettra notre place à la fin du combat.
@@ -442,7 +489,14 @@ local function finirDeplacement(rec)
     refusCombat[rec.cle] = (refusCombat[rec.cle] or 0) + 1
     return
   end
-  sur(f.StopMovingOrSizing, f)
+  if g and g.manuel then
+    -- Glisser à la main : une dernière pose sous la souris, puis on lit la place comme d'habitude.
+    rec.glisse = g
+    deplacerSousSouris(rec)
+    rec.glisse = nil
+  else
+    sur(f.StopMovingOrSizing, f)
+  end
   sur(f.SetUserPlaced, f, false) -- pour que le jeu n'écrive pas la place dans son propre fichier
   if not (db and db.memoriser) then return end
   local pt = lirePoint(rec)
@@ -463,6 +517,14 @@ local function debutDeplacement(rec)
   sur(f.Raise, f) -- la poignée n'est pas un enfant de la fenêtre : on la passe nous-mêmes devant
   majPoignee(rec) -- Raise a changé les niveaux : la poignée reste devant
   rec.deplace = true
+  -- Le point de départ, pour le glisser à la main si le jeu ne fait pas suivre la fenêtre.
+  local cx, cy
+  if GetCursorPosition then cx, cy = GetCursorPosition() end
+  local gauche, haut = sur(f.GetLeft, f), sur(f.GetTop, f)
+  if nb(cx) and nb(cy) and nb(gauche) and nb(haut) then
+    rec.glisse = { cx = cx, cy = cy, gauche = gauche, haut = haut, manuel = false }
+    if rec.poignee then rec.poignee:SetScript("OnUpdate", function() suivreSouris(rec) end) end
+  end
   sur(f.StartMoving, f)
 end
 

@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.0", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.1", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -1259,6 +1259,36 @@ for _, nom in ipairs(globalesRetirees) do
   verifie("API retirée du jeu : " .. nom, true, bon or erreur)
   verifie("API retirée du jeu : " .. nom .. " (aucun champ écrit)", 0, #ecritures)
 end
+
+-- ----- 15 bis. le jeu ignore StartMoving (vu en jeu sur Forever le 12/11) : glisser à la main
+scenario("glisser à la main", function()
+  local perso = fenetreJeu("CharacterFrame")
+  demarrer()
+  jeuOuvre(perso, 100, -50)
+  local h = poigneeDe(perso)
+  local avantL, avantT = perso:GetLeft(), perso:GetTop()
+  local curseur = { 600, 500 }
+  local copie = _G.GetCursorPosition
+  _G.GetCursorPosition = function() return curseur[1], curseur[2] end
+  h._scripts.OnDragStart(h)
+  verifie("à la main : suivi de la souris branché", "function", type(h._scripts.OnUpdate))
+  -- Le jeu ne bouge pas la fenêtre ; la souris va 120 points à droite et 80 vers le bas.
+  curseur[1], curseur[2] = 720, 420
+  h._scripts.OnUpdate(h)
+  local ef = perso:GetEffectiveScale()
+  verifie("à la main : la fenêtre suit la souris (gauche)", math.floor(avantL + 120 / ef + 0.5), math.floor(perso:GetLeft() + 0.5))
+  verifie("à la main : la fenêtre suit la souris (haut)", math.floor(avantT - 80 / ef + 0.5), math.floor(perso:GetTop() + 0.5))
+  curseur[1], curseur[2] = 760, 420
+  h._scripts.OnUpdate(h)
+  h._scripts.OnDragStop(h)
+  verifie("à la main : suivi de la souris débranché", nil, h._scripts.OnUpdate)
+  verifie("à la main : place enregistrée", math.floor(avantL + 160 / ef + 0.5), math.floor((FenetresDB.fenetres.CharacterFrame.x or -1) * UIParent._scale / ef + 0.5))
+  -- Fermer puis rouvrir : la place revient.
+  jeuFerme(perso)
+  jeuOuvre(perso, 100, -50)
+  verifie("à la main : place gardée à la réouverture", math.floor(avantL + 160 / ef + 0.5), math.floor(perso:GetLeft() + 0.5))
+  _G.GetCursorPosition = copie
+end)
 
 -- ----- 16. nettoyage : rien ne reste dans le monde global de ce qui n'est pas à nous
 installer()
