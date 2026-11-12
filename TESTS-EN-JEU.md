@@ -34,6 +34,7 @@ Aucune erreur des addons dans BugGrabber pendant toute la série.
 - [x] Quêtes disponibles 0.3.0 : une quête de Forever apprise en parlant au PNJ (Yala), montrée sur la carte et la minimap.
 - [ ] Quêtes disponibles : sens des « ! » de la minimap pour une quête éloignée ; partage des quêtes apprises au groupe.
 - [x] Second écran (Fenêtres 0.2.2 + le programme du second écran) : fenêtre du jeu étirée sur l'écran de gauche et le principal, jeu et interface entiers sur le principal, fenêtre du personnage posée et gardée sur l'écran de gauche, glisser sur l'écran principal sans saut.
+- [x] Tuto du second écran (Fenêtres 0.3.2) : `/fen tuto` et le bouton « Tuto second écran » ouvrent un cadre sombre et doré avec les étapes, Échap le ferme (vu en jeu le 12/11).
 - [ ] Second écran depuis l'addon (Fenêtres 0.3.0) : « Revenir à un seul écran » remet le plein écran fenêtré ; « Passer au second écran » étale la fenêtre seule une fois `Fenetres/SecondEcran/Installer.cmd` lancé (double-clic) ; `Retirer.cmd` enlève le raccourci de démarrage et arrête le programme.
 - [ ] Second écran : glisser une fenêtre d'un écran à l'autre avec ta souris (mon outil ne sait pas le faire), et le combat (rien ne doit bouger pendant).
 
