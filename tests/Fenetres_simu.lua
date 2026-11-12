@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.2", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.3", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -1288,6 +1288,49 @@ scenario("glisser à la main", function()
   jeuOuvre(perso, 100, -50)
   verifie("à la main : place gardée à la réouverture", math.floor(avantL + 160 / ef + 0.5), math.floor(perso:GetLeft() + 0.5))
   _G.GetCursorPosition = copie
+end)
+
+-- ----- 15 ter. le jeu ne lance même pas le glisser (vu en jeu le 12/11) : appui, souris, relâché
+scenario("glisser par l'appui", function()
+  local perso = fenetreJeu("CharacterFrame")
+  demarrer()
+  jeuOuvre(perso, 100, -50)
+  local h = poigneeDe(perso)
+  local avantL, avantT = perso:GetLeft(), perso:GetTop()
+  local curseur = { 600, 500 }
+  local copie, copieBouton = _G.GetCursorPosition, _G.IsMouseButtonDown
+  _G.GetCursorPosition = function() return curseur[1], curseur[2] end
+  _G.IsMouseButtonDown = function() return true end
+  h._scripts.OnMouseDown(h, "LeftButton")
+  verifie("appui : suivi branché", "function", type(h._scripts.OnUpdate))
+  curseur[1], curseur[2] = 601, 500
+  h._scripts.OnUpdate(h)
+  verifie("appui : 1 point de souris ne déplace rien", math.floor(avantL + 0.5), math.floor(perso:GetLeft() + 0.5))
+  curseur[1], curseur[2] = 700, 450
+  h._scripts.OnUpdate(h)
+  local ef = perso:GetEffectiveScale()
+  verifie("appui : la fenêtre suit la souris", math.floor(avantL + 100 / ef + 0.5), math.floor(perso:GetLeft() + 0.5))
+  verifie("appui : et vers le bas", math.floor(avantT - 50 / ef + 0.5), math.floor(perso:GetTop() + 0.5))
+  h._scripts.OnMouseUp(h, "LeftButton")
+  verifie("appui : suivi débranché au relâché", nil, h._scripts.OnUpdate)
+  verifie("appui : place enregistrée", math.floor(avantL + 100 / ef + 0.5), math.floor((FenetresDB.fenetres.CharacterFrame.x or -1) * UIParent._scale / ef + 0.5))
+  jeuFerme(perso)
+  jeuOuvre(perso, 100, -50)
+  verifie("appui : place gardée à la réouverture", math.floor(avantL + 100 / ef + 0.5), math.floor(perso:GetLeft() + 0.5))
+  -- Un simple clic, sans bouger : rien n'est déplacé ni enregistré de neuf.
+  FenetresDB.fenetres.CharacterFrame = nil
+  h._scripts.OnMouseDown(h, "LeftButton")
+  h._scripts.OnMouseUp(h, "LeftButton")
+  verifie("clic sans bouger : rien d'enregistré", nil, FenetresDB.fenetres.CharacterFrame)
+  verifie("clic sans bouger : suivi débranché", nil, h._scripts.OnUpdate)
+  -- Bouton relâché hors de la poignée : on s'arrête quand même.
+  h._scripts.OnMouseDown(h, "LeftButton")
+  curseur[1], curseur[2] = 650, 500
+  h._scripts.OnUpdate(h)
+  _G.IsMouseButtonDown = function() return false end
+  h._scripts.OnUpdate(h)
+  verifie("relâché ailleurs : suivi débranché", nil, h._scripts.OnUpdate)
+  _G.GetCursorPosition, _G.IsMouseButtonDown = copie, copieBouton
 end)
 
 -- ----- 16. nettoyage : rien ne reste dans le monde global de ce qui n'est pas à nous

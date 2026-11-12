@@ -724,14 +724,58 @@ local function creerPoignee(rec)
   lueur:SetAllPoints()
   lueur:SetColorTexture(1, 1, 1, 0.07)
   p:SetScript("OnDragStart", function() debutDeplacement(rec) end)
-  p:SetScript("OnMouseDown", function(_, bouton)
-    if bouton == "LeftButton" then rec.appui = true end
+  -- Glisser fait par nous, à partir de l'appui du bouton gauche : en jeu sur Forever (12/11), ni le
+  -- glisser du jeu (OnDragStart) ni StartMoving ne déplaçaient la fenêtre du personnage, alors qu'un
+  -- SetPoint la place bien. Donc : appui -> dès que la souris a bougé de 3 points, on pose nous-mêmes
+  -- la fenêtre sous la souris à chaque image ; relâché -> place gardée. Rien ne dépend du jeu.
+  p:SetScript("OnMouseDown", function(self, bouton)
+    if bouton ~= "LeftButton" or rec.deplace or not gere(rec) then return end
+    local f = rec.fenetre
+    if estBloque(f) then refuserEnCombat(rec, "déplacée") return end
+    if not GetCursorPosition then return end
+    local cx, cy = GetCursorPosition()
+    local gauche, haut = sur(f.GetLeft, f), sur(f.GetTop, f)
+    if not (nb(cx) and nb(cy) and nb(gauche) and nb(haut)) then return end
+    rec.appui = { cx = cx, cy = cy, gauche = gauche, haut = haut }
+    self:SetScript("OnUpdate", function()
+      local a = rec.appui
+      if not a then return end
+      -- Bouton relâché sans que l'on ait vu le OnMouseUp : on s'arrête proprement.
+      if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then
+        rec.appui = nil
+        if rec.deplace and rec.glisse and rec.glisse.manuel then finirDeplacement(rec) else self:SetScript("OnUpdate", nil) end
+        return
+      end
+      if rec.deplace then
+        if rec.glisse and rec.glisse.manuel then
+          if rec.trace then rec.trace.images = (rec.trace.images or 0) + 1 end
+          deplacerSousSouris(rec)
+        end
+        return
+      end
+      local x, y = GetCursorPosition()
+      local ef = sur(f.GetEffectiveScale, f)
+      if not (nb(x) and nb(y) and nb(ef) and ef > 0) then return end
+      if math.abs(x - a.cx) / ef + math.abs(y - a.cy) / ef <= 3 then return end
+      -- Le glisser commence : à nous.
+      if estBloque(f) then rec.appui = nil self:SetScript("OnUpdate", nil) refuserEnCombat(rec, "déplacée") return end
+      if not rec.pris then prendre(rec) end
+      sur(f.Raise, f)
+      majPoignee(rec)
+      rec.deplace = true
+      rec.glisse = { cx = a.cx, cy = a.cy, gauche = a.gauche, haut = a.haut, manuel = true }
+      rec.trace = { depart = pos(f), images = 0, start = "non demandé (glisser fait par l'addon)" }
+      deplacerSousSouris(rec)
+    end)
   end)
-  p:SetScript("OnMouseUp", function(_, bouton)
-    if bouton == "LeftButton" and rec.appui and not rec.deplace and not rec.trace then
-      noterTrace(rec, "appui gauche relâché sans glisser (le jeu n'a pas lancé le glisser)")
+  p:SetScript("OnMouseUp", function(self, bouton)
+    if bouton ~= "LeftButton" then return end
+    rec.appui = nil
+    if rec.deplace and rec.glisse and rec.glisse.manuel then
+      finirDeplacement(rec)
+    elseif not rec.deplace then
+      self:SetScript("OnUpdate", nil)
     end
-    rec.appui = false
   end)
   p:SetScript("OnDragStop", function() finirDeplacement(rec) end)
   p:SetScript("OnClick", function(_, bouton)
