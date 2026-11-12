@@ -360,6 +360,31 @@ local function creerVue(nom, prefixe, nomRecherche, options)
         ns.db.positionSac = { p, rp, x, y }
       end
     end)
+    -- Ctrl + molette : la taille de la fenêtre (de 50 à 150 %), gardée dans ns.db.echelleSac.
+    -- Jamais en combat : la fenêtre contient les vraies cases du sac, que le jeu protège.
+    fenetre:EnableMouseWheel(true)
+    fenetre:SetScript("OnMouseWheel", function(self, sens)
+      if not (IsControlKeyDown and IsControlKeyDown()) then return end
+      if InCombatLockdown() then
+        if ns.reglages and ns.reglages.dire then ns.reglages.dire("la taille du sac se change hors combat.") end
+        return
+      end
+      local actuelle = self:GetScale() or 1
+      local nouvelle = math.floor((actuelle + (sens > 0 and 0.05 or -0.05)) * 20 + 0.5) / 20
+      if nouvelle < 0.5 then nouvelle = 0.5 elseif nouvelle > 1.5 then nouvelle = 1.5 end
+      -- Garder le coin haut gauche à sa place pendant le changement de taille.
+      local gauche, haut = self:GetLeft(), self:GetTop()
+      self:SetScale(nouvelle)
+      if gauche and haut then
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", gauche * actuelle / nouvelle, haut * actuelle / nouvelle)
+        if ns.db then
+          local p, _, rp, x, y = self:GetPoint()
+          ns.db.positionSac = { p, rp, x, y }
+        end
+      end
+      if ns.db then ns.db.echelleSac = nouvelle end
+    end)
   end
   fenetre:Hide()
 
@@ -1324,6 +1349,8 @@ end
 
 ecouteur:SetScript("OnEvent", function(_, evenement, arg1)
   if evenement == "PLAYER_LOGIN" then
+    local e = ns.db and tonumber(ns.db.echelleSac)
+    if e and e >= 0.5 and e <= 1.5 then fenetre:SetScale(e) end
     local p = ns.db and ns.db.positionSac
     if p then fenetre:ClearAllPoints(); fenetre:SetPoint(p[1], UIParent, p[2], p[3], p[4]) end
     return
