@@ -9,6 +9,7 @@
 --     d'objets à ne jamais ramasser.
 --  4. Bilan de farm : ce que tu as ramassé, sa valeur à la revente et à
 --     l'hôtel des ventes (si Enchères ou Auctionator est là), et le gain par heure.
+--     Le Carnet de session peut le montrer dans son cadre (ButinRapide_LignesBilan, ButinRapide_SetBilanCache).
 --  5. Touche d'interaction sur les cadavres (option) : le jeu vise tout seul
 --     le cadavre le plus proche, une touche l'ouvre. Un appui par cadavre :
 --     aucun addon n'a le droit d'ouvrir un cadavre à ta place.
@@ -364,9 +365,16 @@ local function nouveauBilan()
   perso.joue, debutSession = 0, time()
 end
 
-function majBilan()
-  if not db or not perso then return end
-  if not db.bilan or not db.actif then fenetreBilan:Hide() return end
+-- Le bilan calculé, une seule fois pour les deux usages : notre cadre et le Carnet de session
+-- (qui peut le montrer dans son propre cadre). Renvoie nil quand il n'y a rien à montrer
+-- (bilan coupé, addon coupé, personnage pas encore chargé). Sinon :
+--   lignes   = { { libelle, valeur, couleur?, texte }, ... } ; couleur = code hexadécimal « rrggbb » ;
+--              texte = la ligne toute faite, telle que notre cadre l'écrit
+--   parHeure = le gain par heure en texte (pièces)
+--   duree    = la durée en secondes (temps passé en jeu)
+local function calculerBilan()
+  if not db or not perso or not perso.objets then return nil end
+  if not db.bilan or not db.actif then return nil end
   local revente, hv, nombre, liste = 0, 0, 0, {}
   for _, o in pairs(perso.objets) do
     local prix = select(11, infoObjet(o.lien)) or 0
@@ -377,19 +385,65 @@ function majBilan()
   end
   table.sort(liste, function(a, b) return a.nombre > b.nombre end)
   local duree = ns.dureeJouee(perso.joue, debutSession, time())
-  local lignes = {
-    string.format("Durée : %d min     Objets : %d", math.floor(duree / 60), nombre),
-    "Or ramassé : " .. texteOr(perso.argent),
-    "Revente marchand : " .. texteOr(revente),
-  }
-  if Encheres_Prix or Auctionator then lignes[#lignes + 1] = "Hôtel des ventes : " .. texteOr(hv) end
-  lignes[#lignes + 1] = "|cff40ff40Par heure : " .. texteOr(ns.parHeure(perso.argent + hv, duree)) .. "|r"
-  for i = 1, math.min(5, #liste) do
-    lignes[#lignes + 1] = liste[i].nombre .. " × " .. liste[i].lien
+  local parHeure = texteOr(ns.parHeure(perso.argent + hv, duree))
+  local lignes = {}
+  local function ajouter(libelle, valeur, couleur, texte)
+    local l = { libelle = libelle, valeur = valeur, couleur = couleur }
+    if texte then
+      l.texte = texte
+    else
+      l.texte = libelle .. " : " .. (couleur and ("|cff" .. couleur .. valeur .. "|r") or valeur)
+    end
+    lignes[#lignes + 1] = l
   end
-  texteBilan:SetText(table.concat(lignes, "\n"))
-  fenetreBilan:SetHeight(40 + texteBilan:GetStringHeight())
-  fenetreBilan:Show()
+  ajouter("Durée", math.floor(duree / 60) .. " min")
+  ajouter("Objets", tostring(nombre))
+  ajouter("Or ramassé", texteOr(perso.argent))
+  ajouter("Revente marchand", texteOr(revente))
+  if Encheres_Prix or Auctionator then ajouter("Hôtel des ventes", texteOr(hv)) end
+  ajouter("Par heure", parHeure, "40ff40", "|cff40ff40Par heure : " .. parHeure .. "|r")
+  for i = 1, math.min(5, #liste) do
+    ajouter(liste[i].lien, "× " .. liste[i].nombre, nil, liste[i].nombre .. " × " .. liste[i].lien)
+  end
+  return { lignes = lignes, parHeure = parHeure, duree = duree }
+end
+
+-- Pour le Carnet de session : les lignes du bilan (voir calculerBilan), ou nil.
+function ButinRapide_LignesBilan()
+  return calculerBilan()
+end
+
+-- Quand le Carnet de session montre le farm dans son cadre, il demande de cacher le nôtre
+-- (sans toucher au réglage « bilan »), et de le remontrer quand il n'en a plus besoin.
+local bilanCache = false
+function ButinRapide_SetBilanCache(cache)
+  cache = cache and true or false
+  if cache == bilanCache then return end
+  bilanCache = cache
+  if majBilan then majBilan() end
+end
+
+local prevenirEnCours = false
+
+function majBilan()
+  if not db or not perso then return end
+  local bilan = calculerBilan()
+  if not bilan or bilanCache then
+    fenetreBilan:Hide()
+  else
+    local textes = {}
+    for i, l in ipairs(bilan.lignes) do textes[i] = l.texte end
+    texteBilan:SetText(table.concat(textes, "\n"))
+    fenetreBilan:SetHeight(40 + texteBilan:GetStringHeight())
+    fenetreBilan:Show()
+  end
+  -- Le Carnet de session (s'il est là) met son cadre à jour, aussi quand le bilan vient d'être coupé.
+  -- Sous pcall : une erreur chez lui ne doit jamais gêner le ramassage.
+  if not prevenirEnCours and type(CarnetDeSession_MajFarm) == "function" then
+    prevenirEnCours = true
+    pcall(CarnetDeSession_MajFarm)
+    prevenirEnCours = false
+  end
 end
 C_Timer.NewTicker(30, function() majBilan() end) -- l'or par heure bouge avec le temps
 
