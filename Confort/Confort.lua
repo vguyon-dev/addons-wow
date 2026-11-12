@@ -171,7 +171,7 @@ end
 
 ns.reglages = ns.creerReglages({
   titre = "Confort",
-  icone = "Interface\\Icons\\INV_Misc_Pillow_01",
+  icone = "Interface\\Icons\\Spell_Nature_Sleep", -- l'oreiller (INV_Misc_Pillow_01) ne s'affichait pas sur Forever
   nomDB = "ConfortDB",
   defauts = DEFAUTS,
   options = {

@@ -23,7 +23,7 @@ verifie("toc : charge Reglages.lua puis Dialogues.lua", true, toc:find("Reglages
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: DialoguesDB", 1, true) ~= nil)
 verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 16001", 1, true) ~= nil)
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Dialogues_OuvrirReglages", 1, true) ~= nil)
-verifie("toc : version 0.1.0", true, toc:find("## Version: 0.1.0", 1, true) ~= nil)
+verifie("toc : version 0.1.1", true, toc:find("## Version: 0.1.1", 1, true) ~= nil)
 verifie("toc : catégorie des addons de Valentin", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil)
 verifie("toc : titre", true, toc:find("## Title: Dialogues de quête", 1, true) ~= nil)
 local source = lire(fichier)

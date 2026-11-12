@@ -1124,7 +1124,9 @@ function ns.surTouche(cadre, touche)
   local e = etat
   local action, n
   if e and bandeau and sur(bandeau.IsShown, bandeau) then
-    local modificateur = (sur(IsShiftKeyDown) == true) or (sur(IsControlKeyDown) == true) or (sur(IsAltKeyDown) == true)
+    -- Maj n'est pas compté : sur un clavier AZERTY, les chiffres du haut se tapent avec Maj (vu en
+    -- jeu le 12/11 : la touche 2 ne choisissait pas la récompense). Ctrl et Alt restent au jeu.
+    local modificateur = (sur(IsControlKeyDown) == true) or (sur(IsAltKeyDown) == true)
     action, n = ns.toucheVers(touche, {
       affiche = true, touches = db.touches, combat = false, modificateur = modificateur, etape = e.etape,
       derniere = e.page >= #e.pages, nbReponses = #e.reponses, nbChoix = e.nbChoix,

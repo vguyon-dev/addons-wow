@@ -3,7 +3,7 @@
 ## Notes: Remplace la fenêtre de dialogue des PNJ par un bandeau en bas de l'écran : portrait, nom, texte affiché par morceaux, réponses numérotées, récompenses à choisir, et le clavier (Espace, chiffres, Échap). La fenêtre du jeu reprend la main en cas de souci.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.0
+## Version: 0.1.1
 ## IconTexture: Interface\GossipFrame\GossipGossipIcon
 ## SavedVariables: DialoguesDB
 ## AddonCompartmentFunc: Dialogues_OuvrirReglages
