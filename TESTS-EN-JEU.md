@@ -328,6 +328,22 @@ But de l'essai : savoir si la base de WoW Classic colle à Forever. À faire en 
 - [ ] Carte d'un continent : rien, sauf si l'option est cochée (et alors sans gel).
 - [ ] Après l'essai : `/reload` puis « regarde », je lirai le relevé enregistré.
 
+## Fenêtres déplaçables (nouveau)
+
+- [ ] `/reload`, aucune erreur dans BugSack. Ouvrir la fenêtre du personnage : glisser sa barre de titre la déplace.
+- [ ] La fermer et la rouvrir : elle revient où tu l'as laissée (c'est le point le plus délicat, le jeu la replace lui-même). Pareil après `/reload`.
+- [ ] Même essai avec la carte (pas agrandie), le grimoire, un marchand, le courrier, la banque, un PNJ de quête, les amis, les options (Échap).
+- [ ] La croix de fermeture, les onglets et le portrait de chaque fenêtre restent cliquables : la poignée ne doit pas les couvrir. Noter la fenêtre si un bouton ne répond plus.
+- [ ] Ouvrir deux fenêtres du jeu côte à côte (personnage puis grimoire) : chacune garde sa place, sans sauter ni clignoter.
+- [ ] Ctrl + molette sur la barre de titre : la fenêtre grossit ou rétrécit, et la taille est gardée.
+- [ ] Clic droit sur la barre de titre : « Remettre à sa place d'origine » et « Taille normale » marchent.
+- [ ] En combat : glisser le personnage ou la carte ; soit ça marche, soit un message dit que ce sera fait après, sans « action bloquée ». Après le combat, la place est appliquée.
+- [ ] Commencer à glisser une fenêtre, entrer en combat, relâcher : la fenêtre ne reste pas collée à la souris.
+- [ ] Cliquer dans une fenêtre pour la passer devant une autre : sa barre de titre reste saisissable.
+- [ ] Avec Dialogues de quête actif : parler à un PNJ ne fait apparaître aucune poignée fantôme.
+- [ ] `/fen reset` remet tout ; couper l'addon rend les fenêtres au jeu.
+- [ ] Après l'essai : `/reload` puis « regarde », je lirai quelles fenêtres existent sur Forever.
+
 ## Plus anciens, jamais confirmés
 
 - [ ] Carnet de session : « niveau max » sur un personnage au plafond (Naincailloux, Retail).

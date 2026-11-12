@@ -194,6 +194,11 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-12", titre = "Nouvel addon : Fenêtres déplaçables", lignes = {
+    "Toutes les grandes fenêtres du jeu se déplacent : glisse leur barre de titre (personnage, grimoire, carte, quêtes, marchand, courrier, banque, métiers, amis, options…). Chacune se rouvre là où tu l'as laissée.",
+    "Ctrl + molette sur la barre de titre change la taille de la fenêtre. Clic droit : la remettre à sa place d'origine. Réglages : /fen.",
+    "En combat, le jeu interdit de déplacer certaines fenêtres : l'addon te le dit et le fait à la fin du combat.",
+  } },
   { date = "2026-11-11", titre = "Nouvel addon : Quêtes disponibles", lignes = {
     "Quêtes disponibles montre sur la carte du monde un « ! » jaune à chaque endroit où une quête est à prendre pour ton personnage. Survole-le pour voir les quêtes et leur niveau. Réglages : /qd.",
     "Clic gauche sur un « ! » : le GPS t'y emmène. Clic droit : ne plus montrer ces quêtes.",
@@ -228,7 +233,7 @@ ns.NOUVEAUTES = {
     "Réglages propres à chaque personnage : en haut de la page de chaque addon, un interrupteur « Réglages propres à ce personnage ». Activé, ce personnage a ses réglages (copiés depuis les réglages actuels) et les autres ne changent pas. Coupé, il retrouve ceux du compte.",
   } },
   { date = "2026-11-10", titre = "Une seule fenêtre de réglages", lignes = {
-    "Les réglages des 22 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
+    "Les réglages des 23 addons sont dans une seule fenêtre, « Addons de Valentin », ouverte par l'engrenage autour de la minimap ou par la commande de chaque addon.",
     "À gauche, la liste des addons avec un point vert (activé) ou rouge (coupé). Un clic droit active ou coupe un addon.",
     "À droite, les réglages de l'addon choisi, rangés en onglets, avec des interrupteurs et des curseurs.",
     "En haut, une recherche trouve un réglage dans tous les addons, même sans les accents.",
@@ -1122,7 +1127,7 @@ local function leHub()
     hub.marquerVu()
   end)
 
-  -- Un seul message par connexion, même avec 22 addons (le drapeau est dans le hub commun).
+  -- Un seul message par connexion, même avec 23 addons (le drapeau est dans le hub commun).
   function hub.annoncerNouveautes()
     if hub.messageNouveau then return end
     hub.messageNouveau = true
