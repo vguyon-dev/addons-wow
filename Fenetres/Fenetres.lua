@@ -457,6 +457,7 @@ end
 local function suivreSouris(rec)
   local g, f = rec.glisse, rec.fenetre
   if not g then return end
+  if rec.trace then rec.trace.images = (rec.trace.images or 0) + 1 end
   if g.manuel then deplacerSousSouris(rec) return end
   if not GetCursorPosition then return end
   local cx, cy = GetCursorPosition()
@@ -475,8 +476,24 @@ local function suivreSouris(rec)
   end
 end
 
+-- Trace des glissers (diagnostic, 12/11 : la fenêtre du personnage ne bougeait pas en jeu). Les
+-- 5 dernières vont dans FenetresDB.traces ; un glisser qui n'a rien déplacé est dit dans le chat.
+local function pos(f)
+  local l, t = sur(f.GetLeft, f), sur(f.GetTop, f)
+  if nb(l) and nb(t) then return string.format("%.0f,%.0f", l, t) end
+  return "?"
+end
+local function noterTrace(rec, texte)
+  if not db then return end
+  db.traces = type(db.traces) == "table" and db.traces or {}
+  table.insert(db.traces, 1, (date and date("%H:%M:%S") or "") .. " " .. rec.cle .. " : " .. texte)
+  while #db.traces > 5 do table.remove(db.traces) end
+end
+
 local function finirDeplacement(rec)
   if not rec.deplace then return end
+  local trace = rec.trace
+  rec.trace = nil
   rec.deplace = false
   local g = rec.glisse
   rec.glisse = nil
@@ -506,6 +523,21 @@ local function finirDeplacement(rec)
   garderPlace(rec, place)
   poser(rec, place) -- remet une ancre propre (coin haut gauche de l'écran)
   rafraichirReglages()
+  if trace then
+    trace.lache = pos(f)
+    trace.mode = (g and g.manuel) and "main" or "jeu"
+    local function finTrace()
+      trace.apres = pos(f)
+      local texte = string.format("départ %s, lâché %s, 0,5 s après %s, mode %s, StartMoving %s, images suivies %d",
+        trace.depart, trace.lache, trace.apres, trace.mode, trace.start, trace.images or 0)
+      noterTrace(rec, texte)
+      if trace.apres == trace.depart then
+        dire("|cffff8040la fenêtre « " .. rec.entree.titre .. " » n'a pas bougé.|r Fais /reload puis dis-le : " ..
+          "le détail est gardé pour comprendre (" .. texte .. ").")
+      end
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(0.5, function() pcall(finTrace) end) else pcall(finTrace) end
+  end
 end
 
 local function debutDeplacement(rec)
@@ -525,7 +557,10 @@ local function debutDeplacement(rec)
     rec.glisse = { cx = cx, cy = cy, gauche = gauche, haut = haut, manuel = false }
     if rec.poignee then rec.poignee:SetScript("OnUpdate", function() suivreSouris(rec) end) end
   end
-  sur(f.StartMoving, f)
+  rec.trace = { depart = pos(f), images = 0 }
+  local okStart, erreurStart = pcall(f.StartMoving, f)
+  rec.trace.start = okStart and "accepté" or ("refusé : " .. tostring(erreurStart))
+  if not rec.glisse then rec.trace.start = rec.trace.start .. " (pas de point de départ : souris ou place illisible)" end
 end
 
 -- Change la taille d'un cran, en gardant le coin haut gauche où il est.
@@ -689,6 +724,15 @@ local function creerPoignee(rec)
   lueur:SetAllPoints()
   lueur:SetColorTexture(1, 1, 1, 0.07)
   p:SetScript("OnDragStart", function() debutDeplacement(rec) end)
+  p:SetScript("OnMouseDown", function(_, bouton)
+    if bouton == "LeftButton" then rec.appui = true end
+  end)
+  p:SetScript("OnMouseUp", function(_, bouton)
+    if bouton == "LeftButton" and rec.appui and not rec.deplace and not rec.trace then
+      noterTrace(rec, "appui gauche relâché sans glisser (le jeu n'a pas lancé le glisser)")
+    end
+    rec.appui = false
+  end)
   p:SetScript("OnDragStop", function() finirDeplacement(rec) end)
   p:SetScript("OnClick", function(_, bouton)
     if bouton == "RightButton" and gere(rec) then menuFenetre(rec) end

@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.1", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.2", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
