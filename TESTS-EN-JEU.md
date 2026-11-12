@@ -5,9 +5,25 @@ Tout ce qui est codé mais pas encore vérifié dans le jeu. Les simulations hor
 Pour chaque test : coche la case quand c'est bon. Si quelque chose cloche, fais `/reload`, puis dis « regarde » : les erreurs sont lues directement dans les fichiers du jeu.
 
 Avant de commencer :
-- [ ] Mettre à jour les addons dans WowUp, puis `/reload`.
+- [ ] Sur le poste de développement, rien à mettre à jour (les addons sont reliés au dossier de travail) : `/reload` suffit. WowUp ne sert qu'aux amis.
 - [ ] Désactiver Pawn, pour ne voir que notre avis sur les objets.
 - [ ] Vérifier que BugSack est actif sur Forever.
+
+## Vérifié en jeu le 12/11/2026 (Forever, druide niveau 3, essais pilotés par Claude)
+
+Aucune erreur des addons dans BugGrabber pendant toute la série.
+
+- [x] Fenêtres déplaçables : personnage, grimoire, carte, options, menu du jeu se déplacent par leur barre de titre (après le correctif 0.1.4 : poignée sur la couche au-dessus de la fenêtre).
+- [x] Fenêtres déplaçables : place gardée à la fermeture et à la réouverture (personnage, carte) ; deux fenêtres ouvertes ensemble gardent chacune leur place ; croix de fermeture toujours cliquable ; infobulle de la barre de titre ; clic droit, « Remettre à sa place d'origine ».
+- [ ] Fenêtres déplaçables : Ctrl + molette (marche chez Valentin ; mon outil n'envoie pas Ctrl avec la molette), glisser en combat, marchand, courrier, banque.
+- [x] Sacs rangés : B ouvre le sac ; plus aucune lueur bleue « nouvel objet » après `/reload` (0 sur 4 cases).
+- [x] Réglages communs : la fenêtre liste les 23 addons ; « Quoi de neuf » ; la recherche « taille » trouve 6 réglages et un clic mène à la bonne page (GPS) ; l'icône de Confort s'affiche (0.3.2).
+- [x] GPS : `/way 45 60 Essai GPS` montre la flèche avec la distance ; `/way effacer` la retire.
+- [x] Quêtes disponibles : `/qd etat` reconnaît les 6 capitales (positions justes) ; sur l'Île de Zéphras (propre à Forever) 0 quête, normal ; en Forêt d'Elwynn, un « ! » montre « [1] Menace intérieure » en français.
+- [x] Dialogues de quête : `/dial test` : bandeau, Espace tourne les pages et accepte, récompenses listées au-dessus du bandeau, choix au clic, « Terminer la quête », Échap ferme.
+- [ ] Dialogues de quête : les chiffres pour choisir (mon outil envoie « ^ » au lieu de « 3 » : à essayer avec ton clavier), et un vrai PNJ.
+- [x] Tenues : `/tenue` ouvre la fenêtre ; enregistrer une tenue (9 pièces, marquée portée) ; « Mettre » (déjà portée) ; supprimer avec « Sûr ? ».
+- [x] Conseiller : `/cs` s'ouvre et lit la classe et le niveau.
 
 ## La fenêtre de réglages commune (refaite le 10/11)
 
