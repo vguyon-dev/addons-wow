@@ -233,6 +233,15 @@ end
 
 local function enCombat() return InCombatLockdown and InCombatLockdown() and true or false end
 
+-- La couche (strate) juste au-dessus d'une autre, sans dépasser celle des dialogues plein écran.
+local STRATES = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
+function ns.strateAuDessus(strate)
+  for i, s in ipairs(STRATES) do
+    if s == strate then return STRATES[math.min(i + 1, #STRATES)] end
+  end
+  return "HIGH"
+end
+
 local function dire(texte)
   if ns.reglages and ns.reglages.dire then ns.reglages.dire(texte) else print("|cffffd200Fenêtres déplaçables|r : " .. texte) end
 end
@@ -420,8 +429,11 @@ local function majPoignee(rec)
   local p, f = rec.poignee, rec.fenetre
   if not p then return end
   if not gere(rec) then p:Hide() return end
+  -- La poignée va sur la couche JUSTE AU-DESSUS de la fenêtre. Vu en jeu sur Forever (12/11) : sur la
+  -- même couche, même avec un niveau bien plus haut, la souris restait à la fenêtre du jeu (aucun
+  -- survol, aucun glisser ; seule la molette passait). Un cadre sur la couche suivante la reçoit.
   local strate = sur(f.GetFrameStrata, f)
-  if strate then sur(p.SetFrameStrata, p, strate) end
+  if strate then sur(p.SetFrameStrata, p, ns.strateAuDessus(strate)) end
   local niveau = sur(f.GetFrameLevel, f)
   if nb(niveau) then sur(p.SetFrameLevel, p, math.min(niveau + 600, 9990)) end
   -- La poignée a l'échelle de la fenêtre : ses marges (portrait, croix) suivent la taille de la fenêtre.

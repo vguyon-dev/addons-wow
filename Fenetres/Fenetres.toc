@@ -3,7 +3,7 @@
 ## Notes: Toutes les grandes fenêtres du jeu (personnage, grimoire, carte, quêtes, marchand, courrier, banque, hôtel des ventes, métiers, amis, collections…) se déplacent en glissant leur barre de titre et gardent leur place d'une ouverture à l'autre et d'une session à l'autre. Ctrl + molette sur la barre de titre change la taille, clic droit ouvre un petit menu.
 ## Category: Addons de Valentin
 ## Author: Valentin
-## Version: 0.1.3
+## Version: 0.1.4
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 ## SavedVariables: FenetresDB
 ## AddonCompartmentFunc: Fenetres_OuvrirReglages

@@ -36,7 +36,7 @@ verifie("toc : les deux versions du jeu", true, toc:find("## Interface: 120105, 
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: Fenetres_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Fenêtres déplaçables", 1, true) ~= nil)
 verifie("toc : catégorie, auteur, version", true, toc:find("## Category: Addons de Valentin", 1, true) ~= nil
-  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.3", 1, true) ~= nil)
+  and toc:find("## Author: Valentin", 1, true) ~= nil and toc:find("## Version: 0.1.4", 1, true) ~= nil)
 verifie("toc : icône", true, toc:find("## IconTexture: ", 1, true) ~= nil)
 -- Aucun tiret cadratin ni demi-cadratin, aucun prénom dans le code ni dans le .toc.
 verifie("texte : pas de tiret cadratin ni demi-cadratin", false,
@@ -575,7 +575,7 @@ scenario("chargement", function()
   verifie("poignée : clic droit", "RightButtonUp", h._clics[1])
   jeuOuvre(perso, 100, -50)
   verifie("poignée : visible quand la fenêtre s'ouvre", true, h._shown)
-  verifie("poignée : même strate que la fenêtre", perso._strate, h._strate)
+  verifie("poignée : couche juste au-dessus de la fenêtre", "HIGH", h._strate)
   verifie("poignée : au-dessus de la fenêtre (niveau)", true, h._niveau > perso._niveau + 500)
   jeuFerme(perso)
   verifie("poignée : cachée quand la fenêtre se ferme", false, h._shown)
