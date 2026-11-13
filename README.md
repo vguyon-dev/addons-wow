@@ -43,7 +43,7 @@ addons-wow/
 ├── tests/               simulations hors jeu (jamais copiées dans AddOns)
 ├── .github/workflows/   publier.yml : tests puis version publiée à chaque push sur main
 ├── outils/              publier.py (paquets pour WowUp), paquet.ps1 (zip à la main), LISEZMOI.txt,
-│                        banc/ (banc d'essai : un addon de développement, jamais publié, voir banc/LISEZMOI.md)
+│                        banc/ (banc d'essai : un addon de développement et son pilote banc.ps1, un essai en jeu en une commande, jamais publiés, voir banc/LISEZMOI.md)
 ├── CarnetDeSession/     un addon = un dossier, au même nom que son .toc
 │   ├── CarnetDeSession.toc
 │   ├── Reglages.lua     copie du module commun (réglages, icône commune)

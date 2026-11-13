@@ -11,6 +11,7 @@ on:
       - "tests/**"
       - "outils/LISEZMOI.txt"
       - "outils/paquet.ps1"
+      - "outils/banc/**"
   workflow_dispatch:
 
 permissions:
