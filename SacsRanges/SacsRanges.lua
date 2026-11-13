@@ -14,6 +14,7 @@ local DEFAUTS = {
   actif = true,
   rangerMarchand = false,  -- ranger tout seul en refermant un marchand
   rangerBanque = true,     -- ranger aussi la banque quand elle est ouverte
+  sacsSpeciaux = true,     -- en rangeant : remplir d'abord le carquois et les sacs de métier avec ce qui y va
   ecart = 0,               -- « moins bon » = au moins ce nombre de niveaux en dessous
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
@@ -143,6 +144,79 @@ end
 -- ---------------------------------------------------------------------------
 -- Lecture des sacs (jeu)
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Les sacs spéciaux : carquois, giberne, sacs de métier (herbes, cuir, enchantement…). Ils n'acceptent
+-- qu'une famille d'objets. Le jeu donne la famille d'un sac et celle d'un objet sous forme de drapeaux.
+-- Fonctions pures, testées hors jeu.
+-- ---------------------------------------------------------------------------
+local function etBinaire(a, b)
+  if bit and bit.band then return bit.band(a, b) end
+  local r, p = 0, 1
+  while a > 0 and b > 0 do
+    if a % 2 == 1 and b % 2 == 1 then r = r + p end
+    a, b, p = math.floor(a / 2), math.floor(b / 2), p * 2
+  end
+  return r
+end
+
+-- Cet objet a-t-il le droit d'aller dans ce sac ? Un sac ordinaire (famille 0) prend tout.
+function ns.vaDansSac(familleObjet, familleSac)
+  if type(familleObjet) ~= "number" or type(familleSac) ~= "number" then return false end
+  if familleSac == 0 then return true end
+  return familleObjet > 0 and etBinaire(familleObjet, familleSac) ~= 0
+end
+
+-- Quoi déplacer pour remplir d'abord les sacs spéciaux : chaque objet rangé là libère une case ordinaire.
+--   objets : { { sac, case, id, nombre, famille } } (ceux des sacs ordinaires suffisent) ;
+--   sacs : { [numéro] = { famille, libres = { cases vides } } }.
+-- Rend { { deSac, deCase, versSac, versCase } }, les piles d'un même objet à la suite, les plus grosses d'abord.
+function ns.planSacsSpeciaux(objets, sacs)
+  if type(sacs) ~= "table" then return {} end
+  local numeros = {}
+  for n, s in pairs(sacs) do
+    if type(s) == "table" and (s.famille or 0) ~= 0 and type(s.libres) == "table" and #s.libres > 0 then
+      numeros[#numeros + 1] = n
+    end
+  end
+  table.sort(numeros)
+  local candidats = {}
+  for _, o in ipairs(type(objets) == "table" and objets or {}) do
+    local s = sacs[o.sac]
+    if s and (s.famille or 0) == 0 and (o.famille or 0) > 0 then candidats[#candidats + 1] = o end
+  end
+  table.sort(candidats, function(a, b)
+    if (a.id or 0) ~= (b.id or 0) then return (a.id or 0) < (b.id or 0) end
+    if (a.nombre or 1) ~= (b.nombre or 1) then return (a.nombre or 1) > (b.nombre or 1) end
+    if a.sac ~= b.sac then return a.sac < b.sac end
+    return a.case < b.case
+  end)
+  local plan, pris = {}, {}
+  for _, n in ipairs(numeros) do
+    local s, i = sacs[n], 1
+    for _, o in ipairs(candidats) do
+      if i > #s.libres then break end
+      if not pris[o] and ns.vaDansSac(o.famille, s.famille) then
+        pris[o] = true
+        plan[#plan + 1] = { deSac = o.sac, deCase = o.case, versSac = n, versCase = s.libres[i] }
+        i = i + 1
+      end
+    end
+  end
+  return plan
+end
+
+-- Le texte du pied de la vue : les cases des sacs spéciaux ne comptent pas comme des cases libres.
+--   speciaux : { { nom, libres } }.
+function ns.texteCasesLibres(libres, total, speciaux)
+  local t = (libres or 0) .. " cases libres sur " .. (total or 0)
+  local plus = {}
+  for _, s in ipairs(type(speciaux) == "table" and speciaux or {}) do
+    if (s.libres or 0) > 0 then plus[#plus + 1] = s.libres .. " dans " .. (s.nom or "un sac spécial") end
+  end
+  if #plus > 0 then t = t .. "  (+ " .. table.concat(plus, ", ") .. ")" end
+  return t
+end
 
 local function infoObjet(lien)
   if C_Item and C_Item.GetItemInfo then return C_Item.GetItemInfo(lien) end
@@ -279,6 +353,16 @@ function ns.utilisableCase(sac, case, lien)
 end
 ns.nbCases = nbCases
 
+-- La famille d'un sac porté (0 : sac ordinaire, ou on ne sait pas).
+local function familleSac(sac)
+  if sac == 0 then return 0 end
+  local f = C_Container and C_Container.GetContainerNumFreeSlots or GetContainerNumFreeSlots
+  if type(f) ~= "function" then return 0 end
+  local ok, _, famille = pcall(f, sac)
+  return ok and type(famille) == "number" and famille or 0
+end
+ns.familleSac = familleSac
+
 local function lireSacs()
   local objets = {}
   local connait = competences()
@@ -314,6 +398,59 @@ end
 
 local banqueOuverte = false
 
+-- Remplit d'abord les sacs spéciaux : un objet à la fois, toutes les 0,3 s, jamais en combat.
+local deplacements
+local function remplirSpeciaux()
+  if not db or not db.actif or not db.sacsSpeciaux or deplacements or InCombatLockdown() then return end
+  local C = C_Container
+  if not (C and C.PickupContainerItem and C.GetContainerItemInfo) then return end
+  local familleDe = (C_Item and C_Item.GetItemFamily) or GetItemFamily
+  local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  if type(familleDe) ~= "function" then return end
+  local objets, sacs = {}, {}
+  for sac = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4 do
+    local s = { famille = familleSac(sac), libres = {} }
+    sacs[sac] = s
+    for case = 1, nbCases(sac) do
+      local info = C.GetContainerItemInfo(sac, case)
+      if not info then
+        s.libres[#s.libres + 1] = case
+      elseif s.famille == 0 and info.itemID and not info.isLocked then
+        -- Un sac ou un carquois rangé dans un sac a lui aussi une « famille » : celle de ce qu'il contient.
+        local classe = instant and select(6, instant(info.itemID))
+        local famille = (classe == 1 or classe == 11) and 0 or familleDe(info.itemID)
+        objets[#objets + 1] = { sac = sac, case = case, id = info.itemID, nombre = info.stackCount or 1,
+          famille = type(famille) == "number" and famille or 0 }
+      end
+    end
+  end
+  local plan = ns.planSacsSpeciaux(objets, sacs)
+  if #plan == 0 then return end
+  deplacements = plan
+  local i, faits = 0, 0
+  local function suivant()
+    i = i + 1
+    local m = plan[i]
+    if not m or InCombatLockdown() or (GetCursorInfo and GetCursorInfo()) then
+      deplacements = nil
+      if faits > 0 then
+        ns.reglages.dire(faits .. (faits > 1 and " piles rangées" or " pile rangée") .. " dans tes sacs spéciaux (carquois, sacs de métier).")
+      end
+      return
+    end
+    C.PickupContainerItem(m.deSac, m.deCase)
+    C.PickupContainerItem(m.versSac, m.versCase)
+    if GetCursorInfo and GetCursorInfo() then
+      if ClearCursor then ClearCursor() end -- refusé par le jeu : on repose l'objet
+    else
+      faits = faits + 1
+    end
+    C_Timer.After(0.3, suivant)
+  end
+  suivant()
+end
+ns.remplirSpeciaux = remplirSpeciaux
+
 local function ranger()
   if not db.actif then return end
   if InCombatLockdown() then return ns.reglages.dire("|cffff4040pas en combat.|r") end
@@ -327,6 +464,8 @@ local function ranger()
     if type(triBanque) == "function" then C_Timer.After(1, function() pcall(triBanque) end) end
   end
   ns.reglages.dire("sacs rangés" .. ((banqueOuverte and db.rangerBanque) and ", banque aussi." or "."))
+  -- Le tri du jeu ne touche pas aux sacs spéciaux : on y range ensuite ce qui y va (vu en jeu le 13/11).
+  if db.sacsSpeciaux and C_Timer and C_Timer.After then C_Timer.After(2, remplirSpeciaux) end
 end
 SacsRanges_Ranger = ranger
 ns.ranger = ranger
@@ -495,6 +634,8 @@ ns.reglages = ns.creerReglages({
       aide = "Interrupteur général : coupé, plus de rangement, plus de barre sur le sac à dos, plus de sac par catégories (les sacs du jeu reviennent)." },
     { cle = "rangerBanque", libelle = "Ranger aussi la banque quand elle est ouverte",
       aide = "Le bouton « Ranger » trie alors tes sacs puis la banque." },
+    { cle = "sacsSpeciaux", libelle = "Remplir d'abord le carquois et les sacs de métier",
+      aide = "En rangeant, ce qui a le droit d'aller dans un sac spécial (flèches et balles dans le carquois, cuir, herbes, minerai… dans un sac de métier) y est déplacé, pour libérer des cases dans tes sacs ordinaires." },
     { cle = "rangerMarchand", libelle = "Ranger tout seul en refermant un marchand",
       aide = "Après la vente des gris par Marchand auto, par exemple." },
     { titre = "Analyse des sacs" },

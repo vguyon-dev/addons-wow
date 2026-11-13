@@ -1,0 +1,9 @@
+## Interface: 120105, 16001
+## Title: Banc d'essai (développement)
+## Notes: Outil de développement, jamais publié : exécute Script.lua au chargement et garde le résultat dans les SavedVariables.
+## Author: addons-wow
+## Version: 0.1.0
+## SavedVariables: BancEssaiDB
+
+BancEssai.lua
+Script.lua

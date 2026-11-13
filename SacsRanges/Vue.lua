@@ -678,10 +678,14 @@ end
 
 local function lire(sacs, sansConseils)
   local objets, libres, total, premiereLibre = {}, 0, 0, nil
+  -- Les sacs spéciaux (carquois, sacs de métier) : leurs cases vides ne sont pas des cases libres pour tout.
+  local speciaux = {}
   for _, numero in ipairs(sacs) do
     local n = ns.nbCases and ns.nbCases(numero) or 0
+    local special = ns.familleSac and ns.familleSac(numero) ~= 0 and { sac = numero, libres = 0 } or nil
+    if special then speciaux[#speciaux + 1] = special end
     for case = 1, n do
-      total = total + 1
+      if not special then total = total + 1 end
       local icone, nombre, verrou, qualite, lien, idObjet, estLie, remboursable = infoCase(numero, case)
       if icone and lien then
         local nom, _, q, _, _, _, _, _, _, _, _, classe, sousClasse, liaison, extension, _, artisanat = infoObjet(lien)
@@ -708,13 +712,20 @@ local function lire(sacs, sansConseils)
           extension = extension,
           raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
+      elseif special then
+        special.libres = special.libres + 1
+        special.case = special.case or case
       else
         libres = libres + 1
         premiereLibre = premiereLibre or { sac = numero, case = case }
       end
     end
   end
-  return objets, libres, total, premiereLibre
+  for _, s in ipairs(speciaux) do
+    local nom = C_Container and C_Container.GetBagName and C_Container.GetBagName(s.sac)
+    s.nom = type(nom) == "string" and nom ~= "" and nom or "un sac spécial"
+  end
+  return objets, libres, total, premiereLibre, speciaux
 end
 
 -- ---------------------------------------------------------------------------
@@ -758,7 +769,7 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
   if not v.fenetre:IsShown() then return end
   if InCombatLockdown() then aRefaire = true end
   local db = ns.db or {}
-  local objets, libres, total, premiereLibre = lire(sacs, not avecConseils)
+  local objets, libres, total, premiereLibre, speciaux = lire(sacs, not avecConseils)
   -- Les objets à équiper sortent de leur section et passent en tête, une ligne chacun.
   local aEquiper, autres = ns.separerConseils(objets, avecConseils)
   local parSection = ns.repartir(autres)
@@ -913,6 +924,32 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
     end
     y = y + TAILLE + ECART
   end
+  -- Une case vide par sac spécial qui a de la place : on y dépose ce qui y va (flèches, cuir…).
+  for _, s in ipairs(speciaux or {}) do
+    if s.libres > 0 and s.case then
+      it = it + 1
+      local t = titreDe(v, it)
+      t:ClearAllPoints()
+      t:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
+      t:SetText(s.nom .. "  |cff888888" .. s.libres .. "|r")
+      t:SetTextColor(0.6, 0.6, 0.6)
+      t:Show()
+      y = y + 16
+      local b = caseDe(v, s.sac, s.case)
+      if b then
+        b.utilisee = true
+        if not InCombatLockdown() then
+          b:ClearAllPoints()
+          b:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
+        end
+        remplir(b, nil, 0, false, nil, nil)
+        b.libres:SetText(s.libres)
+        b:SetAlpha(1)
+        b:Show()
+      end
+      y = y + TAILLE + ECART
+    end
+  end
 
   for i = it + 1, #v.titres do v.titres[i]:Hide() end
   if not InCombatLockdown() then
@@ -922,7 +959,7 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
   end
 
   v.titre:SetText(titreTexte)
-  v.pied:SetText(libres .. " cases libres sur " .. total)
+  v.pied:SetText(ns.texteCasesLibres(libres, total, speciaux))
   if avecArgent then v.argent:SetText(texteOr(GetMoney())) else v.argent:SetText("") end
   if db.apparenceWow ~= v.apparence then
     v.apparence = db.apparenceWow

@@ -33,6 +33,8 @@ local DEFAUTS = {
   pecheTouche = true,      -- une seule touche : lancer, ferrer, et poser l'appât si besoin (en mode pêche)
   touchePeche = nil,       -- la touche choisie, par exemple « F » ou « SHIFT-F » (aucune au départ)
   pecheAppat = true,       -- la touche pose d'abord l'appât quand la canne n'en a pas
+  pecheCanne = true,       -- le mode pêche équipe la canne des sacs et remet l'arme d'avant à la fin
+  armeAvant = nil,         -- { main, autre } : les armes portées avant la canne, pour les remettre
   pecheFenetre = true,     -- la fenêtre « Pêche » s'ouvre et se ferme avec le mode pêche
   pecheRamasser = true,    -- ramasser tout de suite les prises (sans toucher au réglage général)
   rachatPalier = 0,        -- rachat d'appâts chez un marchand : 0 = aucun, 1 = 5, 2 = 10, 3 = 20
@@ -1103,6 +1105,55 @@ function ns.canneManque(interface, objet, infos)
   return not (classe == 2 and sous == 20)
 end
 
+-- ----- la canne à pêche : mise avec le mode pêche, l'arme d'avant remise à la fin
+-- (là où le jeu exige une canne ; si l'addon Tenues a une tenue « Pêche », c'est elle qui passe d'abord).
+local armeEnAttente = false
+local function estCanne(id)
+  local f = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  if not id or type(f) ~= "function" then return false end
+  local _, _, _, _, _, classe, sous = f(id)
+  return classe == 2 and sous == 20
+end
+local function canneDesSacs()
+  local C = C_Container
+  if not (C and C.GetContainerNumSlots and C.GetContainerItemID) then return nil end
+  for sac = 0, NUM_BAG_SLOTS or 4 do
+    for case = 1, C.GetContainerNumSlots(sac) or 0 do
+      local id = C.GetContainerItemID(sac, case)
+      if estCanne(id) then return id end
+    end
+  end
+end
+local function equiperObjet(id, place)
+  local f = (C_Item and C_Item.EquipItemByName) or EquipItemByName
+  if type(f) == "function" then pcall(f, id, place) end
+end
+local function mettreCanne()
+  if not db or not db.pecheCanne or not modePeche or InCombatLockdown() then return end
+  if not GetInventoryItemID then return end
+  local main = GetInventoryItemID("player", 16)
+  if estCanne(main) then return end
+  local canne = canneDesSacs()
+  if not canne then return end
+  if not db.armeAvant then db.armeAvant = { main = main, autre = GetInventoryItemID("player", 17) } end
+  equiperObjet(canne, 16)
+  ns.reglages.dire("canne à pêche équipée, ton arme reviendra à la fin du mode pêche.")
+end
+-- Remet les armes d'avant. En combat, on attend la fin du combat.
+local function remettreArme()
+  local a = db and db.armeAvant
+  if not a then return end
+  if InCombatLockdown() then armeEnAttente = true return end
+  armeEnAttente = false
+  db.armeAvant = nil
+  -- Plus de canne en main : tu as déjà changé d'arme toi-même, on ne touche à rien.
+  if not GetInventoryItemID or not estCanne(GetInventoryItemID("player", 16)) then return end
+  if a.main then equiperObjet(a.main, 16) end
+  if a.autre and C_Timer and C_Timer.After then
+    C_Timer.After(0.6, function() if not InCombatLockdown() then equiperObjet(a.autre, 17) end end)
+  end
+end
+
 -- ----- le mode pêche
 
 local function changerModePeche(actif)
@@ -1122,12 +1173,13 @@ local function changerModePeche(actif)
     -- Addon Tenues (facultatif) : met la tenue Pêche avec le mode pêche.
     if Tenues_ModePeche then pcall(Tenues_ModePeche, true) end
     -- Sans canne équipée, le jeu refuse le lancer sans toujours le dire à l'écran : on le dit nous-mêmes
-    -- (après une seconde et demie, le temps que la tenue Pêche soit mise).
+    -- (après deux secondes et demie, le temps que la tenue Pêche ou la canne des sacs soit mise).
     if C_Timer and C_Timer.After then
-      C_Timer.After(1.5, function()
+      C_Timer.After(0.6, mettreCanne)
+      C_Timer.After(2.5, function()
         if modePeche and ns.canneManque(GetBuildInfo and select(4, GetBuildInfo()) or nil, GetInventoryItemID and GetInventoryItemID("player", 16),
             (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant) then
-          ns.reglages.dire("|cffff4040aucune canne à pêche équipée|r : le jeu refuse de lancer la ligne. Équipe ta canne, ou enregistre une tenue « Pêche » avec /tenue.")
+          ns.reglages.dire("|cffff4040aucune canne à pêche équipée|r : le jeu refuse de lancer la ligne. Il t'en faut une dans tes sacs (un marchand de pêche en vend).")
         end
       end)
     end
@@ -1140,6 +1192,7 @@ local function changerModePeche(actif)
     sonNormal()
     if not InCombatLockdown() then ClearOverrideBindings(lancer) end
     remettreFerrage()
+    remettreArme()
     -- Addon Tenues (facultatif) : remet la tenue d'avant la pêche.
     if Tenues_ModePeche then pcall(Tenues_ModePeche, false) end
     ns.reglages.dire("mode pêche |cffff4040terminé|r, son remis comme avant.")
@@ -1577,6 +1630,8 @@ ns.reglages = ns.creerReglages({
       aide = "En mode pêche : effets sonores à fond, musique et ambiance coupées. Tout revient comme avant à la fin." },
     { cle = "pecheTouche", libelle = "Une seule touche pour pêcher",
       aide = "En mode pêche et hors combat : la touche lance la ligne, puis ferre le bouchon. Elle se choisit dans l'onglet Outils. En combat, ou hors mode pêche, elle reprend son rôle normal. Les réglages du jeu changés pour ferrer sont remis à la fin." },
+    { cle = "pecheCanne", libelle = "Équiper la canne à pêche avec le mode pêche",
+      aide = "En entrant en mode pêche, la canne de tes sacs est équipée ; en sortant, ton arme d'avant revient. Si tu as une tenue « Pêche » dans l'addon Tenues, c'est elle qui sert." },
     { cle = "pecheAppat", libelle = "La touche pose d'abord l'appât", dependDe = "pecheTouche",
       aide = "Si ta canne n'a pas d'appât, un appui pose le meilleur appât de tes sacs que ta compétence permet, puis les appuis suivants lancent la ligne." },
     { cle = "pecheFenetre", libelle = "Fenêtre Pêche avec le mode pêche",
@@ -1719,6 +1774,8 @@ ns.reglages = ns.creerReglages({
     -- réglages du jeu changés pour ferrer.
     sonNormal()
     remettreFerrage()
+    -- Un rechargement canne en main : on remet l'arme d'avant, une fois le personnage en jeu.
+    if C_Timer and C_Timer.After then C_Timer.After(3, function() if not modePeche then remettreArme() end end) end
     placerCourses()
     placerFleche()
     placerPeche()
@@ -1773,6 +1830,7 @@ ecouteur:SetScript("OnEvent", function(_, evenement, a1, a2, a3)
   elseif evenement == "PLAYER_REGEN_ENABLED" then
     -- Tout ce qui attendait la fin du combat.
     if db.ferrageAvant and not modePeche then remettreFerrage() end
+    if (armeEnAttente or db.armeAvant) and not modePeche then remettreArme() end
     if db.sonAvant and not modePeche then sonNormal() end
     majAppat()
     appliquerTouche(true)

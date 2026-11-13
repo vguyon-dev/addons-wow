@@ -739,4 +739,38 @@ do
     "12 piles de composants déposées en banque (Bataillon), 2 liées au personnage laissées, 1 laissée (verrouillée ou déplacée). Arrêt : la banque est pleine.",
     ns.bilanDepot(12, "Bataillon", 2, 1, "la banque est pleine"))
 end
+-- ----- sacs spéciaux : carquois et sacs de métier
+do
+  local CUIR, FLECHES = 33554432, 1
+  verifie("sac spécial : une flèche va dans le carquois", true, ns.vaDansSac(FLECHES, FLECHES))
+  verifie("sac spécial : du cuir ne va pas dans le carquois", false, ns.vaDansSac(CUIR, FLECHES))
+  verifie("sac spécial : un objet sans famille ne va dans aucun", false, ns.vaDansSac(0, CUIR))
+  verifie("sac spécial : tout va dans un sac ordinaire", true, ns.vaDansSac(0, 0))
+  verifie("sac spécial : famille illisible", false, ns.vaDansSac(nil, CUIR))
+  verifie("sac spécial : un objet à deux familles", true, ns.vaDansSac(CUIR + 8, CUIR))
+  -- Le cas vu en jeu le 13/11 : sac à dos plein, carquois avec de la place, sacoche de dépeçage.
+  local sacs = {
+    [0] = { famille = 0, libres = {} },
+    [1] = { famille = FLECHES, libres = { 3, 4 } },
+    [2] = { famille = 0, libres = { 2, 3 } },
+    [3] = { famille = CUIR, libres = { 4 } },
+  }
+  local objets = {
+    { sac = 0, case = 13, id = 2934, nombre = 2, famille = CUIR },
+    { sac = 0, case = 14, id = 2934, nombre = 20, famille = CUIR },
+    { sac = 0, case = 15, id = 2589, nombre = 20, famille = 0 },
+    { sac = 2, case = 1, id = 2515, nombre = 80, famille = FLECHES },
+    { sac = 3, case = 1, id = 2318, nombre = 20, famille = CUIR }, -- déjà dans le sac spécial : on n'y touche pas
+  }
+  local plan = ns.planSacsSpeciaux(objets, sacs)
+  local t = {}
+  for _, m in ipairs(plan) do t[#t + 1] = m.deSac .. ":" .. m.deCase .. ">" .. m.versSac .. ":" .. m.versCase end
+  verifie("sac spécial : flèches au carquois, la plus grosse pile de cuir à la sacoche", "2:1>1:3 0:14>3:4", table.concat(t, " "))
+  verifie("sac spécial : rien à faire sans sac spécial", 0, #ns.planSacsSpeciaux(objets,
+    { [0] = { famille = 0, libres = { 1 } }, [2] = { famille = 0, libres = {} }, [3] = { famille = 0, libres = {} } }))
+  verifie("sac spécial : entrées illisibles", 0, #ns.planSacsSpeciaux(nil, nil))
+  verifie("pied : sans sac spécial", "11 cases libres sur 32", ns.texteCasesLibres(11, 32, {}))
+  verifie("pied : avec un carquois", "11 cases libres sur 32  (+ 6 dans Petit carquois)",
+    ns.texteCasesLibres(11, 32, { { nom = "Petit carquois", libres = 6 }, { nom = "Sacoche", libres = 0 } }))
+end
 os.exit(ok and 0 or 1)
