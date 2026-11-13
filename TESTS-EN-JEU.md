@@ -22,9 +22,11 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [x] Pêche : F lance la ligne (lancer compté, « Ligne à l'eau : appuie sur F au plouf pour ferrer »), F agit ensuite sur le bouchon ; 5 lancers, 1 échappé comptés. Hors mode pêche, F a repris son action d'origine.
 - [x] Pêche : `SoftTargetInteractRange` passe à 30 pendant la pêche et revient à 10 à l'arrêt du mode ; `SoftTargetInteract` et l'arc inchangés (3 et 2 chez toi).
 - [x] Pêche : sans canne équipée, message rouge « aucune canne à pêche équipée ».
-- [ ] Pêche : une vraie prise (l'outil n'entend pas le plouf : à faire avec ton oreille), ramassage direct, icônes des prises, valeur ; appât posé une seule fois ; F retiré au début d'un combat ; réglages remis après un combat et après un `/reload` en pêchant ; fenêtre déplacée qui garde sa place.
+- [x] Pêche : une vraie prise (en répétant les lancers : 6 lancers, 1 prise, 1 échappé) : ramassage direct, prise comptée une seule fois, compétence 26 puis 27, valeur de revente 2 pc, icône de la prise avec sa bulle (« Poisson-chat moustachu cru »).
+- [x] Pêche : `/reload` ligne à l'eau : `SoftTargetInteractRange` revenu à 10, F rendu à son rôle, rien de gardé dans la base.
+- [ ] Pêche : appât posé une seule fois (pas d'appât dans les sacs) ; F retiré au début d'un combat et réglages remis après (aucun monstre à portée) ; fenêtre déplacée qui garde sa place. Les compteurs repartent de zéro après un `/reload` : à garder ou non ?
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
-- [ ] À voir : un « 0 % » s'affiche sous l'icône du bouchon pendant la pêche (sans doute Barres de vie sur le bouchon).
+- [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).
 
 ## Vérifié en jeu le 12/11/2026 (Forever, druide niveau 3, essais pilotés par Claude)
 

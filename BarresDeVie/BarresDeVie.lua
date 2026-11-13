@@ -183,6 +183,11 @@ end
 
 local function majPourcent(unite, a)
   if not db.pourcent then a.pourcent:Hide() return end
+  -- Une chose sans vie (le bouchon de pêche, un objet visé) : pas de « 0 % » (vu en jeu le 13/11).
+  local sansVie = UnitHealthMax(unite)
+  if sur(sansVie) and sansVie <= 0 then a.pourcent:Hide() return end
+  local guid = UnitGUID and UnitGUID(unite)
+  if sur(guid) and type(guid) == "string" and guid:sub(1, 10) == "GameObject" then a.pourcent:Hide() return end
   -- Retail récent : UnitHealthPercent rend un pourcentage affichable même caché.
   if UnitHealthPercent and CurveConstants and CurveConstants.ScaleTo100 then
     local ok = pcall(function()
