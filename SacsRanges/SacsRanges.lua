@@ -15,6 +15,7 @@ local DEFAUTS = {
   rangerMarchand = false,  -- ranger tout seul en refermant un marchand
   rangerBanque = true,     -- ranger aussi la banque quand elle est ouverte
   sacsSpeciaux = true,     -- en rangeant : remplir d'abord le carquois et les sacs de métier avec ce qui y va
+  sacsSpeciauxAuto = true, -- et aussi tout seul, dès qu'un objet qui y va arrive dans un sac ordinaire
   ecart = 0,               -- « moins bon » = au moins ce nombre de niveaux en dessous
   boutonsSac = true,       -- la barre de boutons sur le sac à dos
   vueCategories = false,   -- remplace les sacs du jeu par un sac rangé en sections
@@ -400,6 +401,7 @@ local banqueOuverte = false
 
 -- Remplit d'abord les sacs spéciaux : un objet à la fois, toutes les 0,3 s, jamais en combat.
 local deplacements
+local refuses = {} -- [numéro d'objet] = vrai : le jeu a refusé de le mettre dans un sac spécial, on n'insiste pas
 local function remplirSpeciaux()
   if not db or not db.actif or not db.sacsSpeciaux or deplacements or InCombatLockdown() then return end
   local C = C_Container
@@ -415,7 +417,7 @@ local function remplirSpeciaux()
       local info = C.GetContainerItemInfo(sac, case)
       if not info then
         s.libres[#s.libres + 1] = case
-      elseif s.famille == 0 and info.itemID and not info.isLocked then
+      elseif s.famille == 0 and info.itemID and not info.isLocked and not refuses[info.itemID] then
         -- Un sac ou un carquois rangé dans un sac a lui aussi une « famille » : celle de ce qu'il contient.
         local classe = instant and select(6, instant(info.itemID))
         local famille = (classe == 1 or classe == 11) and 0 or familleDe(info.itemID)
@@ -424,6 +426,8 @@ local function remplirSpeciaux()
       end
     end
   end
+  local idCase = {}
+  for _, o in ipairs(objets) do idCase[o.sac .. ":" .. o.case] = o.id end
   local plan = ns.planSacsSpeciaux(objets, sacs)
   if #plan == 0 then return end
   deplacements = plan
@@ -442,6 +446,8 @@ local function remplirSpeciaux()
     C.PickupContainerItem(m.versSac, m.versCase)
     if GetCursorInfo and GetCursorInfo() then
       if ClearCursor then ClearCursor() end -- refusé par le jeu : on repose l'objet
+      local id = idCase[m.deSac .. ":" .. m.deCase]
+      if id then refuses[id] = true end
     else
       faits = faits + 1
     end
@@ -636,6 +642,8 @@ ns.reglages = ns.creerReglages({
       aide = "Le bouton « Ranger » trie alors tes sacs puis la banque." },
     { cle = "sacsSpeciaux", libelle = "Remplir d'abord le carquois et les sacs de métier",
       aide = "En rangeant, ce qui a le droit d'aller dans un sac spécial (flèches et balles dans le carquois, cuir, herbes, minerai… dans un sac de métier) y est déplacé, pour libérer des cases dans tes sacs ordinaires." },
+    { cle = "sacsSpeciauxAuto", libelle = "Le faire tout seul, sans cliquer sur Ranger", dependDe = "sacsSpeciaux",
+      aide = "Dès qu'un objet qui va dans un sac spécial arrive dans un sac ordinaire (butin, achat, courrier), il y est déplacé, hors combat. Décoche si tu veux garder des flèches ou du cuir ailleurs." },
     { cle = "rangerMarchand", libelle = "Ranger tout seul en refermant un marchand",
       aide = "Après la vente des gris par Marchand auto, par exemple." },
     { titre = "Analyse des sacs" },
@@ -676,7 +684,20 @@ ns.reglages = ns.creerReglages({
 -- ---------------------------------------------------------------------------
 
 local ecouteur = CreateFrame("Frame")
-for _, e in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "MERCHANT_CLOSED", "BAG_UPDATE_DELAYED" }) do
+-- Rangement automatique vers les sacs spéciaux : une seule passe, une seconde et demie après le dernier
+-- changement des sacs (un butin, un achat), jamais en combat ni avec un objet au bout du curseur.
+local speciauxPrevu = false
+function ns.prevoirSpeciaux()
+  if speciauxPrevu or not db or not db.actif or not db.sacsSpeciaux or not db.sacsSpeciauxAuto then return end
+  if not (C_Timer and C_Timer.After) then return end
+  speciauxPrevu = true
+  C_Timer.After(1.5, function()
+    speciauxPrevu = false
+    if not InCombatLockdown() and not (GetCursorInfo and GetCursorInfo()) then ns.remplirSpeciaux() end
+  end)
+end
+
+for _, e in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "MERCHANT_CLOSED", "BAG_UPDATE_DELAYED", "PLAYER_REGEN_ENABLED" }) do
   ecouteur:RegisterEvent(e)
 end
 local dernierRangement = 0
@@ -690,8 +711,11 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
       dernierRangement = GetTime()
       C_Timer.After(0.5, ranger)
     end
+  elseif evenement == "PLAYER_REGEN_ENABLED" then
+    ns.prevoirSpeciaux()
   else
     rafraichir()
+    ns.prevoirSpeciaux()
   end
 end)
 

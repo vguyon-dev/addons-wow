@@ -27,6 +27,7 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [ ] Pêche : appât posé une seule fois (pas d'appât dans les sacs) ; F retiré au début d'un combat et réglages remis après (aucun monstre à portée) ; fenêtre déplacée qui garde sa place. Les compteurs repartent de zéro après un `/reload` : à garder ou non ?
 - [x] Métiers auto 0.11.0 (banc d'essai) : `/metiers peche` équipe la canne des sacs (main 248007 puis 6256, message « canne à pêche équipée »), la sortie du mode remet l'arme d'avant, rien ne reste dans la base.
 - [x] Sacs rangés 0.15.0 (banc d'essai) : une pile de flèches sortie du carquois vers un sac ordinaire y retourne avec `/sr ranger` ; vue par catégories : « Cases libres 11 », une case « Petit carquois 6 », pied « 11 cases libres sur 32 (+ 6 dans Petit carquois) » (avant : 17 libres, et la case de dépôt tombait dans le carquois).
+- [x] Sacs rangés 0.16.0 (banc d'essai) : rangement automatique, une pile de flèches posée dans un sac ordinaire retourne au carquois en moins d'une seconde, message « 1 pile rangée dans tes sacs spéciaux ».
 - [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; un sac de métier avec de la place (la sacoche de dépeçage était pleine) ; banque avec un sac spécial.
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
 - [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).

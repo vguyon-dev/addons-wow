@@ -202,7 +202,7 @@ ns.NOUVEAUTES = {
     "Une fenêtre Pêche s'ouvre avec le mode pêche : compétence, appât et temps restant, lancers, prises, échappés, prises par heure, valeur de revente et liste des prises.",
     "Les prises peuvent aller droit dans tes sacs. Le rachat d'appâts chez un marchand existe aussi, mais il est coupé au départ car il dépense ton or (/metiers appats 5, 10 ou 20).",
     "Confort : sur Forever, les objets de quête à ramasser gardent leur scintillement, même après un changement de qualité graphique (onglet Écran).",
-    "Sacs rangés : le carquois et les sacs de métier sont enfin compris. Leurs cases vides ne sont plus comptées comme des cases libres, chacun a sa propre case où déposer ce qui y va, et le bouton Ranger y remet d'abord les flèches, le cuir, les herbes…",
+    "Sacs rangés : le carquois et les sacs de métier sont enfin compris. Leurs cases vides ne sont plus comptées comme des cases libres, chacun a sa propre case où déposer ce qui y va, et les flèches, le cuir ou les herbes qui traînent dans un sac ordinaire y sont rangés tout seuls (et par le bouton Ranger).",
     "Métiers auto : le mode pêche équipe tout seul la canne de tes sacs et remet ton arme à la fin. Sans canne, il te le dit.",
     "Les commandes changent : /metiers pour Métiers auto et /marchand pour Marchand auto. Le jeu gardait /mt et /ma pour lui (tank et assistant du groupe), elles ne marchaient donc pas.",
   } },
