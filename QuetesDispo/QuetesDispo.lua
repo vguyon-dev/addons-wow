@@ -20,6 +20,11 @@
 --     retient où elles se prennent, et les partage avec le groupe (préfixe d'addon « QuetesDispo ») ;
 --   - de petits « ! » sur la minimap pour les quêtes à prendre à moins d'une portée de minimap.
 --
+-- Et pour les quêtes déjà dans ton journal (idées vues dans l'addon Questie, code à nous) :
+--   - une petite icône là où se fait chaque objectif pas encore fini (survol : la quête et « 3/8 ... ») ;
+--   - un « ? » jaune (carte et minimap) là où rendre une quête finie ; en option, un « ? » gris pour les autres ;
+--   - dans la bulle d'un monstre, les quêtes du journal qui en ont besoin, avec la progression.
+--
 --   /qd : les réglages     /qd etat : ce que l'addon voit sur la carte     /qd aide
 --
 -- Le fichier a deux parties : la logique pure (testée hors jeu, tests/QuetesDispo_simu.lua),
@@ -48,6 +53,11 @@ local DEFAUTS = {
   surMinimap = true,     -- montrer les « ! » des quêtes proches sur la minimap
   apprendre = true,      -- retenir les quêtes que les PNJ proposent et que la base ne connaît pas
   partager = true,       -- envoyer ces quêtes au groupe et recevoir celles du groupe
+  objectifsCarte = true, -- les icônes des objectifs des quêtes du journal sur la carte d'une zone
+  rendre = true,         -- le « ? » jaune là où rendre une quête finie (carte et minimap)
+  rendreGris = false,    -- un « ? » gris là où rendre une quête pas encore finie
+  bulleMonstres = true,  -- les quêtes du journal dans la bulle des monstres
+  nomsPnj = {},          -- [numéro du PNJ, ou -numéro d'un objet] = nom en français, appris en lui parlant
   appris = {},           -- [ numéro de quête ] = { titre, niveau, monde = { continent, x, y }, carte, pnj, date, source }
   ignorees = {},         -- [ "Nom-Royaume" ] = { [numéro de quête] = true } : cachées à la main, par personnage
 }
@@ -537,6 +547,259 @@ function ns.placementMinimap(dxMonde, dyMonde, rayon, demiLargeur, rotation, mar
   local m = tonumber(marge) or 0
   if px * px + py * py > (demiLargeur - m) * (demiLargeur - m) then return nil end
   return px, py
+end
+
+-- ---------------------------------------------------------------------------
+-- Les quêtes du journal : objectifs sur la carte, « ? » où rendre, lignes dans la bulle des monstres.
+-- L'idée vient de l'addon Questie (GPL-3.0, voir LICENCE.md) ; le code ci-dessous est le nôtre.
+-- Les données (ns.OBJECTIFS, ns.FINS, ns.NOMS_FINS) sont dans Donnees.lua. Le titre et le texte des
+-- objectifs viennent du journal du jeu (en français) ; la base, en anglais, ne donne que les positions.
+-- ---------------------------------------------------------------------------
+
+-- Genres d'objectif dans ns.OBJECTIFS : 1 monstre à tuer, 2 objet à ramasser, 3 objet du décor à utiliser.
+ns.OBJ_TUER, ns.OBJ_OBJET, ns.OBJ_DECOR = 1, 2, 3
+
+-- Les types d'objectif du journal (champ « type » de C_QuestLog.GetQuestObjectives) qui vont avec chaque genre.
+local TYPES_JOURNAL = {
+  [1] = { monster = true },
+  [2] = { item = true },
+  [3] = { object = true },
+}
+
+-- Le nom d'un objectif, sans son compte : « Foie de Goretusk : 3/8 » ou « 3/8 Foie de Goretusk » -> « Foie de Goretusk ».
+function ns.nomObjectif(texte)
+  if type(texte) ~= "string" then return "" end
+  local nom = texte:gsub("%d+%s*/%s*%d+", "", 1)
+  nom = nom:gsub("^[%s%-:]+", ""):gsub("[%s:]+$", "")
+  return nom
+end
+
+-- La clé d'un objet (nom en minuscules, sans compte) : la même que celle des butins appris par BarresDeVie.
+function ns.cleObjet(texte)
+  local nom = ns.nomObjectif(texte)
+  if nom == "" then return nil end
+  return nom:lower()
+end
+
+-- Le texte d'un objectif avec sa progression devant : « 3/8 Foie de Goretusk ».
+-- fait et total viennent du jeu ; à défaut, du texte lui-même.
+function ns.texteObjectif(texte, fait, total)
+  local t = type(texte) == "string" and texte or ""
+  local a, b = t:match("(%d+)%s*/%s*(%d+)")
+  fait, total = tonumber(fait) or tonumber(a), tonumber(total) or tonumber(b)
+  local nom = ns.nomObjectif(t)
+  if fait and total and total > 0 then
+    if nom == "" then return fait .. "/" .. total end
+    return fait .. "/" .. total .. " " .. nom
+  end
+  if nom ~= "" then return nom end
+  return nil
+end
+
+-- Associe les objectifs de la base à ceux du journal. base : { { genre, besoin, ... } } ; journal :
+-- { { type, total, ... } }. Rend { [index dans la base] = index dans le journal }. On ne se fie pas à la
+-- position seule (le jeu ne range pas forcément les objectifs comme la base) : d'abord même genre et même
+-- nombre demandé, dans l'ordre ; puis le premier libre du même genre.
+function ns.associerObjectifs(base, journal)
+  local resultat, pris = {}, {}
+  for passe = 1, 2 do
+    for i, o in ipairs(type(base) == "table" and base or {}) do
+      if not resultat[i] then
+        local types = TYPES_JOURNAL[o[1]] or {}
+        for j, jo in ipairs(type(journal) == "table" and journal or {}) do
+          if not pris[j] and types[jo.type] and (passe == 2 or tonumber(jo.total) == o[2]) then
+            resultat[i], pris[j] = j, true
+            break
+          end
+        end
+      end
+    end
+  end
+  return resultat
+end
+
+-- Une quête du journal est-elle finie (prête à rendre) ?
+--   etatJeu : ce que dit le jeu (C_QuestLog.IsComplete, celui que suit le journal du jeu) : vrai ou 1, faux ou 0,
+--             -1 (échouée), ou nil quand le jeu ne le dit pas ;
+--   objectifs : { { fini } } ; lus : vrai si le jeu a bien donné la liste des objectifs.
+-- Le jeu décide quand il répond. Sinon : tous les objectifs faits, et une quête sans aucun objectif (porter une
+-- lettre, parler à quelqu'un) est à rendre tout de suite.
+function ns.queteFinie(etatJeu, objectifs, lus)
+  if etatJeu == true or etatJeu == 1 then return true end
+  if etatJeu == false or etatJeu == 0 or etatJeu == -1 then return false end
+  if not lus or type(objectifs) ~= "table" then return false end
+  -- Liste vide : une quête sans objectif (lettre à porter) est à rendre. Ce repli ne sert que si le jeu ne dit rien.
+  for _, o in ipairs(objectifs) do
+    if not o.fini then return false end
+  end
+  return true
+end
+
+-- Les objectifs d'une quête du journal qu'il reste à faire, avec ce que la base en sait :
+-- { { i, genre, texte, positions, monstres } }. q : { complete, objectifs, lus } ; base : ns.OBJECTIFS[numéro].
+-- Un objectif fini n'y est pas. Un objectif que le journal ne nomme pas n'y est que si le jeu n'a rien dit
+-- des objectifs (on ne montre pas un objectif dont on ne sait pas s'il est fait).
+function ns.objectifsAFaire(q, base)
+  local sortie = {}
+  if type(q) ~= "table" or type(base) ~= "table" or q.complete then return sortie end
+  local journal = type(q.objectifs) == "table" and q.objectifs or {}
+  local assoc = ns.associerObjectifs(base, journal)
+  for i, o in ipairs(base) do
+    local jo = assoc[i] and journal[assoc[i]]
+    local montrer, texte, brut = false, nil, nil
+    if jo then
+      montrer, texte, brut = not jo.fini, ns.texteObjectif(jo.texte, jo.fait, jo.total), jo.texte
+    elseif #journal == 0 and not q.lus then
+      montrer = true
+    end
+    if montrer then
+      sortie[#sortie + 1] = {
+        i = i, genre = o[1], texte = texte, brut = brut,
+        positions = type(o[3]) == "table" and o[3] or {}, monstres = type(o[4]) == "table" and o[4] or {},
+      }
+    end
+  end
+  return sortie
+end
+
+-- Les monstres utiles aux quêtes du journal : { [numéro de créature] = { { q, i } } }, dans l'ordre du journal.
+function ns.indexMonstres(liste, objectifs)
+  local index = {}
+  for _, q in ipairs(type(liste) == "table" and liste or {}) do
+    local base = type(objectifs) == "table" and objectifs[q.id]
+    for i, o in ipairs(type(base) == "table" and base or {}) do
+      for _, m in ipairs(type(o[4]) == "table" and o[4] or {}) do
+        index[m] = index[m] or {}
+        index[m][#index[m] + 1] = { q = q, i = i }
+      end
+    end
+  end
+  return index
+end
+
+-- Le numéro de créature d'un identifiant du jeu (« Creature-0-1-2-3-157-0000ABCD » -> 157). nil pour un joueur.
+function ns.creatureDuGuid(guid)
+  if type(guid) ~= "string" then return nil end
+  local genre, id = guid:match("^(%a+)%-[^%-]*%-[^%-]*%-[^%-]*%-[^%-]*%-(%d+)")
+  if genre ~= "Creature" and genre ~= "Vehicle" then return nil end
+  return tonumber(id)
+end
+
+-- Les lignes à ajouter dans la bulle d'un monstre : { { titre, r, v, b, lignes = { « 3/8 Foie de Goretusk » } } }.
+--   creature : son numéro ; liste : les quêtes du journal ; objectifs : ns.OBJECTIFS ; index : ns.indexMonstres ;
+--   butins : { [clé d'objet] = true } que ce genre de monstre a déjà donnés (appris par BarresDeVie), ou nil ;
+--   deja : ce que la bulle montre déjà, { ids = { [quête] = true }, textes = { [texte en minuscules] = true } } :
+--          une quête dont le jeu écrit déjà le titre n'est pas répétée, ni un objectif déjà écrit ;
+--   niveauJoueur, plageVerte : pour la couleur du titre.
+function ns.lignesBulleMonstre(creature, liste, objectifs, index, butins, deja, niveauJoueur, plageVerte)
+  deja = type(deja) == "table" and deja or {}
+  local ids, textes = deja.ids or {}, deja.textes or {}
+  local blocs, parQuete = {}, {}
+  local function connu(t) return type(t) == "string" and textes[t:lower()] end
+  local function ajouter(q, texte, brut)
+    if ids[q.id] or connu(q.titre) or connu(texte) or connu(brut) then return end
+    local b = parQuete[q.id]
+    if not b then
+      local r, v, bl = ns.couleurDifficulte(q.niveau, niveauJoueur, plageVerte)
+      b = { id = q.id, titre = ns.titreAffiche(q.niveau, q.titre or ("Quête " .. tostring(q.id))), r = r, v = v, b = bl,
+        lignes = {}, vues = {} }
+      parQuete[q.id] = b
+      blocs[#blocs + 1] = b
+    end
+    if texte and not b.vues[texte] then
+      b.vues[texte] = true
+      b.lignes[#b.lignes + 1] = texte
+    end
+  end
+  for _, e in ipairs(type(index) == "table" and index[creature] or {}) do
+    for _, o in ipairs(ns.objectifsAFaire(e.q, type(objectifs) == "table" and objectifs[e.q.id])) do
+      if o.i == e.i then ajouter(e.q, o.texte, o.brut) end
+    end
+  end
+  -- Les objets que ce genre de monstre a déjà donnés en jeu (même quand la base ne le sait pas).
+  if type(butins) == "table" then
+    for _, q in ipairs(type(liste) == "table" and liste or {}) do
+      if not q.complete then
+        for _, jo in ipairs(type(q.objectifs) == "table" and q.objectifs or {}) do
+          local cle = jo.type == "item" and not jo.fini and ns.cleObjet(jo.texte)
+          if cle and butins[cle] then ajouter(q, ns.texteObjectif(jo.texte, jo.fait, jo.total), jo.texte) end
+        end
+      end
+    end
+  end
+  for _, b in ipairs(blocs) do b.vues = nil end
+  return blocs
+end
+
+-- Les quêtes du journal qui ont un « ? » : finies (jaune), et pas finies si l'option « gris » est cochée.
+-- Rend { { q, gris } } dans l'ordre du journal.
+function ns.quetesARendre(liste, jaune, gris)
+  local sortie = {}
+  for _, q in ipairs(type(liste) == "table" and liste or {}) do
+    if q.complete then
+      if jaune then sortie[#sortie + 1] = { q = q, gris = false } end
+    elseif gris and not q.echouee then
+      sortie[#sortie + 1] = { q = q, gris = true }
+    end
+  end
+  return sortie
+end
+
+-- L'index des endroits où rendre : { [numéro de quête] = { indices dans fins } }, construit une fois par table.
+local indexFinsCache, indexFinsSource
+function ns.indexFins(fins)
+  if indexFinsCache and indexFinsSource == fins then return indexFinsCache end
+  local index = {}
+  for k, f in ipairs(type(fins) == "table" and fins or {}) do
+    for _, n in ipairs(type(f) == "table" and type(f[6]) == "table" and f[6] or {}) do
+      index[n] = index[n] or {}
+      index[n][#index[n] + 1] = k
+    end
+  end
+  indexFinsCache, indexFinsSource = index, fins
+  return index
+end
+
+-- La clé du nom de celui qui reprend une quête : le numéro du PNJ, ou moins le numéro d'un objet du décor.
+function ns.cleFin(genre, id)
+  if type(id) ~= "number" then return nil end
+  return genre == 2 and -id or id
+end
+
+-- Le nom à montrer : celui appris en jeu (français) d'abord, sinon l'anglais des données, sinon rien.
+function ns.nomFin(genre, id, appris, noms)
+  local cle = ns.cleFin(genre, id)
+  if not cle then return nil end
+  local n = type(appris) == "table" and appris[cle]
+  if type(n) == "string" and n ~= "" then return n end
+  n = type(noms) == "table" and noms[cle]
+  if type(n) == "string" and n ~= "" then return n end
+  return nil
+end
+
+-- Pourquoi aucune icône d'objectif sur la carte (pour /qd etat). nil s'il y en a.
+-- c : option, carteZone, journalLu, nbJournal, nbDansBase, nbAFaire, nbAvecPositions, surCarte.
+function ns.raisonObjectifs(c)
+  if not c.option then return "option coupée" end
+  if not c.carteZone then return "seulement sur la carte d'une zone" end
+  if not c.journalLu then return "le jeu ne donne pas le journal de quêtes" end
+  if (c.nbJournal or 0) == 0 then return "journal vide" end
+  if (c.nbDansBase or 0) == 0 then return "aucune quête du journal n'est dans la base" end
+  if (c.nbAFaire or 0) == 0 then return "objectifs déjà faits" end
+  if (c.nbAvecPositions or 0) == 0 then return "la base ne dit pas où se font ces objectifs" end
+  if (c.surCarte or 0) == 0 then return "rien sur cette carte" end
+  return nil
+end
+
+-- Pourquoi aucun « ? » sur la carte. c : option, gris, journalLu, nbJournal, nbAMontrer, nbAvecFin, surCarte.
+function ns.raisonRendre(c)
+  if not c.option then return "option coupée" end
+  if not c.journalLu then return "le jeu ne donne pas le journal de quêtes" end
+  if (c.nbJournal or 0) == 0 then return "journal vide" end
+  if (c.nbAMontrer or 0) == 0 then return c.gris and "aucune quête dans le journal à montrer" or "aucune quête finie dans le journal" end
+  if (c.nbAvecFin or 0) == 0 then return "la base ne dit pas où rendre ces quêtes" end
+  if (c.surCarte or 0) == 0 then return "rien sur cette carte" end
+  return nil
 end
 
 if not CreateFrame then return end -- hors jeu : la suite ne sert qu'en jeu
@@ -1032,7 +1295,7 @@ local function prendreEpingle(i, toile)
   return p
 end
 
-local function cacherTout()
+local function cacherExclamations()
   for _, p in ipairs(epingles) do p:Hide() end
   carteDessinee = nil
 end
@@ -1059,6 +1322,421 @@ local function dessiner(liste, carte, toile)
   carteDessinee = carte
 end
 
+-- ---------------------------------------------------------------------------
+-- Les quêtes du journal : leurs objectifs et l'endroit où les rendre, sur la carte du monde
+-- ---------------------------------------------------------------------------
+
+local ICONE_RENDRE = "Interface\\GossipFrame\\ActiveQuestIcon" -- le « ? » jaune des quêtes à rendre
+-- Les icônes des objectifs, par genre : un crâne (tuer), un sac (ramasser), une main (utiliser un objet du décor).
+local ICONES_OBJECTIF = {
+  [1] = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
+  [2] = "Interface\\GossipFrame\\VendorGossipIcon",
+  [3] = "Interface\\Cursor\\Interact",
+}
+local JOURNAL_MAX = 60 -- lignes du journal lues au plus (en-têtes compris : 25 quêtes au plus dans le jeu)
+
+local journalCache        -- le journal lu (nil : à relire)
+local dernierEtatJournal  -- ce que la dernière passe a montré : objectifs, rendre, et pourquoi zéro
+local cacheJournalCarte = {} -- [carte] = { ori, continents, points = { [clé] = { { x, y } } } }
+
+local function oublierJournal()
+  journalCache = nil
+end
+
+-- Le journal du jeu : { lu, liste = { { id, titre, niveau, complete, echouee, objectifs, lus } }, parId, index }.
+-- lu est faux si le jeu ne donne pas le journal (alors rien n'est montré).
+local function lireJournal()
+  if journalCache then return journalCache end
+  local j = { lu = false, liste = {}, parId = {} }
+  journalCache = j
+  local ql = C_QuestLog
+  if type(ql) ~= "table" or type(ql.GetNumQuestLogEntries) ~= "function" or type(ql.GetInfo) ~= "function" then return j end
+  local n = lisible(sur(ql.GetNumQuestLogEntries))
+  if type(n) ~= "number" then return j end
+  j.lu = true
+  for i = 1, math.min(n, JOURNAL_MAX) do
+    local info = sur(ql.GetInfo, i)
+    if type(info) == "table" and not lisible(info.isHeader) then
+      local id = lisible(info.questID)
+      if type(id) == "number" and id > 0 and not j.parId[id] then
+        local brut = type(ql.GetQuestObjectives) == "function" and sur(ql.GetQuestObjectives, id) or nil
+        local objectifs = {}
+        for _, o in ipairs(type(brut) == "table" and brut or {}) do
+          if type(o) == "table" then
+            local texte = lisible(o.text)
+            objectifs[#objectifs + 1] = {
+              texte = type(texte) == "string" and texte or nil, type = lisible(o.type), fini = lisible(o.finished) == true,
+              fait = tonumber((lisible(o.numFulfilled))), total = tonumber((lisible(o.numRequired))),
+            }
+          end
+        end
+        local etat
+        if type(ql.IsComplete) == "function" then etat = lisible(sur(ql.IsComplete, id)) end
+        if etat == nil then etat = lisible(info.isComplete) end
+        local titre = lisible(info.title)
+        if type(titre) ~= "string" or titre == "" then titre = lisible(sur(ql.GetTitleForQuestID, id)) end
+        local f = ns.fiche(id)
+        local niveau = tonumber((lisible(info.level)))
+        if not niveau or niveau <= 0 then niveau = f and f.niveau or nil end
+        local q = {
+          id = id, titre = type(titre) == "string" and titre ~= "" and titre or (f and f.titre) or nil, niveau = niveau,
+          objectifs = objectifs, lus = type(brut) == "table",
+          echouee = etat == -1 or lisible(info.isFailed) == true
+            or (type(ql.IsFailed) == "function" and lisible(sur(ql.IsFailed, id)) == true),
+        }
+        q.complete = not q.echouee and ns.queteFinie(etat, objectifs, q.lus)
+        j.liste[#j.liste + 1] = q
+        j.parId[id] = q
+      end
+    end
+  end
+  return j
+end
+
+-- Les positions (liste plate « continent, x, y, ... » de la base) qui tombent sur la carte, gardées par carte.
+local function pointsSurCarte(carte, cle, plat)
+  local ori = laOrientation()
+  local c = cacheJournalCarte[carte]
+  if not c or c.ori ~= ori then
+    c = { ori = ori, continents = continentsDe(carte), points = {} }
+    cacheJournalCarte[carte] = c
+  end
+  local p = c.points[cle]
+  if p then return p end
+  p = {}
+  local transformer = ns.TRANSFORMATIONS[ori]
+  for k = 1, #plat - 2, 3 do
+    local cont, a, b = plat[k], plat[k + 1], plat[k + 2]
+    if c.continents[cont] and type(a) == "number" and type(b) == "number" then
+      local ga, gb = transformer(a, b)
+      local x, y = convertirBrut(cont, ga, gb, carte)
+      if x and x >= 0 and x <= 1 and y >= 0 and y <= 1 then p[#p + 1] = { x = x, y = y } end
+    end
+  end
+  c.points[cle] = p
+  return p
+end
+
+local function nomsAppris()
+  if db and type(db.nomsPnj) ~= "table" then db.nomsPnj = {} end
+  return db and db.nomsPnj
+end
+
+-- Ce qu'il faut poser sur la carte pour les quêtes du journal : { { x, y, quetes = { éléments }, sorte, grise } }
+-- (sorte « objectif » ou « rendre ») et l'état pour /qd etat.
+local function calculerJournalCarte(carte, genre)
+  local j = lireJournal()
+  local liste = {}
+  -- Les objectifs (seulement sur la carte d'une zone : sur un continent, il y en aurait partout).
+  local cObj = { option = db.objectifsCarte, carteZone = genre == "zone", journalLu = j.lu, nbJournal = #j.liste,
+    nbDansBase = 0, nbAFaire = 0, nbAvecPositions = 0, surCarte = 0 }
+  if db.objectifsCarte and genre == "zone" and j.lu then
+    local bruts = {}
+    for _, q in ipairs(j.liste) do
+      local base = type(ns.OBJECTIFS) == "table" and ns.OBJECTIFS[q.id]
+      if type(base) == "table" then
+        cObj.nbDansBase = cObj.nbDansBase + 1
+        for _, o in ipairs(ns.objectifsAFaire(q, base)) do
+          cObj.nbAFaire = cObj.nbAFaire + 1
+          if #o.positions >= 3 then
+            cObj.nbAvecPositions = cObj.nbAvecPositions + 1
+            local element = { q = q, i = o.i, genre = o.genre, texte = o.texte }
+            for _, p in ipairs(pointsSurCarte(carte, "o" .. q.id .. ":" .. o.i, o.positions)) do
+              bruts[#bruts + 1] = { x = p.x, y = p.y, quetes = { element } }
+            end
+          end
+        end
+      end
+    end
+    for _, e in ipairs(ns.regrouper(bruts, 0.015)) do
+      e.sorte = "objectif"
+      liste[#liste + 1] = e
+    end
+    cObj.surCarte = #liste
+  end
+  -- Les « ? » : où rendre les quêtes finies (et les autres en gris, si l'option est cochée).
+  local cFin = { option = db.rendre, gris = db.rendreGris, journalLu = j.lu, nbJournal = #j.liste, nbAMontrer = 0,
+    nbAvecFin = 0, surCarte = 0 }
+  local nbRendre, nbGris = 0, 0
+  if db.rendre and j.lu then
+    local index = ns.indexFins(ns.FINS)
+    local bruts = {}
+    local aMontrer = ns.quetesARendre(j.liste, true, db.rendreGris)
+    cFin.nbAMontrer = #aMontrer
+    for _, r in ipairs(aMontrer) do
+      local indices = index[r.q.id]
+      if indices then
+        cFin.nbAvecFin = cFin.nbAvecFin + 1
+        for _, k in ipairs(indices) do
+          local f = ns.FINS[k]
+          local element = { q = r.q, gris = r.gris, pnj = ns.nomFin(f[4], f[5], nomsAppris(), ns.NOMS_FINS) }
+          for _, p in ipairs(pointsSurCarte(carte, "f" .. k, { f[1], f[2], f[3] })) do
+            bruts[#bruts + 1] = { x = p.x, y = p.y, quetes = { element } }
+          end
+        end
+      end
+    end
+    for _, e in ipairs(ns.regrouper(bruts, genre == "continent" and 0.015 or 0.005)) do
+      e.sorte = "rendre"
+      e.grise = true
+      for _, el in ipairs(e.quetes) do if not el.gris then e.grise = false end end
+      if e.grise then nbGris = nbGris + 1 else nbRendre = nbRendre + 1 end
+      liste[#liste + 1] = e
+    end
+    cFin.surCarte = nbRendre + nbGris
+  end
+  local etat = {
+    carte = carte, objectifs = cObj.surCarte, rendre = nbRendre, gris = nbGris, journal = #j.liste, journalLu = j.lu,
+    raisonObjectifs = ns.raisonObjectifs(cObj), raisonRendre = ns.raisonRendre(cFin),
+  }
+  return liste, etat
+end
+
+local iconesJournal = {} -- la réserve des icônes du journal sur la carte (objectifs et « ? »)
+local carteJournal       -- la carte où elles sont posées
+local survolJournal
+
+local function niveauJoueur() return tonumber((sur(UnitLevel, "player"))) end
+
+-- La bulle d'une icône d'objectif : chaque quête, puis ses objectifs avec leur progression.
+local function remplirBulleObjectifs(elements, avecClics)
+  local parQuete, ordre = {}, {}
+  for _, e in ipairs(elements) do
+    local b = parQuete[e.q.id]
+    if not b then b = { q = e.q, textes = {} }; parQuete[e.q.id] = b; ordre[#ordre + 1] = b end
+    if e.texte then b.textes[#b.textes + 1] = e.texte end
+  end
+  local nj = niveauJoueur()
+  for i, b in ipairs(ordre) do
+    if i > MAX_LIGNES then
+      GameTooltip:AddLine("… et " .. (#ordre - MAX_LIGNES) .. " autres", 0.6, 0.6, 0.6)
+      break
+    end
+    local r, v, bl = ns.couleurDifficulte(b.q.niveau, nj, plageVerte())
+    GameTooltip:AddLine(ns.titreAffiche(b.q.niveau, b.q.titre or ("Quête " .. b.q.id)), r, v, bl)
+    if #b.textes == 0 then GameTooltip:AddLine("   Objectif de la quête", 0.85, 0.85, 0.85) end
+    for _, t in ipairs(b.textes) do GameTooltip:AddLine("   " .. t, 1, 1, 1) end
+  end
+  if avecClics then GameTooltip:AddLine("Clic gauche : balise", 0.6, 0.6, 0.6) end
+  GameTooltip:Show()
+end
+
+-- La bulle d'un « ? » : celui qui reprend la quête (si on le connaît), puis « [niveau] Titre » et « (À rendre) ».
+local function remplirBulleRendre(elements, avecClics)
+  local nom, memeNom = elements[1] and elements[1].pnj, true
+  for _, e in ipairs(elements) do
+    if e.pnj ~= nom then memeNom = false end
+  end
+  if nom and memeNom then GameTooltip:AddLine(nom, 1, 0.82, 0)
+  else GameTooltip:AddLine(#elements > 1 and "Quêtes à rendre" or "Quête à rendre", 1, 0.82, 0) end
+  local nj, vus, nb = niveauJoueur(), {}, 0
+  for _, e in ipairs(elements) do
+    if not vus[e.q.id] then
+      vus[e.q.id] = true
+      nb = nb + 1
+      if nb > MAX_LIGNES then break end
+      local r, v, bl = ns.couleurDifficulte(e.q.niveau, nj, plageVerte())
+      local droite = e.gris and "(En cours)" or "(À rendre)"
+      if not memeNom and e.pnj then droite = e.pnj .. " " .. droite end
+      GameTooltip:AddDoubleLine(ns.titreAffiche(e.q.niveau, e.q.titre or ("Quête " .. e.q.id)), droite, r, v, bl,
+        e.gris and 0.6 or 1, e.gris and 0.6 or 0.82, e.gris and 0.6 or 0)
+    end
+  end
+  if avecClics then GameTooltip:AddLine("Clic gauche : balise", 0.6, 0.6, 0.6) end
+  GameTooltip:Show()
+end
+
+local function infobulleJournal(p)
+  local e = p.journal
+  if not e then return end
+  survolJournal = p
+  GameTooltip:SetOwner(p, "ANCHOR_RIGHT")
+  if e.sorte == "rendre" then remplirBulleRendre(e.elements, true) else remplirBulleObjectifs(e.elements, true) end
+end
+
+local function clicJournal(self)
+  local e = self.journal
+  if not e then return end
+  local premier = e.elements[1]
+  local titre = premier and premier.q and premier.q.titre or "Quête"
+  if e.sorte == "rendre" then titre = "Rendre : " .. titre end
+  baliser(e.carte, e.x, e.y, titre)
+end
+
+local function prendreIconeJournal(i, toile)
+  local p = iconesJournal[i]
+  if not p then
+    p = CreateFrame("Button", nil, toile)
+    p:RegisterForClicks("LeftButtonUp")
+    p.image = p:CreateTexture(nil, "ARTWORK")
+    p.image:SetAllPoints()
+    p:SetScript("OnEnter", infobulleJournal)
+    p:SetScript("OnLeave", function(self) if survolJournal == self then survolJournal = nil end GameTooltip:Hide() end)
+    p:SetScript("OnClick", clicJournal)
+    iconesJournal[i] = p
+  end
+  return p
+end
+
+local function cacherJournal()
+  for _, p in ipairs(iconesJournal) do p:Hide() end
+  carteJournal = nil
+end
+
+local function dessinerJournal(liste, carte, toile)
+  local largeur, hauteur = toile:GetWidth(), toile:GetHeight()
+  if type(largeur) ~= "number" or largeur <= 0 then return end
+  local taille = taillePin()
+  local petite = math.max(10, math.floor(taille * 0.7 + 0.5))
+  local base = toile:GetFrameLevel()
+  for i, e in ipairs(liste) do
+    local p = prendreIconeJournal(i, toile)
+    p.journal = { carte = carte, x = e.x, y = e.y, sorte = e.sorte, elements = e.quetes, grise = e.grise }
+    if e.sorte == "rendre" then
+      p:SetSize(taille, taille)
+      -- Au-dessus des « ! » (un « ? » et un « ! » au même PNJ : le « ? » se voit), en restant sous le plafond.
+      p:SetFrameLevel(math.min(base + 7010, 9990))
+      p.image:SetTexture(ICONE_RENDRE)
+    else
+      p:SetSize(petite, petite)
+      -- Sous les « ! » : un objectif ne doit pas cacher une quête à prendre.
+      p:SetFrameLevel(math.min(base + 6900, 9980))
+      local premier = e.quetes[1]
+      p.image:SetTexture(ICONES_OBJECTIF[premier and premier.genre] or ICONES_OBJECTIF[1])
+    end
+    p.image:SetDesaturated(e.grise and true or false)
+    p:SetAlpha(e.grise and 0.6 or 1)
+    p:ClearAllPoints()
+    p:SetPoint("CENTER", toile, "TOPLEFT", e.x * largeur, -e.y * hauteur)
+    p:Show()
+  end
+  for i = #liste + 1, #iconesJournal do iconesJournal[i]:Hide() end
+  carteJournal = carte
+end
+
+-- La couche du journal d'une carte : calcul, dessin, état. Protégée : une erreur ici n'empêche pas les « ! ».
+local function passeJournal(carte, genre, toile)
+  local ok, erreur = pcall(function()
+    local liste, etat = calculerJournalCarte(carte, genre)
+    dernierEtatJournal = etat
+    dessinerJournal(liste, carte, toile)
+  end)
+  if not ok then
+    ns.derniereErreur = tostring(erreur)
+    cacherJournal()
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- La bulle des monstres : les quêtes du journal qui ont besoin de ce monstre, et où on en est
+-- ---------------------------------------------------------------------------
+
+local bulleAccrochee = false
+
+-- Ce que la bulle montre déjà : les quêtes (lignes « titre de quête » du jeu) et tous les textes.
+local function dejaDansBulle(tooltip, data)
+  local deja = { ids = {}, textes = {} }
+  local typeTitre = Enum and Enum.TooltipDataLineType and Enum.TooltipDataLineType.QuestTitle
+  if type(data) == "table" and type(data.lines) == "table" then
+    for _, l in ipairs(data.lines) do
+      if type(l) == "table" then
+        local texte = lisible(l.leftText)
+        if type(texte) == "string" then deja.textes[texte:lower()] = true end
+        local id = lisible(l.id)
+        if typeTitre and lisible(l.type) == typeTitre and type(id) == "number" then deja.ids[id] = true end
+      end
+    end
+  end
+  -- Les lignes déjà écrites (et celles d'autres addons) : on lit le texte affiché, s'il est lisible.
+  local nom = tooltip.GetName and sur(tooltip.GetName, tooltip)
+  local nb = tooltip.NumLines and sur(tooltip.NumLines, tooltip)
+  if type(nom) == "string" and type(nb) == "number" then
+    for i = 1, math.min(nb, 40) do
+      local fs = _G[nom .. "TextLeft" .. i]
+      local texte = fs and fs.GetText and lisible(sur(fs.GetText, fs))
+      if type(texte) == "string" then deja.textes[texte:lower()] = true end
+    end
+  end
+  return deja
+end
+
+-- Ajoute les lignes de nos quêtes à la bulle d'un monstre (survol ou cible).
+local function bulleMonstre(tooltip, data)
+  if not (db and db.actif and db.bulleMonstres) or tooltip ~= GameTooltip then return end
+  if tooltip.IsForbidden and sur(tooltip.IsForbidden, tooltip) then return end
+  -- En donjon et en raid, Forever cache les données des bulles aux addons : on laisse le jeu faire.
+  if sur(IsInInstance) then return end
+  local guid = type(data) == "table" and lisible(data.guid) or nil
+  if type(guid) ~= "string" then
+    local _, unite = sur(tooltip.GetUnit, tooltip)
+    unite = lisible(unite)
+    if type(unite) == "string" then guid = lisible(sur(UnitGUID, unite)) end
+  end
+  local creature = ns.creatureDuGuid(guid)
+  if not creature then return end
+  local j = lireJournal()
+  if not j.lu or #j.liste == 0 then return end
+  if not j.index then j.index = ns.indexMonstres(j.liste, ns.OBJECTIFS) end
+  -- Les objets que BarresDeVie a vu tomber de ce genre de monstre (lecture seule de sa sauvegarde).
+  local butins = type(BarresDeVieDB) == "table" and type(BarresDeVieDB.butins) == "table" and BarresDeVieDB.butins[creature] or nil
+  if not j.index[creature] and type(butins) ~= "table" then return end
+  local blocs = ns.lignesBulleMonstre(creature, j.liste, ns.OBJECTIFS, j.index, butins, dejaDansBulle(tooltip, data),
+    niveauJoueur(), plageVerte())
+  if #blocs == 0 then return end
+  for _, b in ipairs(blocs) do
+    tooltip:AddLine(b.titre, b.r, b.v, b.b)
+    for _, l in ipairs(b.lignes) do tooltip:AddLine("   " .. l, 1, 1, 1) end
+  end
+  tooltip:Show()
+end
+
+local function bulleMonstreProtegee(tooltip, data)
+  local ok, erreur = pcall(bulleMonstre, tooltip, data)
+  if not ok then ns.derniereErreur = tostring(erreur) end
+end
+
+-- S'accrocher à la bulle : le chemin moderne (TooltipDataProcessor) d'abord, sinon l'ancien (OnTooltipSetUnit).
+local function accrocherBulle()
+  if bulleAccrochee then return end
+  if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
+    and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
+    bulleAccrochee = pcall(TooltipDataProcessor.AddTooltipPostCall, Enum.TooltipDataType.Unit, bulleMonstreProtegee)
+  end
+  if not bulleAccrochee and type(GameTooltip) == "table" and type(GameTooltip.HookScript) == "function"
+    and type(GameTooltip.HasScript) == "function" and sur(GameTooltip.HasScript, GameTooltip, "OnTooltipSetUnit") then
+    bulleAccrochee = pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", function(t) bulleMonstreProtegee(t, nil) end)
+  end
+end
+
+-- Le nom (en français) de celui qui reprend des quêtes, appris quand on lui parle. Seulement ceux de la base.
+local NOMS_MAX = 3000
+local function apprendreNomPnj()
+  if not db or type(UnitGUID) ~= "function" then return end
+  local guid = lisible(sur(UnitGUID, "npc")) or lisible(sur(UnitGUID, "questnpc"))
+  if type(guid) ~= "string" then return end
+  local genre, id = guid:match("^(%a+)%-[^%-]*%-[^%-]*%-[^%-]*%-[^%-]*%-(%d+)")
+  id = tonumber(id)
+  local cle
+  if genre == "Creature" or genre == "Vehicle" then cle = ns.cleFin(1, id)
+  elseif genre == "GameObject" then cle = ns.cleFin(2, id) end
+  if not cle or type(ns.NOMS_FINS) ~= "table" or not ns.NOMS_FINS[cle] then return end
+  local nom = lisible(sur(UnitName, "npc")) or lisible(sur(UnitName, "questnpc"))
+  if type(nom) ~= "string" or nom == "" or nom == UNKNOWNOBJECT then return end
+  local noms = nomsAppris()
+  if noms[cle] == nil then
+    local n = 0
+    for _ in pairs(noms) do n = n + 1 end
+    if n >= NOMS_MAX then return end
+  end
+  noms[cle] = nom
+end
+
+-- Tout ce qui est posé sur la carte : les « ! » et les icônes du journal.
+local function cacherTout()
+  cacherExclamations()
+  cacherJournal()
+end
+
 local donneesDites, apiQuetesDite = false, false
 
 -- Une passe : on regarde la carte ouverte et on pose les « ! ». Rien n'est créé si la carte n'est pas affichée.
@@ -1076,12 +1754,16 @@ local function passe()
   if genre == "rien" or (genre == "continent" and not db.continent) then
     cacherTout()
     dernierEtat = { carte = carte, montrees = 0, epingles = 0, exclues = {}, titres = {}, note = "carte non concernée" }
+    dernierEtatJournal = { carte = carte, objectifs = 0, rendre = 0, gris = 0,
+      raisonObjectifs = "carte non concernée", raisonRendre = "carte non concernée" }
     return
   end
+  -- Les quêtes du journal d'abord : elles ne dépendent pas du calcul des « ! ».
+  passeJournal(carte, genre, toile)
   local liste, etat, joueur = evaluer(carte, genre == "continent" and 0.015 or 0.005, demander)
   if not liste then return end -- le calcul continue, il rappellera
   if not joueur.etatConnu then
-    cacherTout()
+    cacherExclamations()
     if not apiQuetesDite then
       apiQuetesDite = true
       dire("le jeu ne dit pas quelles quêtes sont rendues : aucun « ! » n'est montré.")
@@ -1290,6 +1972,7 @@ local miniProches = {}   -- { { x, y, quetes, grise } } : les quêtes proches, d
 local miniProchesAt, miniProchesPos, miniContinent
 local miniSig            -- ce qui a servi au dernier placement
 local miniVisibles = 0
+local miniRendreVisibles = 0 -- dont les « ? »
 local survolMini
 
 -- Les mètres vus par la minimap (du centre au bord) selon le zoom, quand le jeu ne les donne pas
@@ -1324,7 +2007,7 @@ local function infobulleMini(p)
   if not e then return end
   survolMini = p
   GameTooltip:SetOwner(p, "ANCHOR_LEFT")
-  remplirBulle(e.quetes, false)
+  if e.rendre then remplirBulleRendre(e.quetes, false) else remplirBulle(e.quetes, false) end
 end
 
 local function prendrePastille(i)
@@ -1353,11 +2036,11 @@ local function cacherMinimap()
     for _, p in ipairs(pastilles) do p:Hide() end
     if survolMini then survolMini = nil; GameTooltip:Hide() end
   end
-  miniVisibles, miniSig = 0, nil
+  miniVisibles, miniRendreVisibles, miniSig = 0, 0, nil
 end
 
 -- Les quêtes à prendre à moins de MINI_PORTEE mètres du joueur, avec les mêmes filtres que la carte.
-local function recalculerProches(pos, rayon)
+local function recalculerExclamationsProches(pos, rayon)
   miniProchesAt, miniProchesPos, miniContinent, miniSale = maintenant(), { pos.x, pos.y }, pos.continent, false
   local portee = math.max(MINI_PORTEE, rayon + 30)
   local portee2 = portee * portee
@@ -1407,6 +2090,45 @@ local function recalculerProches(pos, rayon)
   end
 end
 
+-- Les « ? » proches : où rendre les quêtes du journal (finies, et les autres en gris si l'option est cochée).
+local MINI_RENDRE_MAX = 10
+local function ajouterRendreProches(pos, portee2)
+  if not (db.rendre and type(ns.FINS) == "table") then return end
+  local j = lireJournal()
+  if not j.lu then return end
+  local index = ns.indexFins(ns.FINS)
+  local bruts = {}
+  for _, r in ipairs(ns.quetesARendre(j.liste, true, db.rendreGris)) do
+    for _, k in ipairs(index[r.q.id] or {}) do
+      local f = ns.FINS[k]
+      if f[1] == pos.continent then
+        local dx, dy = f[2] - pos.x, f[3] - pos.y
+        if dx * dx + dy * dy < portee2 then
+          bruts[#bruts + 1] = { x = f[2], y = f[3],
+            quetes = { { q = r.q, gris = r.gris, pnj = ns.nomFin(f[4], f[5], nomsAppris(), ns.NOMS_FINS) } } }
+        end
+      end
+    end
+  end
+  local n = 0
+  for _, e in ipairs(ns.regrouper(bruts, MINI_REGROUPE)) do
+    if n < MINI_RENDRE_MAX then
+      n = n + 1
+      e.rendre = true
+      e.grise = true
+      for _, el in ipairs(e.quetes) do if not el.gris then e.grise = false end end
+      miniProches[#miniProches + 1] = e
+    end
+  end
+end
+
+local function recalculerProches(pos, rayon)
+  recalculerExclamationsProches(pos, rayon)
+  local portee = math.max(MINI_PORTEE, rayon + 30)
+  local ok, erreur = pcall(ajouterRendreProches, pos, portee * portee)
+  if not ok then ns.derniereErreur = tostring(erreur) end
+end
+
 -- Un passage du minuteur de 0,2 s.
 local function tickMinimap()
   if not db then return end
@@ -1441,7 +2163,7 @@ local function tickMinimap()
     return
   end
   miniSig = { x = pos.x, y = pos.y, rotation = rotation, rayon = rayon, largeur = largeur }
-  local demi, n = largeur / 2, 0
+  local demi, n, nRendre = largeur / 2, 0, 0
   for _, e in ipairs(miniProches) do
     local px, py = ns.placementMinimap(e.x - pos.x, e.y - pos.y, rayon, demi, rotation, MINI_TAILLE / 2)
     if px then
@@ -1449,17 +2171,19 @@ local function tickMinimap()
       local p = prendrePastille(n)
       if p.mini ~= e then
         p.mini = e
+        p.image:SetTexture(e.rendre and ICONE_RENDRE or ICONE)
         p.image:SetDesaturated(e.grise and true or false)
         p:SetAlpha(e.grise and 0.6 or 1)
-        p.nombre:SetText(#e.quetes > 1 and tostring(#e.quetes) or "")
+        p.nombre:SetText((not e.rendre and #e.quetes > 1) and tostring(#e.quetes) or "")
       end
+      if e.rendre then nRendre = nRendre + 1 end
       p:ClearAllPoints()
       p:SetPoint("CENTER", Minimap, "CENTER", px, py)
       p:Show()
     end
   end
   for i = n + 1, #pastilles do pastilles[i]:Hide() end
-  miniVisibles = n
+  miniVisibles, miniRendreVisibles = n, nRendre
 end
 
 local function tickMinimapProtege()
@@ -1519,7 +2243,16 @@ ns.reglages = ns.creerReglages({
     { cle = "continent", libelle = "Montrer aussi sur la carte d'un continent",
       aide = "Kalimdor et les Royaumes de l'Est : beaucoup de « ! », regroupés plus largement. Coupé : seulement sur la carte d'une zone." },
     { cle = "surMinimap", libelle = "Montrer les « ! » sur la minimap",
-      aide = "De petits « ! » sur la minimap pour les quêtes à prendre assez proches, avec les mêmes filtres que la carte. Survole-en un pour voir les quêtes. Pas de flèche au bord." },
+      aide = "De petits « ! » sur la minimap pour les quêtes à prendre assez proches, avec les mêmes filtres que la carte, et les « ? » des quêtes à rendre. Survole-en un pour voir les quêtes. Pas de flèche au bord." },
+    { titre = "Quêtes du journal" },
+    { cle = "objectifsCarte", libelle = "Montrer les objectifs de mes quêtes sur la carte",
+      aide = "Une petite icône là où se fait chaque objectif pas encore fini des quêtes de ton journal : un crâne pour les monstres à tuer, un sac pour les objets à ramasser, une main pour un objet du décor à utiliser. Survole-la pour voir la quête et où tu en es (« 3/8 »). Seulement sur la carte d'une zone." },
+    { cle = "rendre", libelle = "Un « ? » là où rendre une quête finie",
+      aide = "Un « ? » jaune sur la carte et sur la minimap, à l'endroit du personnage ou de l'objet à qui rendre une quête de ton journal dont tous les objectifs sont faits. Clic gauche sur la carte : une balise." },
+    { cle = "rendreGris", libelle = "Aussi un « ? » gris pour les quêtes pas finies", dependDe = "rendre",
+      aide = "Montre aussi, en gris, où rendre les quêtes de ton journal encore en cours." },
+    { cle = "bulleMonstres", libelle = "Mes quêtes dans la bulle des monstres",
+      aide = "Au survol d'un monstre (ou de ta cible), sa bulle dit quelles quêtes de ton journal en ont besoin et où tu en es (« 3/8 Foie de Goretusk »). Rien n'est répété si le jeu l'écrit déjà. Pas en donjon : le jeu y cache ces informations aux addons." },
     { titre = "Quêtes apprises" },
     { cle = "apprendre", libelle = "Retenir les quêtes que les PNJ proposent",
       aide = "Quand un PNJ te propose une quête que la base ne connaît pas (celles propres à Forever), l'addon retient l'endroit où tu te tenais et la montre ensuite sur la carte et la minimap, marquée « appris en jeu »." },
@@ -1539,7 +2272,9 @@ ns.reglages = ns.creerReglages({
     db = d
     if type(db.ignorees) ~= "table" then db.ignorees = {} end
     if type(db.appris) ~= "table" then db.appris = {} end
+    if type(db.nomsPnj) ~= "table" then db.nomsPnj = {} end
     ns.apprises = db.appris
+    accrocherBulle()
     majApprises()
     -- Le canal des messages du groupe (une inscription par session).
     sur((C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or RegisterAddonMessagePrefix, ns.PREFIXE)
@@ -1612,13 +2347,18 @@ local function noterDiagnostic()
     date = date and date("%Y-%m-%d %H:%M") or "", donnees = ns.VERSION_DONNEES, connues = nbConnues(), apprises = (nbApprises()),
     orientation = orientation, ancresReconnues = orientationScore,
     carte = e and e.carte, montrees = e and e.montrees, epingles = e and e.epingles, exclues = exclues, titres = titres,
+    journal = dernierEtatJournal and {
+      objectifs = dernierEtatJournal.objectifs, rendre = dernierEtatJournal.rendre, gris = dernierEtatJournal.gris,
+      raisonObjectifs = dernierEtatJournal.raisonObjectifs, raisonRendre = dernierEtatJournal.raisonRendre,
+    },
   }
 end
 
 local ecouteur = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "QUEST_ACCEPTED", "QUEST_TURNED_IN",
                      "QUEST_REMOVED", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "QUEST_DATA_LOAD_RESULT",
-                     "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "CHAT_MSG_ADDON" }) do
+                     "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "CHAT_MSG_ADDON", "QUEST_LOG_UPDATE",
+                     "UNIT_QUEST_LOG_CHANGED", "QUEST_PROGRESS", "QUEST_COMPLETE" }) do
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 
@@ -1639,17 +2379,25 @@ ecouteur:SetScript("OnEvent", function(_, evenement, arg1, arg2, arg3, arg4)
     if survol and survol.donnees and survol:IsShown() then pcall(infobulle, survol) end
     if survolMini and survolMini.mini and survolMini:IsShown() then pcall(infobulleMini, survolMini) end
   elseif evenement == "GOSSIP_SHOW" or evenement == "QUEST_GREETING" or evenement == "QUEST_DETAIL" then
+    pcall(apprendreNomPnj)
     local ok, erreur = pcall(apprendreEvenement, evenement)
     if not ok then ns.derniereErreur = tostring(erreur) end
+  elseif evenement == "QUEST_PROGRESS" or evenement == "QUEST_COMPLETE" then
+    pcall(apprendreNomPnj) -- celui à qui on rend la quête : son nom en français pour la bulle du « ? »
+  elseif evenement == "UNIT_QUEST_LOG_CHANGED" and arg1 ~= "player" then
+    return -- le journal d'un autre joueur du groupe : rien à refaire
   elseif evenement == "CHAT_MSG_ADDON" then
     local ok, erreur = pcall(recevoir, arg1, arg2, arg3, arg4)
     if not ok then ns.derniereErreur = tostring(erreur) end
   elseif evenement == "QUEST_TURNED_IN" then
     -- Le jeu marque la quête rendue un peu après : on regarde une seconde fois.
+    oublierJournal()
     miniSale = true
     demander()
-    apres(1, function() miniSale = true; demander() end)
+    apres(1, function() oublierJournal(); miniSale = true; demander() end)
   else
+    -- Une quête prise, abandonnée, un objectif qui avance : le journal est à relire.
+    if evenement ~= "PLAYER_LEVEL_UP" and evenement ~= "SKILL_LINES_CHANGED" then oublierJournal() end
     miniSale = true -- la minimap refait sa liste de quêtes proches au prochain passage
     demander()
   end
@@ -1696,9 +2444,18 @@ local function commandeEtat()
   local nbA, nbG = nbApprises()
   dire("quêtes apprises : " .. nbA .. (nbA > 0 and (" (dont " .. nbG .. " reçue(s) du groupe)") or "")
     .. (db.apprendre and "" or ", apprentissage coupé") .. ".")
-  dire("minimap : " .. (db.surMinimap and (miniVisibles .. " « ! » proche(s) affiché(s)") or "« ! » coupés") .. ".")
+  dire("minimap : " .. (db.surMinimap and ((miniVisibles - miniRendreVisibles) .. " « ! » proche(s) affiché(s)"
+    .. (miniRendreVisibles > 0 and (" et " .. miniRendreVisibles .. " « ? »") or "")) or "« ! » coupés") .. ".")
   -- Carte ouverte : on refait une passe pour avoir son état à jour.
   if type(WorldMapFrame) == "table" and WorldMapFrame.IsShown and WorldMapFrame:IsShown() then rafraichirSur() end
+  local ej = dernierEtatJournal
+  if ej then
+    local j = lireJournal()
+    dire("journal : " .. #j.liste .. " quête(s) ; carte " .. tostring(ej.carte) .. " : " .. ej.objectifs .. " icône(s) d'objectif"
+      .. (ej.raisonObjectifs and (" (" .. ej.raisonObjectifs .. ")") or "") .. ", " .. ej.rendre .. " « ? » à rendre"
+      .. ((ej.gris or 0) > 0 and (" et " .. ej.gris .. " gris") or "")
+      .. (ej.raisonRendre and (" (" .. ej.raisonRendre .. ")") or "") .. ".")
+  end
   local e = dernierEtat
   if not e then return dire("ouvre la carte du monde pour voir ce que l'addon y montre.") end
   dire(string.format("carte %s (%s) : %d quête(s) à prendre, %d « ! ».", tostring(e.carte), nomCarte(e.carte), e.montrees, e.epingles)
@@ -1722,6 +2479,7 @@ local function commande(texte)
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/qd : les réglages     /qd etat : ce que l'addon voit sur la carte ouverte")
     dire("/qd on, /qd off : activer ou couper     Sur la carte : clic gauche = balise, clic droit = cacher ces quêtes")
+    dire("/qd objectifscarte, /qd rendre, /qd rendregris, /qd bullemonstres : les options des quêtes du journal")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /qd aide donne la liste.")
   end

@@ -4,8 +4,9 @@
 //   node tests/donnees/quetes-dispo-controle.js [chemin du .sql de classic-db]
 //
 // Sans argument : on contrôle seulement le fichier Lua (faits connus de Classic
-// et cohérence interne). Avec le chemin du .sql : on contrôle aussi que le
-// donneur de la quête 65 porte bien le bon nom dans la base d'origine.
+// et cohérence interne, y compris les tables du journal : OBJECTIFS, FINS,
+// NOMS_FINS). Avec le chemin du .sql : on contrôle aussi que le donneur de la
+// quête 65 porte bien le bon nom dans la base d'origine, et où se rend la quête 7.
 //
 // Lua 5.1 est lancé par WSL (« wsl lua5.1 ») : on lui fait charger le fichier
 // comme le fait le jeu, puis afficher son contenu en texte simple.
@@ -45,6 +46,16 @@ end
 for _, d in ipairs(ns.DEPARTS) do
   io.write("D\\t", d[1], "\\t", d[2], "\\t", d[3], "\\t", d[4], "\\t", table.concat(d[5], ","), "\\n")
 end
+for numero, liste in pairs(ns.OBJECTIFS or {}) do
+  for i, o in ipairs(liste) do
+    io.write("O\\t", numero, "\\t", i, "\\t", tostring(o[1]), "\\t", tostring(o[2]), "\\t",
+      type(o[3]) == "table" and table.concat(o[3], ",") or "", "\\t", type(o[4]) == "table" and table.concat(o[4], ",") or "", "\\n")
+  end
+end
+for _, f in ipairs(ns.FINS or {}) do
+  io.write("F\\t", f[1], "\\t", f[2], "\\t", f[3], "\\t", f[4], "\\t", f[5], "\\t", table.concat(f[6], ","), "\\n")
+end
+for cle, nom in pairs(ns.NOMS_FINS or {}) do io.write("N\\t", cle, "\\t", nom, "\\n") end
 `;
 
 const r = spawnSync("wsl", ["lua5.1", "-"], {
@@ -60,6 +71,9 @@ if (r.status !== 0) {
 }
 
 const quetes = new Map(); // numéro -> { champs, titre, nbChamps }
+const objectifs = new Map(); // numéro -> [{ genre, besoin, positions[], monstres[] }]
+const fins = []; // { continent, x, y, genre, id, quetes[] }
+const nomsFins = new Map(); // clé (id, ou -id pour un objet du décor) -> nom
 const departs = []; // { continent, x, y, genre, quetes[] }
 let version = null;
 for (const ligne of r.stdout.split("\n")) {
@@ -74,6 +88,22 @@ for (const ligne of r.stdout.split("\n")) {
       autres: c[13] === "nil" || c[13] === "0" ? [] : c[13].split(",").map(Number),
       reputation: c[14] === "nil" ? 0 : Number(c[14]),
     });
+  } else if (c[0] === "O") {
+    const n = Number(c[1]);
+    if (!objectifs.has(n)) objectifs.set(n, []);
+    objectifs.get(n)[Number(c[2]) - 1] = {
+      genre: Number(c[3]),
+      besoin: Number(c[4]),
+      positions: c[5] ? c[5].split(",").map(Number) : [],
+      monstres: c[6] ? c[6].split(",").map(Number) : [],
+    };
+  } else if (c[0] === "F") {
+    fins.push({
+      continent: Number(c[1]), x: Number(c[2]), y: Number(c[3]), genre: Number(c[4]), id: Number(c[5]),
+      quetes: c[6].split(",").map(Number),
+    });
+  } else if (c[0] === "N") {
+    nomsFins.set(Number(c[1]), c[2]);
   } else if (c[0] === "D") {
     departs.push({
       continent: Number(c[1]),
@@ -180,6 +210,66 @@ verifier(
   "numéros de quêtes de chaque point triés, sans répétition"
 );
 
+// --- Les tables du journal (objectifs, endroits où rendre) ---------------------
+
+verifier(objectifs.size >= 2000, "au moins 2000 quêtes avec des objectifs (trouvé " + objectifs.size + ")");
+verifier([...objectifs.keys()].every((n) => quetes.has(n)), "objectifs : seulement des quêtes de QUETES");
+let objMalFormes = 0;
+let objTropDeGroupes = 0;
+let objAvecPositions = 0;
+for (const liste of objectifs.values()) {
+  for (const o of liste) {
+    if (!o || ![1, 2, 3].includes(o.genre) || !Number.isInteger(o.besoin) || o.besoin < 0) { objMalFormes++; continue; }
+    if (o.positions.length % 3 !== 0 || !o.positions.every(Number.isFinite)) objMalFormes++;
+    if (!o.monstres.every((m) => Number.isInteger(m) && m > 0)) objMalFormes++;
+    const parCont = {};
+    for (let k = 0; k < o.positions.length; k += 3) {
+      if (o.positions[k] !== 0 && o.positions[k] !== 1) objMalFormes++;
+      parCont[o.positions[k]] = (parCont[o.positions[k]] || 0) + 1;
+    }
+    if (Object.values(parCont).some((nb) => nb > 5)) objTropDeGroupes++;
+    if (o.positions.length > 0) objAvecPositions++;
+  }
+}
+verifier(objMalFormes === 0, objMalFormes + " objectif(s) mal formé(s)");
+verifier(objTropDeGroupes === 0, objTropDeGroupes + " objectif(s) avec plus de 5 groupes sur un continent");
+verifier(objAvecPositions >= 1500, "au moins 1500 objectifs avec des positions (trouvé " + objAvecPositions + ")");
+// Faits connus : 7 « Kobold Camp Cleanup » (tuer 10 vermines kobold, créature 6, au nord de Comté-de-l'Or),
+// 22 « Goretusk Liver Pie » (8 foies, que les sangliers 157 font tomber, en Marche de l'Ouest),
+// 11 « Riverpaw Gnoll Bounty » (gnolls dont l'apparition tire le genre au hasard : creature_spawn_entry).
+const o7 = objectifs.get(7) && objectifs.get(7)[0];
+verifier(o7 && o7.genre === 1 && o7.besoin === 10 && o7.monstres.includes(6), "quête 7 : tuer 10 créatures 6");
+verifier(o7 && o7.positions.length >= 3 && o7.positions[0] === 0 && o7.positions[1] > -9200 && o7.positions[1] < -8500,
+  "quête 7 : les kobolds sont en forêt d'Elwynn");
+const o22 = objectifs.get(22) && objectifs.get(22)[0];
+verifier(o22 && o22.genre === 2 && o22.besoin === 8 && o22.monstres.includes(157), "quête 22 : 8 objets, que la créature 157 fait tomber");
+verifier(o22 && o22.positions.length >= 3 && o22.positions[1] > -11200 && o22.positions[1] < -9400, "quête 22 : en Marche de l'Ouest");
+const o11 = objectifs.get(11) && objectifs.get(11)[0];
+verifier(o11 && o11.positions.length >= 3, "quête 11 : les gnolls tirés au hasard ont des positions");
+
+verifier(fins.length >= 1000, "au moins 1000 endroits où rendre (trouvé " + fins.length + ")");
+verifier(fins.every((f) => (f.continent === 0 || f.continent === 1) && (f.genre === 1 || f.genre === 2) && Number.isFinite(f.x) && Number.isFinite(f.y)),
+  "endroits où rendre : continent, genre et position valables");
+verifier(fins.every((f) => f.quetes.every((n) => quetes.has(n))), "endroits où rendre : seulement des quêtes de QUETES");
+verifier(fins.every((f) => f.quetes.every((n, i) => i === 0 || n > f.quetes[i - 1])), "endroits où rendre : quêtes triées, sans répétition");
+const pointsParRendeur = new Map();
+for (const f of fins) {
+  const cle = f.genre + ":" + f.id + ":" + f.continent;
+  pointsParRendeur.set(cle, (pointsParRendeur.get(cle) || 0) + 1);
+}
+verifier([...pointsParRendeur.values()].every((n) => n <= 3), "endroits où rendre : au plus 3 points par PNJ et par continent");
+const sansNom = fins.filter((f) => !nomsFins.has(f.genre === 2 ? -f.id : f.id)).length;
+verifier(sansNom <= fins.length * 0.05, sansNom + " endroit(s) où rendre sans nom (au plus 5 %)");
+verifier(fins.some((f) => f.id === 197 && f.genre === 1 && f.quetes.includes(7)) && nomsFins.get(197) === "Marshal McBride",
+  "la quête 7 se rend à Marshal McBride (197)");
+const quetesAvecFin = new Set();
+for (const f of fins) for (const n of f.quetes) quetesAvecFin.add(n);
+verifier(quetesAvecFin.size >= quetes.size * 0.95, "au moins 95 % des quêtes ont un endroit où les rendre (" + quetesAvecFin.size + ")");
+
+// Taille : le fichier reste raisonnable (338 Ko avant les tables du journal, au plus 2 Mo de plus).
+const tailleDonnees = require("fs").statSync(path.join(racine, "QuetesDispo", "Donnees.lua")).size;
+verifier(tailleDonnees < 345616 + 2 * 1024 * 1024, "Donnees.lua pèse moins de 2,3 Mo (" + Math.round(tailleDonnees / 1024) + " Ko)");
+
 // --- Contrôle contre la base d'origine (facultatif) ---------------------------
 
 const sql = process.argv[2];
@@ -273,6 +363,11 @@ if (sql) {
     verifier(tropProches === 0, tropProches + " paire(s) de points d'un même donneur à moins de 5 mètres");
     verifier(pointsOrphelins === 0, pointsOrphelins + " point(s) qui ne viennent d'aucun donneur de leurs quêtes");
     verifier(donneurSansPoint === 0, donneurSansPoint + " donneur(s) avec apparition sur un continent mais sans point");
+    // La quête 7 se rend bien à la créature 197 dans la base, et 197 apparaît à l'endroit du « ? ».
+    verifier(base.creature_involvedrelation.some((x) => x.quest === 7 && x.id === 197), "dans la base, la quête 7 se rend à la créature 197");
+    const app197 = base.creature.filter((c) => c.id === 197);
+    verifier(fins.filter((f) => f.id === 197 && f.genre === 1).every((f) =>
+      app197.some((a) => Math.hypot(a.position_x - f.x, a.position_y - f.y) < 1)), "le « ? » de la créature 197 est à l'une de ses apparitions");
     fin();
   })().catch((e) => {
     console.log("Contrôle de la base impossible : " + e.message);
@@ -286,7 +381,8 @@ function fin() {
   console.log("");
   console.log(
     reussites + " vérifications réussies, " + echecs + " échec(s). " +
-      quetes.size + " quêtes, " + departs.length + " points de départ."
+      quetes.size + " quêtes, " + departs.length + " points de départ, " + objectifs.size + " quêtes avec objectifs, " +
+      fins.length + " endroits où rendre."
   );
   process.exit(echecs === 0 ? 0 : 1);
 }

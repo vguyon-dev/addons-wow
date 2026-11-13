@@ -9,6 +9,19 @@ Avant de commencer :
 - [ ] Désactiver Pawn, pour ne voir que notre avis sur les objets.
 - [ ] Vérifier que BugSack est actif sur Forever.
 
+## À vérifier : nouveautés du 13/11/2026 (écrites sans le jeu lancé)
+
+- [ ] Confort 0.4.0 : option « Garder le scintillement des objets de quête » (onglet Écran) : un objet de quête à ramasser brille ; changer la qualité graphique puis attendre une seconde : il brille toujours ; `/dump GetCVar("outlineModeShowLootEffectWhenDisabled")` rend 1. Décocher : message « au prochain lancement du jeu ».
+- [ ] Quêtes disponibles 0.4.0 : prendre une quête de monstres à tuer, ouvrir la carte de la zone : des crânes là où sont les monstres ; survol : « [niveau] Titre » puis « x/10 … » ; clic gauche = balise.
+- [ ] Quête d'objets à ramasser sur des monstres : des sacs sur la carte ; quête d'objet du décor : une main (doute : le jeu donne-t-il le type « object » ?).
+- [ ] Objectifs finis : les icônes partent, un « ? » jaune apparaît sur le PNJ (carte et minimap), bulle avec le nom, le titre et « (À rendre) ». Option « ? » gris pour les quêtes en cours.
+- [ ] Bulle d'un monstre d'objectif (survol et cible) : la quête et la progression s'ajoutent, sans doublon si le jeu l'écrit déjà ; rien en donjon ; aucune erreur en combat (BugSack).
+- [ ] Les textures des icônes d'objectif s'affichent (pas de carré vide) ; `/qd etat`, carte ouverte : ligne « journal » avec les comptes ; une zone repliée dans le journal du jeu ne cache pas ses quêtes.
+- [ ] Métiers auto 0.10.0 : `/mt touche F`, mode pêche avec une canne et un appât dans les sacs : 1er appui = pose l'appât (une seule fois), appui suivant = lance, au plouf = ferre. Hors mode pêche et en combat, F refait son action normale tout de suite.
+- [ ] Pêche : `/dump GetCVar("SoftTargetInteract")` pendant la pêche, puis après l'arrêt du mode, après un combat qui le coupe et après un `/reload` en pêchant : la valeur d'avant est revenue. Le lancement de sorts sur soi marche toujours.
+- [ ] Fenêtre Pêche : s'ouvre et se ferme avec le mode pêche, se déplace, garde sa place, croix ; compétence et barre, appât et temps restant (alerte sous la minute), bouton « Poser l'appât », lancers, prises, échappés, par heure, valeur, icônes des prises. Compétence lue même si l'en-tête des métiers est replié.
+- [ ] Pêche : ramassage direct des prises (une prise comptée une seule fois) sans changer le ramassage hors pêche ; rachat d'appâts à 0 = rien ; `/mt appats 5` chez un marchand d'appâts : rachète le meilleur appât permis, dit la quantité et le prix.
+
 ## Vérifié en jeu le 12/11/2026 (Forever, druide niveau 3, essais pilotés par Claude)
 
 Après-midi du 12/11 : fenêtre de réglages commune (engrenage, clic droit, Maj+clic, recherche, curseurs, partage des réglages), Suivi des quêtes (clic, bulle, rangement, repli), Tenues (enregistrer, /tenue com, supprimer), Conseiller (6 onglets ; corrigé en 0.3.1 : talent annoncé « à prendre » sans point libre, et druide sans forme sans sort d'attaque), GPS (balise, flèche verte, arrivée, clic droit) et trois panneaux sombres cochés plus bas. Piège de l'outil : un clic instantané n'est pas toujours pris par le jeu (engrenage), un appui de 0,15 s l'est. Barres de vie et Butin rapide attendent une quête de monstres.

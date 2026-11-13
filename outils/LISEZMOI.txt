@@ -51,7 +51,7 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
            avant la première fois, double-clique sur Interface\AddOns\Fenetres\SecondEcran\Installer.cmd
            dans le dossier du jeu : un petit programme étale alors la fenêtre du jeu sur tes deux écrans,
            et démarre avec Windows ; Retirer.cmd, au même endroit, l'enlève ; /fen tuto explique tout)
-  /qd      Quêtes disponibles (les « ! » des quêtes à prendre sur la carte ; /qd etat dit ce qu'il voit ; Forever seulement)
+  /qd      Quêtes disponibles (objectifs de ton journal et « ? » des quêtes à rendre sur la carte ; les « ! » des quêtes à prendre sur la carte ; /qd etat dit ce qu'il voit ; Forever seulement)
   /dial    Dialogues de quête (bandeau en bas à la place de la fenêtre du jeu ; /dial jeu la rend)
   /tenue   Tenues (fenêtre des tenues ; /tenue <nom> la met, /tenue retour remet la précédente)
   /sq      Suivi des quêtes (panneau rangé par genre ; /sq genre pour voir ce que dit le jeu)

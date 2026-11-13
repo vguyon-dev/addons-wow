@@ -1,7 +1,7 @@
 -- Simulation hors jeu de Quêtes disponibles : la logique pure (filtre, regroupement, couleurs, marques,
 -- choix de l'orientation des positions), puis un chargement simulé avec de faux cadres et de petites
 -- données : épingles de la carte, quêtes acceptées et rendues, filtres, cartes de continent, clics, API
--- qui manquent une à une.
+-- qui manquent une à une ; enfin les quêtes du journal (objectifs sur la carte, « ? » à rendre, bulle des monstres).
 -- Lancer depuis la racine du dépôt, sous Windows :
 --   wsl lua5.1 tests/QuetesDispo_simu.lua QuetesDispo/QuetesDispo.lua
 local ok = true
@@ -35,7 +35,7 @@ verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true
 verifie("toc : catégorie Mes addons", true, toc:find("## Category: Mes addons", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.3.0", true, toc:find("## Version: 0.3.0", 1, true) ~= nil)
+verifie("toc : version 0.4.0", true, toc:find("## Version: 0.4.0", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -492,6 +492,171 @@ do
   ns.QUETES, ns.apprises = avantQ, nil
 end
 
+do
+-- ============================================================================
+-- 1c. Les quêtes du journal (objectifs, « ? », bulle des monstres) : les fonctions pures.
+-- ============================================================================
+verifie("nom d'objectif : « Foie de Goretusk : 3/8 »", "Foie de Goretusk", ns.nomObjectif("Foie de Goretusk : 3/8"))
+verifie("nom d'objectif : « 3/8 Foie de Goretusk »", "Foie de Goretusk", ns.nomObjectif("3/8 Foie de Goretusk"))
+verifie("nom d'objectif : « Goretusk Liver: 3/8 »", "Goretusk Liver", ns.nomObjectif("Goretusk Liver: 3/8"))
+verifie("nom d'objectif : tiret au début", "Kobold", ns.nomObjectif("- Kobold : 2/5"))
+verifie("nom d'objectif : sans compte", "Parler à Marcus", ns.nomObjectif("Parler à Marcus"))
+verifie("nom d'objectif : rien", "", ns.nomObjectif(nil))
+verifie("clé d'objet : en minuscules, sans compte", "foie de goretusk", ns.cleObjet("Foie de Goretusk : 3/8"))
+verifie("clé d'objet : même clé depuis le nom de l'objet seul", "foie de goretusk", ns.cleObjet("Foie de Goretusk"))
+verifie("clé d'objet : texte vide", nil, ns.cleObjet("3/8"))
+verifie("texte d'objectif : le compte devant", "3/8 Foie de Goretusk", ns.texteObjectif("Foie de Goretusk : 3/8"))
+verifie("texte d'objectif : le compte du jeu gagne", "4/8 Foie de Goretusk", ns.texteObjectif("Foie de Goretusk : 3/8", 4, 8))
+verifie("texte d'objectif : déjà dans le bon ordre", "3/8 Foie de Goretusk", ns.texteObjectif("3/8 Foie de Goretusk"))
+verifie("texte d'objectif : sans compte", "Parler à Marcus", ns.texteObjectif("Parler à Marcus"))
+verifie("texte d'objectif : compte donné par le jeu seulement", "0/1 Parler à Marcus", ns.texteObjectif("Parler à Marcus", 0, 1))
+verifie("texte d'objectif : compte sans texte", "2/5", ns.texteObjectif(nil, 2, 5))
+verifie("texte d'objectif : rien du tout", nil, ns.texteObjectif(nil))
+verifie("texte d'objectif : total 0 ignoré", "Explorer", ns.texteObjectif("Explorer", 0, 0))
+
+-- Associer la base et le journal.
+local function assoc(base, journal)
+  local r = ns.associerObjectifs(base, journal)
+  local t = {}
+  for i = 1, #base do t[i] = tostring(r[i]) end
+  return table.concat(t, ",")
+end
+verifie("associer : les genres, même si le jeu change l'ordre", "2,1",
+  assoc({ { 1, 10 }, { 2, 8 } }, { { type = "item", total = 8 }, { type = "monster", total = 10 } }))
+verifie("associer : deux monstres, d'après le nombre demandé", "2,1",
+  assoc({ { 1, 5 }, { 1, 10 } }, { { type = "monster", total = 10 }, { type = "monster", total = 5 } }))
+verifie("associer : deux monstres au même nombre, dans l'ordre", "1,2",
+  assoc({ { 1, 5 }, { 1, 5 } }, { { type = "monster", total = 5 }, { type = "monster", total = 5 } }))
+verifie("associer : nombre différent, le premier libre du genre", "1", assoc({ { 2, 8 } }, { { type = "item", total = 6 } }))
+verifie("associer : objet du décor avec « object »", "1", assoc({ { 3, 1 } }, { { type = "object", total = 1 } }))
+verifie("associer : aucun objectif du même genre", "nil", assoc({ { 1, 10 } }, { { type = "item", total = 10 } }))
+verifie("associer : journal vide", "nil,nil", assoc({ { 1, 10 }, { 2, 3 } }, {}))
+verifie("associer : un journal plus court", "1,nil", assoc({ { 2, 3 }, { 2, 4 } }, { { type = "item", total = 3 } }))
+
+-- Quête finie.
+verifie("finie : le jeu dit oui", true, ns.queteFinie(true, { { fini = false } }, true))
+verifie("finie : le jeu dit 1", true, ns.queteFinie(1, {}, true))
+verifie("finie : le jeu dit non, même si tout semble fait", false, ns.queteFinie(false, { { fini = true } }, true))
+verifie("finie : échouée", false, ns.queteFinie(-1, { { fini = true } }, true))
+verifie("finie : le jeu ne dit rien, tout fait", true, ns.queteFinie(nil, { { fini = true }, { fini = true } }, true))
+verifie("finie : le jeu ne dit rien, un objectif à faire", false, ns.queteFinie(nil, { { fini = true }, { fini = false } }, true))
+verifie("finie : le jeu ne dit rien, aucun objectif (lettre à porter)", true, ns.queteFinie(nil, {}, true))
+verifie("finie : objectifs pas lus", false, ns.queteFinie(nil, {}, false))
+
+-- Les objectifs à faire.
+local baseLoups = { { 1, 10, { 0, -9050, -150 }, { 299 } }, { 2, 8, { 0, -9800, 800 }, { 157 } }, { 2, 1 } }
+local qLoups = { id = 1, titre = "Les loups", niveau = 5, lus = true, complete = false, objectifs = {
+  { texte = "Loups tués : 3/10", type = "monster", fini = false, fait = 3, total = 10 },
+  { texte = "Viande de loup : 8/8", type = "item", fini = true, fait = 8, total = 8 },
+  { texte = "Lettre : 0/1", type = "item", fini = false, fait = 0, total = 1 },
+} }
+do
+  local a = ns.objectifsAFaire(qLoups, baseLoups)
+  verifie("à faire : deux objectifs pas finis", 2, #a)
+  verifie("à faire : le premier, son texte", "3/10 Loups tués", a[1] and a[1].texte)
+  verifie("à faire : le premier, son genre et ses positions", "1,3", a[1] and (a[1].genre .. "," .. #a[1].positions))
+  verifie("à faire : le texte brut du jeu gardé", "Loups tués : 3/10", a[1] and a[1].brut)
+  verifie("à faire : le troisième, sans position", "3,0", a[2] and (a[2].i .. "," .. #a[2].positions))
+  verifie("à faire : quête finie, rien", 0, #ns.objectifsAFaire({ id = 1, complete = true, lus = true, objectifs = {} }, baseLoups))
+  verifie("à faire : pas dans la base, rien", 0, #ns.objectifsAFaire(qLoups, nil))
+  local inconnu = ns.objectifsAFaire({ id = 1, lus = false, objectifs = {} }, baseLoups)
+  verifie("à faire : le jeu ne dit rien des objectifs, tout est montré sans texte", "3,nil", #inconnu .. "," .. tostring(inconnu[1].texte))
+  verifie("à faire : un objectif que le journal ne nomme pas n'est pas montré", 1,
+    #ns.objectifsAFaire({ id = 1, lus = true, objectifs = { { texte = "Loups tués : 0/10", type = "monster", fini = false, total = 10 } } },
+      { { 1, 10, { 0, 1, 1 } }, { 3, 1, { 0, 2, 2 } } }))
+end
+
+-- L'index des monstres et la bulle.
+do
+  local objectifs = { [1] = baseLoups, [2] = { { 1, 6, { 0, 5, 5 }, { 299, 300 } } } }
+  local q2 = { id = 2, titre = "Encore des loups", niveau = 9, lus = true, complete = false, objectifs = {
+    { texte = "Loups gris tués : 6/6", type = "monster", fini = true, fait = 6, total = 6 } } }
+  local liste = { qLoups, q2 }
+  local index = ns.indexMonstres(liste, objectifs)
+  verifie("index des monstres : 299 sert à deux quêtes", 2, index[299] and #index[299])
+  verifie("index des monstres : 157 sert à une", 1, index[157] and #index[157])
+  verifie("index des monstres : un monstre inconnu", nil, index[12345])
+  verifie("index des monstres : quête sans données", 0, (function() local n = 0 for _ in pairs(ns.indexMonstres({ { id = 99 } }, objectifs)) do n = n + 1 end return n end)())
+  local function bulle(creature, butins, deja)
+    local blocs = ns.lignesBulleMonstre(creature, liste, objectifs, index, butins, deja, 5, 8)
+    local t = {}
+    for _, b in ipairs(blocs) do
+      t[#t + 1] = b.titre
+      for _, l in ipairs(b.lignes) do t[#t + 1] = "  " .. l end
+    end
+    return table.concat(t, " ; ")
+  end
+  verifie("bulle : le monstre d'un objectif pas fini", "[5] Les loups ;   3/10 Loups tués", bulle(299))
+  verifie("bulle : la couleur du titre selon le niveau", "1,1,0",
+    (function() local b = ns.lignesBulleMonstre(299, liste, objectifs, index, nil, nil, 5, 8)[1] return b.r .. "," .. b.v .. "," .. b.b end)())
+  verifie("bulle : l'objet est déjà ramassé (8/8), rien", "", bulle(157))
+  verifie("bulle : un monstre sans quête", "", bulle(4242))
+  verifie("bulle : le jeu écrit déjà la quête (son numéro)", "", bulle(299, nil, { ids = { [1] = true } }))
+  verifie("bulle : le jeu écrit déjà le titre", "", bulle(299, nil, { textes = { ["les loups"] = true } }))
+  verifie("bulle : le jeu écrit déjà l'objectif", "", bulle(299, nil, { textes = { ["loups tués : 3/10"] = true } }))
+  verifie("bulle : un objet appris par BarresDeVie", "[5] Les loups ;   0/1 Lettre", bulle(4242, { ["lettre"] = true }))
+  verifie("bulle : un objet appris mais déjà ramassé", "", bulle(4242, { ["viande de loup"] = true }))
+  verifie("bulle : quête finie, rien", "", (function()
+    local fini = { id = 1, titre = "Les loups", niveau = 5, lus = true, complete = true, objectifs = qLoups.objectifs }
+    local b = ns.lignesBulleMonstre(299, { fini }, objectifs, ns.indexMonstres({ fini }, objectifs), nil, nil, 5, 8)
+    return #b == 0 and "" or "?"
+  end)())
+  verifie("bulle : sans texte du jeu, le titre seul", "[5] Les loups", (function()
+    local q = { id = 1, titre = "Les loups", niveau = 5, lus = false, objectifs = {} }
+    local b = ns.lignesBulleMonstre(299, { q }, objectifs, ns.indexMonstres({ q }, objectifs), nil, nil, 5, 8)
+    return b[1] and (b[1].titre .. (#b[1].lignes > 0 and "+" or "")) or ""
+  end)())
+end
+verifie("numéro de créature : Creature", 157, ns.creatureDuGuid("Creature-0-4372-0-1234-157-0000ABCDEF"))
+verifie("numéro de créature : Vehicle", 300, ns.creatureDuGuid("Vehicle-0-1-0-1-300-0000ABCDEF"))
+verifie("numéro de créature : joueur", nil, ns.creatureDuGuid("Player-4372-0ABCDEF"))
+verifie("numéro de créature : rien", nil, ns.creatureDuGuid(nil))
+
+-- Les quêtes à rendre.
+do
+  local liste = { { id = 1, complete = true }, { id = 2, complete = false }, { id = 3, complete = false, echouee = true } }
+  local function texte(t) local l = {} for _, r in ipairs(t) do l[#l + 1] = r.q.id .. (r.gris and "g" or "") end return table.concat(l, ",") end
+  verifie("à rendre : seulement les finies", "1", texte(ns.quetesARendre(liste, true, false)))
+  verifie("à rendre : avec le gris, les autres en gris (pas l'échouée)", "1,2g", texte(ns.quetesARendre(liste, true, true)))
+  verifie("à rendre : le gris seul", "2g", texte(ns.quetesARendre(liste, false, true)))
+  verifie("à rendre : journal vide", "", texte(ns.quetesARendre(nil, true, true)))
+  local fins = { { 0, 1, 2, 1, 197, { 1, 2 } }, { 1, 3, 4, 2, 50, { 2 } } }
+  local idx = ns.indexFins(fins)
+  verifie("index des fins : quête 2 à deux endroits", "1,2", table.concat(idx[2], ","))
+  verifie("index des fins : construit une seule fois", true, ns.indexFins(fins) == idx)
+  verifie("index des fins : table absente", nil, ns.indexFins(nil)[1])
+  verifie("clé du nom : PNJ", 197, ns.cleFin(1, 197))
+  verifie("clé du nom : objet du décor", -50, ns.cleFin(2, 50))
+  verifie("nom : appris en jeu d'abord", "Maréchal", ns.nomFin(1, 197, { [197] = "Maréchal" }, { [197] = "Marshal" }))
+  verifie("nom : sinon celui des données", "Marshal", ns.nomFin(1, 197, {}, { [197] = "Marshal" }))
+  verifie("nom : objet du décor", "Wanted Poster", ns.nomFin(2, 50, nil, { [-50] = "Wanted Poster" }))
+  verifie("nom : inconnu", nil, ns.nomFin(1, 9, nil, nil))
+end
+
+-- Pourquoi zéro.
+do
+  local c = { option = true, carteZone = true, journalLu = true, nbJournal = 2, nbDansBase = 1, nbAFaire = 1, nbAvecPositions = 1, surCarte = 3 }
+  local function avec(k, v) local t = {} for a, b in pairs(c) do t[a] = b end t[k] = v return ns.raisonObjectifs(t) end
+  verifie("raison objectifs : il y en a", nil, ns.raisonObjectifs(c))
+  verifie("raison objectifs : option", "option coupée", avec("option", false))
+  verifie("raison objectifs : continent", "seulement sur la carte d'une zone", avec("carteZone", false))
+  verifie("raison objectifs : pas de journal", "le jeu ne donne pas le journal de quêtes", avec("journalLu", false))
+  verifie("raison objectifs : journal vide", "journal vide", avec("nbJournal", 0))
+  verifie("raison objectifs : pas dans la base", "aucune quête du journal n'est dans la base", avec("nbDansBase", 0))
+  verifie("raison objectifs : tout fait", "objectifs déjà faits", avec("nbAFaire", 0))
+  verifie("raison objectifs : sans position", "la base ne dit pas où se font ces objectifs", avec("nbAvecPositions", 0))
+  verifie("raison objectifs : pas sur cette carte", "rien sur cette carte", avec("surCarte", 0))
+  local f = { option = true, gris = false, journalLu = true, nbJournal = 2, nbAMontrer = 1, nbAvecFin = 1, surCarte = 1 }
+  local function avecF(k, v) local t = {} for a, b in pairs(f) do t[a] = b end t[k] = v return ns.raisonRendre(t) end
+  verifie("raison « ? » : il y en a", nil, ns.raisonRendre(f))
+  verifie("raison « ? » : option", "option coupée", avecF("option", false))
+  verifie("raison « ? » : aucune finie", "aucune quête finie dans le journal", avecF("nbAMontrer", 0))
+  verifie("raison « ? » : sans endroit", "la base ne dit pas où rendre ces quêtes", avecF("nbAvecFin", 0))
+  verifie("raison « ? » : pas sur cette carte", "rien sur cette carte", avecF("surCarte", 0))
+end
+
+end
+
 -- ============================================================================
 -- 2. Chargement simulé avec de faux cadres.
 -- ============================================================================
@@ -650,7 +815,7 @@ local function installer(avecAPI)
           -- Le joueur et son entourage : près du point de départ n° 1 (à 20 m), regard au nord, minimap fixe de 200 m.
           posJoueur = { x = 0.5, y = 0.6267 }, carteJoueur = nil, regard = 0, rotation = "0", rayonMini = 200, temps = 1000,
           groupe = nil, guid = "Creature-0-3-0-0-1234-0000AAAA", gossip = {}, greeting = {}, detail = nil, envoyes = {}, prefixes = {},
-          dedans = false }
+          dedans = false, journal = {}, instance = false }
   _G.MesAddons, _G.MesAddonsReglages, _G.MesAddonsMinimap = nil, nil, nil
   _G.QuetesDispoDB, _G.QuetesDispoReglages, _G.QuetesDispoMinimap = nil, nil, nil
   _G.UIParent = nouveau("Frame", "UIParent")
@@ -687,7 +852,7 @@ local function installer(avecAPI)
     "UnitClass", "UnitFactionGroup", "GetProfessions", "GetProfessionInfo", "GetQuestGreenRange", "C_ChatInfo", "C_GossipInfo",
     "C_Minimap", "C_CVar", "UnitGUID", "GetQuestID", "GetTitleText", "GetNumAvailableQuests", "GetAvailableTitle", "GetAvailableLevel",
     "GetAvailableQuestInfo", "IsInGroup", "IsInRaid", "GetPlayerFacing", "GetCVar", "GetTime", "IsIndoors", "SendAddonMessage",
-    "RegisterAddonMessagePrefix", "issecretvalue" }) do _G[n] = nil end
+    "RegisterAddonMessagePrefix", "issecretvalue", "TooltipDataProcessor", "Enum", "IsInInstance", "BarresDeVieDB" }) do _G[n] = nil end
   if not avecAPI then return end
 
   local function vec2(x, y)
@@ -728,7 +893,17 @@ local function installer(avecAPI)
     IsOnQuest = function(n) return JEU.cours[n] == true end,
     GetTitleForQuestID = function(n) return JEU.titresJeu[n] end,
     RequestLoadQuestByID = function(n) JEU.requetesTitre[n] = (JEU.requetesTitre[n] or 0) + 1 end,
+    -- Le journal : JEU.journal = { { id, titre, niveau, complete, entete, objectifs = { { text, type, finished, ... } } } }.
+    GetNumQuestLogEntries = function() return #JEU.journal end,
+    GetInfo = function(i)
+      local q = JEU.journal[i]
+      if not q then return nil end
+      return { questID = q.id, title = q.titre, level = q.niveau, isHeader = q.entete == true }
+    end,
+    GetQuestObjectives = function(id) for _, q in ipairs(JEU.journal) do if q.id == id then return q.objectifs end end end,
+    IsComplete = function(id) for _, q in ipairs(JEU.journal) do if q.id == id then return q.complete == true end end return false end,
   }
+  _G.IsInInstance = function() return JEU.instance == true end
   _G.UnitLevel = function() return JEU.niveau end
   _G.UnitRace = function() return "Humain", "Human", 1 end
   _G.UnitClass = function() return "Paladin", "PALADIN", 2 end
@@ -1908,6 +2083,299 @@ do
   verifie("sans minuteur : aucune erreur", nil, ns2.derniereErreur)
 end
 
+-- ---------------------------------------------------------------------------
+-- 2g. Les quêtes du journal : objectifs sur la carte, « ? » à rendre, bulle des monstres.
+-- ---------------------------------------------------------------------------
+local function iconesJournal(sorte)
+  local l = {}
+  for _, f in ipairs(toutes) do
+    if f._type == "Button" and rawget(f, "journal") and f._shown and (not sorte or f.journal.sorte == sorte) then l[#l + 1] = f end
+  end
+  return l
+end
+local function donneesJournal(nj)
+  nj.OBJECTIFS = {
+    [1] = { { 1, 10, { 0, -9050, -150, 0, -9500, 500 }, { 299 } }, { 2, 8, { 0, -9800, 800 }, { 157, 158 } } },
+    [2] = { { 2, 1 } },
+    [16] = { { 1, 4, { 1, 1500, -4300 }, { 3000 } } },
+  }
+  nj.FINS = { { 0, -9000, -100, 1, 197, { 1, 2 } }, { 1, 1500, -4300, 1, 300, { 16 } } }
+  nj.NOMS_FINS = { [197] = "Marshal McBride", [300] = "Gornek" }
+end
+local function journalLoups()
+  return {
+    { entete = true, titre = "Forêt d'Elwynn" },
+    { id = 1, titre = "Les loups", niveau = 5, objectifs = {
+      { text = "Loups tués : 3/10", type = "monster", finished = false, numFulfilled = 3, numRequired = 10 },
+      { text = "Viande de loup : 8/8", type = "item", finished = true, numFulfilled = 8, numRequired = 8 },
+    } },
+  }
+end
+local function bulleDe(p)
+  p._scripts.OnEnter(p)
+  local t = {}
+  for _, l in ipairs(GameTooltip.lignes) do t[#t + 1] = tostring(l.gauche) .. (l.droite and l.droite ~= "" and ("|" .. l.droite) or "") end
+  return table.concat(t, " ; ")
+end
+do
+  installer(true)
+  JEU.journal = journalLoups()
+  JEU.cours[1] = true
+  local postcalls = {}
+  _G.Enum = { TooltipDataType = { Unit = 2 }, TooltipDataLineType = { QuestTitle = 17, QuestObjective = 8 } }
+  _G.TooltipDataProcessor = { AddTooltipPostCall = function(genre, f) postcalls[genre] = f end }
+  local nj = chargerAddon()
+  donneesJournal(nj)
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+  verifie("journal : réglages, objectifs sur la carte cochés", true, QuetesDispoDB.objectifsCarte)
+  verifie("journal : réglages, « ? » cochés", true, QuetesDispoDB.rendre)
+  verifie("journal : réglages, « ? » gris décochés", false, QuetesDispoDB.rendreGris)
+  verifie("journal : réglages, bulle des monstres cochée", true, QuetesDispoDB.bulleMonstres)
+  verifie("journal : la bulle des monstres est accrochée", "function", type(postcalls[2]))
+
+  ouvrirCarte(37); avancer()
+  verifie("journal : deux icônes pour l'objectif pas fini (deux groupes d'apparitions)", 2, #iconesJournal("objectif"))
+  verifie("journal : pas de « ? » tant que la quête n'est pas finie", 0, #iconesJournal("rendre"))
+  verifie("journal : les « ! » de la carte ne bougent pas (la quête 1, en cours, n'y est plus)", "12 | 2 | 4,6,18 | 9,10", resume())
+  local o = iconesJournal("objectif")[1]
+  verifie("journal : l'icône d'un monstre à tuer", "Interface\\TargetingFrame\\UI-TargetingFrame-Skull", o.image._tex)
+  verifie("journal : sous les « ! »", true, o._niveau < pinAvec(12)._niveau)
+  verifie("journal : niveau de cadre borné", true, o._niveau <= 9990)
+  verifie("journal : plus petite qu'un « ! »", "14,14", o._w .. "," .. o._h)
+  verifie("journal : la bulle de l'objectif", "[5] Les loups ;    3/10 Loups tués ; Clic gauche : balise", bulleDe(o))
+  local px = {}
+  for _, p in ipairs(iconesJournal("objectif")) do px[#px + 1] = string.format("%.3f", p._pt[4] / 1000) end
+  table.sort(px)
+  verifie("journal : les positions sur la carte", "0.250,0.475", table.concat(px, ","))
+  JEU.waypoint = nil
+  o._scripts.OnClick(o, "LeftButton")
+  verifie("journal : clic gauche, une balise", 37, JEU.waypoint and JEU.waypoint.uiMapID)
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : la ligne du journal", true, lireImprime():find(
+    "journal : 1 quête(s) ; carte 37 : 2 icône(s) d'objectif, 0 « ? » à rendre (aucune quête finie dans le journal).", 1, true) ~= nil)
+
+  -- L'objectif avance : la bulle suit.
+  JEU.journal[2].objectifs[1].numFulfilled = 7
+  JEU.journal[2].objectifs[1].text = "Loups tués : 7/10"
+  declencher("QUEST_LOG_UPDATE"); avancer()
+  verifie("journal : la progression suit le journal", true, bulleDe(iconesJournal("objectif")[1]):find("7/10 Loups tués", 1, true) ~= nil)
+
+  -- La bulle des monstres.
+  local function bulleMonstre(guid, lignes)
+    GameTooltip:SetOwner(UIParent)
+    postcalls[2](GameTooltip, { guid = guid, lines = lignes or {} })
+    local t = {}
+    for _, l in ipairs(GameTooltip.lignes) do t[#t + 1] = l.gauche end
+    return table.concat(t, " ; ")
+  end
+  verifie("bulle du monstre : la quête et la progression", "[5] Les loups ;    7/10 Loups tués", bulleMonstre("Creature-0-1-0-0-299-0000AB"))
+  verifie("bulle du monstre : couleur du titre (jaune, même niveau)", "1,1,0",
+    GameTooltip.lignes[1] and (GameTooltip.lignes[1].r .. "," .. GameTooltip.lignes[1].v .. "," .. GameTooltip.lignes[1].b))
+  verifie("bulle du monstre : le jeu montre déjà la quête", "",
+    bulleMonstre("Creature-0-1-0-0-299-0000AB", { { type = 17, id = 1, leftText = "Les loups" } }))
+  verifie("bulle du monstre : le jeu montre déjà le titre", "",
+    bulleMonstre("Creature-0-1-0-0-299-0000AB", { { type = 0, leftText = "Les loups" } }))
+  verifie("bulle du monstre : objet déjà ramassé, rien", "", bulleMonstre("Creature-0-1-0-0-157-0000AB"))
+  verifie("bulle du monstre : un joueur, rien", "", bulleMonstre("Player-1-0ABC"))
+  verifie("bulle du monstre : sans identifiant, rien", "", bulleMonstre(nil))
+  JEU.journal[2].objectifs[2] = { text = "Viande de loup : 5/8", type = "item", finished = false, numFulfilled = 5, numRequired = 8 }
+  declencher("QUEST_LOG_UPDATE")
+  verifie("bulle du monstre : il fait tomber l'objet demandé", "[5] Les loups ;    5/8 Viande de loup", bulleMonstre("Creature-0-1-0-0-158-0000AB"))
+  _G.BarresDeVieDB = { butins = { [555] = { ["viande de loup"] = true } } }
+  verifie("bulle du monstre : un butin appris par BarresDeVie", "[5] Les loups ;    5/8 Viande de loup", bulleMonstre("Creature-0-1-0-0-555-0000AB"))
+  _G.BarresDeVieDB = nil
+  JEU.instance = true
+  verifie("bulle du monstre : en donjon, rien (le jeu cache les données)", "", bulleMonstre("Creature-0-1-0-0-299-0000AB"))
+  JEU.instance = false
+  nj.reglages.changer("bulleMonstres", false)
+  verifie("bulle du monstre : option coupée", "", bulleMonstre("Creature-0-1-0-0-299-0000AB"))
+  nj.reglages.changer("bulleMonstres", true)
+  verifie("bulle du monstre : aucune erreur", nil, nj.derniereErreur)
+  JEU.journal[2].objectifs[2] = { text = "Viande de loup : 8/8", type = "item", finished = true, numFulfilled = 8, numRequired = 8 }
+
+  -- La quête est finie : les objectifs partent, le « ? » arrive.
+  JEU.journal[2].objectifs[1] = { text = "Loups tués : 10/10", type = "monster", finished = true, numFulfilled = 10, numRequired = 10 }
+  JEU.journal[2].complete = true
+  declencher("QUEST_LOG_UPDATE"); avancer()
+  verifie("quête finie : plus d'icône d'objectif", 0, #iconesJournal("objectif"))
+  verifie("quête finie : un « ? »", 1, #iconesJournal("rendre"))
+  local r = iconesJournal("rendre")[1]
+  verifie("quête finie : le « ? » jaune", "Interface\\GossipFrame\\ActiveQuestIcon", r.image._tex)
+  verifie("quête finie : en couleur", false, r.image._desat)
+  verifie("quête finie : au-dessus des « ! »", true, r._niveau > pinAvec(12)._niveau and r._niveau <= 9990)
+  verifie("quête finie : à l'endroit du PNJ", "0.500,0.633", string.format("%.3f,%.3f", r._pt[4] / 1000, -r._pt[5] / 667))
+  verifie("quête finie : la bulle (nom du PNJ, titre, à rendre)", "Marshal McBride ; [5] Les loups|(À rendre) ; Clic gauche : balise", bulleDe(r))
+  JEU.waypoint = nil
+  r._scripts.OnClick(r, "LeftButton")
+  verifie("quête finie : clic gauche, une balise", 37, JEU.waypoint and JEU.waypoint.uiMapID)
+  -- Son nom en français, appris en lui rendant une quête.
+  local nomJeu = UnitName
+  UnitName = function(u) if u == "npc" then return "Maréchal McBride" end return nomJeu(u) end
+  JEU.guid = "Creature-0-3-0-0-197-0000AAAA"
+  declencher("QUEST_COMPLETE")
+  verifie("nom appris en parlant au PNJ", "Maréchal McBride", QuetesDispoDB.nomsPnj[197])
+  JEU.guid = "Creature-0-3-0-0-1234-0000AAAA"
+  declencher("QUEST_PROGRESS")
+  verifie("un PNJ qui ne reprend aucune quête de la base n'est pas retenu", nil, QuetesDispoDB.nomsPnj[1234])
+  UnitName = nomJeu
+  nj.reglages.changer("rendreGris", false)
+  verifie("quête finie : la bulle dit le nom appris", true, bulleDe(iconesJournal("rendre")[1]):find("^Maréchal McBride ;") ~= nil)
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : objectifs faits, un « ? »", true, lireImprime():find(
+    "carte 37 : 0 icône(s) d'objectif (objectifs déjà faits), 1 « ? » à rendre.", 1, true) ~= nil)
+
+  -- Une quête pas finie, en gris si l'option est cochée.
+  table.insert(JEU.journal, { id = 2, titre = "La lettre", niveau = 6, objectifs = {
+    { text = "Lettre : 0/1", type = "item", finished = false, numFulfilled = 0, numRequired = 1 } } })
+  declencher("QUEST_LOG_UPDATE"); avancer()
+  verifie("« ? » gris décoché : toujours un seul « ? »", 1, #iconesJournal("rendre"))
+  verifie("« ? » gris décoché : la bulle ne parle que de la quête finie", false, bulleDe(iconesJournal("rendre")[1]):find("La lettre", 1, true) ~= nil)
+  nj.reglages.changer("rendreGris", true)
+  local b = bulleDe(iconesJournal("rendre")[1])
+  verifie("« ? » gris coché : même PNJ, un seul « ? » pour les deux", 1, #iconesJournal("rendre"))
+  verifie("« ? » gris coché : la quête en cours dans la bulle", true, b:find("[6] La lettre|(En cours)", 1, true) ~= nil)
+  verifie("« ? » gris coché : la finie l'emporte (jaune)", false, iconesJournal("rendre")[1].image._desat)
+  table.remove(JEU.journal, 2) -- la quête finie est rendue
+  declencher("QUEST_TURNED_IN", 1); avancer(); avancer()
+  verifie("« ? » gris : seule la quête en cours, en gris", true, iconesJournal("rendre")[1].image._desat)
+  verifie("« ? » gris : transparent", 0.6, iconesJournal("rendre")[1]._alpha)
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : le « ? » gris compté", true, lireImprime():find("0 « ? » à rendre et 1 gris.", 1, true) ~= nil)
+  nj.reglages.changer("rendreGris", false)
+  verifie("« ? » gris décoché : il part", 0, #iconesJournal("rendre"))
+
+  -- La minimap : le « ? » proche.
+  JEU.journal = journalLoups()
+  JEU.journal[2].complete = true
+  declencher("QUEST_LOG_UPDATE")
+  tictac()
+  local mini
+  for _, f in ipairs(toutes) do
+    if f._type == "Button" and f._parent == Minimap and f._shown and rawget(f, "mini") and f.mini.rendre then mini = f end
+  end
+  verifie("minimap : le « ? » de la quête finie, à 20 m", true, mini ~= nil)
+  verifie("minimap : son icône", "Interface\\GossipFrame\\ActiveQuestIcon", mini and mini.image._tex)
+  verifie("minimap : sa bulle", true, mini and bulleDe(mini):find("[5] Les loups|(À rendre)", 1, true) ~= nil)
+  verifie("minimap : pas de rappel des clics", true, mini and bulleDe(mini):find("Clic", 1, true) == nil)
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : le « ? » de la minimap compté", true, lireImprime():find("et 1 « ? »", 1, true) ~= nil)
+  nj.reglages.changer("rendre", false)
+  tictac()
+  local reste = 0
+  for _, f in ipairs(toutes) do
+    if f._type == "Button" and f._parent == Minimap and f._shown and rawget(f, "mini") and f.mini.rendre then reste = reste + 1 end
+  end
+  verifie("minimap : option « ? » coupée, il part", 0, reste)
+  verifie("carte : option « ? » coupée, il part", 0, #iconesJournal("rendre"))
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : dit pourquoi aucun « ? »", true, lireImprime():find("0 « ? » à rendre (option coupée)", 1, true) ~= nil)
+  nj.reglages.changer("rendre", true)
+
+  -- Les objectifs : option coupée, carte d'un continent.
+  JEU.journal = journalLoups()
+  declencher("QUEST_LOG_UPDATE"); avancer()
+  verifie("objectifs : de nouveau deux icônes", 2, #iconesJournal("objectif"))
+  SlashCmdList.QUETESDISPO("objectifscarte")
+  verifie("/qd objectifscarte : coupe les icônes", 0, #iconesJournal("objectif"))
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : objectifs coupés, la raison", true, lireImprime():find("0 icône(s) d'objectif (option coupée)", 1, true) ~= nil)
+  SlashCmdList.QUETESDISPO("objectifscarte")
+  verifie("/qd objectifscarte : les remet", 2, #iconesJournal("objectif"))
+  nj.reglages.changer("continent", true)
+  changerCarte(13); avancer()
+  verifie("continent : pas d'objectif (trop d'icônes)", 0, #iconesJournal("objectif"))
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : continent, la raison", true, lireImprime():find("(seulement sur la carte d'une zone)", 1, true) ~= nil)
+  nj.reglages.changer("continent", false)
+  changerCarte(1); avancer() -- Durotar : la quête n'a rien ici
+  verifie("autre zone : rien", 0, #iconesJournal())
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("/qd etat : rien sur cette carte", true, lireImprime():find("0 icône(s) d'objectif (rien sur cette carte)", 1, true) ~= nil)
+  changerCarte(37); avancer()
+  verifie("retour en Elwynn : les icônes reviennent", 2, #iconesJournal("objectif"))
+  local avantCadres = #toutes
+  for _ = 1, 5 do declencher("QUEST_LOG_UPDATE"); avancer() end
+  verifie("les icônes sont réutilisées : aucun cadre de plus", avantCadres, #toutes)
+  nj.reglages.changer("actif", false)
+  verifie("addon coupé : plus d'icône du journal", 0, #iconesJournal())
+  nj.reglages.changer("actif", true)
+  verifie("addon réactivé : elles reviennent", 2, #iconesJournal("objectif"))
+  declencher("PLAYER_LOGOUT")
+  verifie("diagnostic : le journal", 2, QuetesDispoDB.diagnostic.journal and QuetesDispoDB.diagnostic.journal.objectifs)
+  verifie("journal : aucune erreur retenue", nil, nj.derniereErreur)
+end
+
+-- Le journal sans données (ancien Donnees.lua) ou sans API : rien ne plante, et /qd etat dit pourquoi.
+do
+  installer(true)
+  JEU.journal = journalLoups()
+  local nj = demarrer()
+  ouvrirCarte(37); avancer()
+  verifie("sans données du journal : aucune icône", 0, #iconesJournal())
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("sans données du journal : la raison", true, lireImprime():find("(aucune quête du journal n'est dans la base)", 1, true) ~= nil)
+  verifie("sans données du journal : aucune erreur", nil, nj.derniereErreur)
+end
+do
+  installer(true)
+  JEU.journal = journalLoups()
+  C_QuestLog.GetNumQuestLogEntries = nil
+  local nj = chargerAddon()
+  donneesJournal(nj)
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+  ouvrirCarte(37); avancer()
+  verifie("sans journal du jeu : aucune icône", 0, #iconesJournal())
+  verifie("sans journal du jeu : les « ! » restent", "1,2 | 12 | 4,6,18 | 9,10", resume())
+  imprime = {}
+  SlashCmdList.QUETESDISPO("etat")
+  verifie("sans journal du jeu : la raison", true, lireImprime():find("(le jeu ne donne pas le journal de quêtes)", 1, true) ~= nil)
+  verifie("sans journal du jeu : aucune erreur", nil, nj.derniereErreur)
+end
+do
+  installer(true)
+  JEU.journal = journalLoups()
+  C_QuestLog.GetQuestObjectives = nil
+  C_QuestLog.IsComplete = nil
+  local nj = chargerAddon()
+  donneesJournal(nj)
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+  ouvrirCarte(37); avancer()
+  verifie("sans objectifs du jeu : les objectifs de la base, sans texte", 3, #iconesJournal("objectif"))
+  verifie("sans objectifs du jeu : la bulle le dit", true, bulleDe(iconesJournal("objectif")[1]):find("Objectif de la quête", 1, true) ~= nil)
+  verifie("sans objectifs du jeu : aucune erreur", nil, nj.derniereErreur)
+end
+do
+  -- Ni TooltipDataProcessor ni OnTooltipSetUnit : la bulle n'est pas accrochée, sans erreur.
+  installer(true)
+  local nj = demarrer()
+  verifie("sans accroche de bulle : aucune erreur", nil, nj.derniereErreur)
+  -- Le chemin ancien : OnTooltipSetUnit.
+  installer(true)
+  JEU.journal = journalLoups()
+  local crochets = {}
+  GameTooltip.HasScript = function(_, nom) return nom == "OnTooltipSetUnit" end
+  GameTooltip.HookScript = function(_, nom, f) crochets[nom] = f end
+  GameTooltip.GetUnit = function() return "Loup", "mouseover" end
+  _G.UnitGUID = function(u) if u == "mouseover" then return "Creature-0-1-0-0-299-0000AB" end return JEU.guid end
+  local nk = chargerAddon()
+  donneesJournal(nk)
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+  verifie("bulle par OnTooltipSetUnit : accrochée", "function", type(crochets.OnTooltipSetUnit))
+  GameTooltip:SetOwner(UIParent)
+  crochets.OnTooltipSetUnit(GameTooltip)
+  verifie("bulle par OnTooltipSetUnit : la quête ajoutée", "[5] Les loups", GameTooltip.lignes[1] and GameTooltip.lignes[1].gauche)
+  verifie("bulle par OnTooltipSetUnit : aucune erreur", nil, nk.derniereErreur)
+end
+
 -- ============================================================================
 -- 3. Le VRAI Donnees.lua, chargé avec l'addon (constats 1, 2, 3, 8 de la relecture).
 -- ============================================================================
@@ -1972,6 +2440,78 @@ do
   verifie("vrai fichier, Elwynn : 247 (niveau 30) n'est pas montrée", nil, pinAvec(247))
   io.write(string.format("   (vrai fichier : %d quêtes, %d points, %d épingles et %d quêtes montrées en Elwynn)\n", nq, np, #pins, tout))
   io.write("   quêtes vues : " .. table.concat(etat.titres, " ; ") .. "\n")
+end
+
+-- Le VRAI Donnees.lua et les quêtes du journal : objectifs, « ? », bulle des monstres.
+do
+  installer(true)
+  JEU.niveau = 3
+  JEU.journal = { { id = 7, titre = "Nettoyage du camp kobold", niveau = 2, objectifs = {
+    { text = "Vermine kobold tuée : 2/10", type = "monster", finished = false, numFulfilled = 2, numRequired = 10 } } } }
+  JEU.cours[7] = true
+  local postcalls = {}
+  _G.Enum = { TooltipDataType = { Unit = 2 }, TooltipDataLineType = { QuestTitle = 17, QuestObjective = 8 } }
+  _G.TooltipDataProcessor = { AddTooltipPostCall = function(genre, f) postcalls[genre] = f end }
+  local reel = {}
+  assert(loadfile(reglagesLua))("QuetesDispo", reel)
+  assert(loadfile(donneesLua))("QuetesDispo", reel)
+  assert(loadfile(fichier))("QuetesDispo", reel)
+  declencher("ADDON_LOADED", "QuetesDispo"); declencher("PLAYER_ENTERING_WORLD"); avancer()
+
+  -- Accord des tables du journal avec ns.QUETES.
+  local nObj, horsBase, malForme, tropDeGroupes = 0, 0, 0, 0
+  for numero, liste in pairs(reel.OBJECTIFS) do
+    nObj = nObj + 1
+    if not reel.QUETES[numero] then horsBase = horsBase + 1 end
+    for _, o in ipairs(liste) do
+      if type(o[1]) ~= "number" or o[1] < 1 or o[1] > 3 or type(o[2]) ~= "number" then malForme = malForme + 1 end
+      local pos = o[3] or {}
+      if #pos % 3 ~= 0 then malForme = malForme + 1 end
+      local parCont = {}
+      for k = 1, #pos, 3 do
+        if pos[k] ~= 0 and pos[k] ~= 1 then malForme = malForme + 1 end
+        parCont[pos[k]] = (parCont[pos[k]] or 0) + 1
+      end
+      for _, nb in pairs(parCont) do if nb > 5 then tropDeGroupes = tropDeGroupes + 1 end end
+    end
+  end
+  local finsHorsBase = 0
+  for _, f in ipairs(reel.FINS) do
+    for _, q in ipairs(f[6]) do if not reel.QUETES[q] then finsHorsBase = finsHorsBase + 1 end end
+  end
+  verifie("vrai fichier : des objectifs pour au moins 2000 quêtes", true, nObj >= 2000)
+  verifie("vrai fichier : objectifs seulement pour des quêtes de la base", 0, horsBase)
+  verifie("vrai fichier : objectifs bien formés", 0, malForme)
+  verifie("vrai fichier : au plus 5 groupes par objectif et par continent", 0, tropDeGroupes)
+  verifie("vrai fichier : au moins 1000 endroits où rendre", true, #reel.FINS >= 1000)
+  verifie("vrai fichier : endroits où rendre, seulement des quêtes de la base", 0, finsHorsBase)
+  verifie("vrai fichier : la quête 7 (kobolds) demande d'en tuer 10 (créature 6)", "1,10,6",
+    reel.OBJECTIFS[7] and (reel.OBJECTIFS[7][1][1] .. "," .. reel.OBJECTIFS[7][1][2] .. "," .. reel.OBJECTIFS[7][1][4][1]) or "?")
+  verifie("vrai fichier : la quête 22 (foie de Goretusk) : 8 objets, que le sanglier 157 fait tomber", true, (function()
+    local o = reel.OBJECTIFS[22] and reel.OBJECTIFS[22][1]
+    if not o or o[1] ~= 2 or o[2] ~= 8 then return false end
+    for _, m in ipairs(o[4] or {}) do if m == 157 then return true end end
+    return false
+  end)())
+
+  ouvrirCarte(37); avancer()
+  verifie("vrai fichier, Elwynn : les objectifs de la quête 7 sur la carte", true, #iconesJournal("objectif") >= 1)
+  verifie("vrai fichier, Elwynn : la bulle de l'objectif", true,
+    iconesJournal("objectif")[1] and bulleDe(iconesJournal("objectif")[1]):find("2/10 Vermine kobold tuée", 1, true) ~= nil)
+  GameTooltip:SetOwner(UIParent)
+  postcalls[2](GameTooltip, { guid = "Creature-0-1-0-0-6-0000AB", lines = {} })
+  verifie("vrai fichier : la bulle d'une vermine kobold", "[2] Nettoyage du camp kobold ;    2/10 Vermine kobold tuée", (function()
+    local t = {} for _, l in ipairs(GameTooltip.lignes) do t[#t + 1] = l.gauche end return table.concat(t, " ; ") end)())
+  JEU.journal[1].objectifs[1] = { text = "Vermine kobold tuée : 10/10", type = "monster", finished = true, numFulfilled = 10, numRequired = 10 }
+  JEU.journal[1].complete = true
+  declencher("QUEST_LOG_UPDATE"); avancer()
+  verifie("vrai fichier, Elwynn : quête finie, plus d'objectif", 0, #iconesJournal("objectif"))
+  verifie("vrai fichier, Elwynn : un « ? » où la rendre", true, #iconesJournal("rendre") >= 1)
+  local b = iconesJournal("rendre")[1] and bulleDe(iconesJournal("rendre")[1]) or ""
+  verifie("vrai fichier, Elwynn : sa bulle (nom anglais du PNJ, à rendre)", true,
+    b:find("[2] Nettoyage du camp kobold|(À rendre)", 1, true) ~= nil and b:find("^Quête à rendre") == nil)
+  io.write("   (vrai fichier, quête 7 finie : " .. b .. ")\n")
+  verifie("vrai fichier, journal : aucune erreur", nil, reel.derniereErreur)
 end
 
 -- Reglages.lua : une dernière fois, identique à celui de QuetesAuto.

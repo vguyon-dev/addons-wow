@@ -12,9 +12,23 @@ classic-db**, publiée sous licence **GNU GPL version 3**. Le dossier
 - Fichier utilisé : voir la ligne « Sauvegarde utilisée » en tête de
   `Donnees.lua` (nom du fichier `.sql` et date de l'extraction).
 - Ce qu'on en garde : pour chaque quête, son niveau, ses conditions (niveau
-  minimum, races, classes, quêtes à rendre avant, métier, faction de réputation), son titre anglais, et
+  minimum, races, classes, quêtes à rendre avant, métier, faction de réputation), son titre anglais,
   les endroits où on la prend (continent, position, personnage ou objet du
-  décor). Rien d'autre.
+  décor), ses objectifs (genre, nombre demandé, groupes d'apparitions des monstres
+  ou objets du décor concernés, numéros des monstres utiles), les endroits où on la
+  rend, et le nom anglais de ceux qui la reprennent. Rien d'autre.
+
+## Idées reprises de Questie
+
+Trois idées de la version 0.4.0 viennent de l'addon **Questie**
+(https://github.com/Questie/Questie), lui aussi sous licence **GNU GPL
+version 3** : des icônes sur la carte là où se font les objectifs des quêtes du
+journal (apparitions regroupées pour n'en montrer que quelques-unes), un « ? »
+là où rendre une quête finie, et les quêtes du journal ajoutées dans la bulle
+d'un monstre. Nous avons lu sa méthode pour la comprendre (notamment ses notes
+sur les bulles de WoW Forever : le jeu y écrit déjà certaines lignes de quête, et
+cache ces données en donjon) ; le code, les données et les textes de
+QuetesDispo sont les nôtres, aucun fichier de Questie n'est repris.
 
 ## Mention de droit d'auteur
 

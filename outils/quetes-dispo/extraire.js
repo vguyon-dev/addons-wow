@@ -2,6 +2,8 @@
 //
 // Usage :  node outils/quetes-dispo/extraire.js <chemin du fichier .sql>
 // Résultat : QuetesDispo/Donnees.lua (fichier généré, ne pas modifier à la main).
+// Il contient les quêtes et où les prendre (QUETES, DEPARTS), et pour les quêtes du journal
+// où se font leurs objectifs et où les rendre (OBJECTIFS, FINS, NOMS_FINS).
 //
 // Le fichier .sql pèse plus de 70 Mo : on le lit ligne par ligne, jamais en un
 // seul bloc. Pour chaque table utile, on lit d'abord son CREATE TABLE afin de
@@ -29,6 +31,12 @@ const COLONNES_UTILES = {
     "RequiredClasses", "RequiredRaces", "RequiredSkill", "RequiredSkillValue",
     "PrevQuestId", "NextQuestId", "NextQuestInChain", "ExclusiveGroup", "SpecialFlags", "QuestFlags",
     "RequiredMinRepFaction", "Title",
+    // Les objectifs (pour les icônes d'objectifs et la bulle des monstres) : 4 cases de chaque.
+    ...[1, 2, 3, 4].flatMap((i) => [
+      "ReqItemId" + i, "ReqItemCount" + i, "ReqSourceId" + i, "ReqCreatureOrGOId" + i, "ReqCreatureOrGOCount" + i,
+    ]),
+    // Le point d'une quête d'exploration (zone à découvrir), quand la base le donne.
+    "PointMapId", "PointX", "PointY",
   ],
   creature_questrelation: ["id", "quest"],
   gameobject_questrelation: ["id", "quest"],
@@ -38,8 +46,17 @@ const COLONNES_UTILES = {
   game_event_creature: ["guid", "event"],
   game_event_gameobject: ["guid", "event"],
   game_event_quest: ["quest", "event"],
-  creature_template: ["Entry", "Name"],
-  gameobject_template: ["entry", "name"],
+  creature_template: ["Entry", "Name", "LootId", "KillCredit1", "KillCredit2"],
+  gameobject_template: ["entry", "name", "type", "data1"],
+  // Où rendre une quête.
+  creature_involvedrelation: ["id", "quest"],
+  gameobject_involvedrelation: ["id", "quest"],
+  // Qui fait tomber quel objet (mincountOrRef négatif : renvoi vers une table commune, ignoré).
+  creature_loot_template: ["entry", "item", "ChanceOrQuestChance", "groupid", "mincountOrRef"],
+  gameobject_loot_template: ["entry", "item", "ChanceOrQuestChance", "groupid", "mincountOrRef"],
+  // Une apparition au genre tiré au hasard (colonne id à 0 dans creature ou gameobject) : ses genres possibles.
+  creature_spawn_entry: ["guid", "entry"],
+  gameobject_spawn_entry: ["guid", "entry"],
 };
 
 // Cartes gardées : 0 = Royaumes de l'Est, 1 = Kalimdor. Les autres sont des instances.
@@ -431,7 +448,271 @@ function construire(base) {
       titre: q.Title,
     });
   }
-  return { quetes, departs };
+  const journal = construireJournal(base, new Set(quetes.map((q) => q.numero)));
+  return { quetes, departs, journal };
+}
+
+// ---------------------------------------------------------------------------
+// Les quêtes du journal : où se font les objectifs, où rendre la quête
+// ---------------------------------------------------------------------------
+
+// Un objet que plus de tant de genres de monstres différents font tomber est trop commun (tissu, viande...) :
+// pas d'icône pour lui, et pas de ligne dans la bulle de ces monstres. Un objet qui ne tombe que pour une quête
+// (taux négatif dans la base, comme les yeux de murloc) a droit à plus de sources : il est fait pour ça.
+const SOURCES_MAX = 20;
+const SOURCES_MAX_QUETE = 50;
+// Taux de chute (en %, signe ignoré : négatif = chute réservée aux quêtes) en dessous duquel un monstre ne compte pas.
+const CHANCE_MIN = 1;
+// Au plus tant de groupes d'apparitions par objectif et par continent.
+const GROUPES_MAX = 5;
+// Rayon de départ du regroupement (mètres), doublé tant qu'il reste trop de groupes, jusqu'au maximum.
+const RAYON_DEPART = 100;
+const RAYON_MAX = 1600;
+// Types d'objets du décor qui contiennent un butin (data1 = numéro du butin) : 3 coffre, 25 banc de poissons.
+const TYPES_GO_BUTIN = new Set([3, 25]);
+// Genres d'objectif, dans le fichier : 1 monstre à tuer, 2 objet à ramasser, 3 objet du décor à utiliser.
+const OBJ_TUER = 1;
+const OBJ_OBJET = 2;
+const OBJ_DECOR = 3;
+
+// Regroupe des apparitions { x, y } d'un même continent. Chaque groupe est représenté par l'apparition la plus
+// proche de son centre (jamais un point au milieu d'un lac entre deux camps). Rend [{ x, y, n }], du plus gros
+// groupe au plus petit, au plus GROUPES_MAX.
+function grouperSurContinent(points) {
+  let rayon = RAYON_DEPART;
+  let groupes;
+  for (;;) {
+    groupes = [];
+    const cellules = new Map();
+    for (const p of points) {
+      const ci = Math.floor(p.x / rayon);
+      const cj = Math.floor(p.y / rayon);
+      let trouve = null;
+      for (let di = -1; di <= 1 && !trouve; di++) {
+        for (let dj = -1; dj <= 1 && !trouve; dj++) {
+          for (const g of cellules.get(ci + di + ":" + (cj + dj)) || []) {
+            if (Math.hypot(g.cx - p.x, g.cy - p.y) <= rayon) {
+              trouve = g;
+              break;
+            }
+          }
+        }
+      }
+      if (!trouve) {
+        trouve = { cx: p.x, cy: p.y, points: [] };
+        groupes.push(trouve);
+        const cle = ci + ":" + cj;
+        if (!cellules.has(cle)) cellules.set(cle, []);
+        cellules.get(cle).push(trouve);
+      }
+      trouve.points.push(p);
+      const n = trouve.points.length;
+      trouve.cx += (p.x - trouve.cx) / n;
+      trouve.cy += (p.y - trouve.cy) / n;
+    }
+    if (groupes.length <= GROUPES_MAX || rayon >= RAYON_MAX) break;
+    rayon *= 2;
+  }
+  const sortie = groupes.map((g) => {
+    let meilleur = g.points[0];
+    let dmin = Infinity;
+    for (const p of g.points) {
+      const d = Math.hypot(p.x - g.cx, p.y - g.cy);
+      if (d < dmin) {
+        dmin = d;
+        meilleur = p;
+      }
+    }
+    return { x: Math.round(meilleur.x), y: Math.round(meilleur.y), n: g.points.length };
+  });
+  sortie.sort((a, b) => b.n - a.n || a.x - b.x || a.y - b.y);
+  return sortie.slice(0, GROUPES_MAX);
+}
+
+// Apparitions [{ map, x, y }] de plusieurs continents -> liste plate [continent, x, y, continent, x, y, ...].
+function positionsGroupees(apparitions) {
+  const parCont = new Map();
+  for (const a of apparitions) {
+    if (!parCont.has(a.map)) parCont.set(a.map, []);
+    parCont.get(a.map).push(a);
+  }
+  const plat = [];
+  for (const cont of Array.from(parCont.keys()).sort((a, b) => a - b)) {
+    for (const g of grouperSurContinent(parCont.get(cont))) plat.push(cont, g.x, g.y);
+  }
+  return plat;
+}
+
+// quetesGardees : Set des numéros de quêtes de ns.QUETES. Rend { objectifs: Map(numéro -> [objectif]), fins, noms, stats }.
+// Un objectif : { genre, besoin, positions (liste plate), monstres (numéros de créatures, pour la bulle) }.
+function construireJournal(base, quetesGardees) {
+  const stats = { objectifs: 0, avecPositions: 0, sansPosition: 0, objetsCommuns: 0, fins: 0, quetesSansFin: 0 };
+
+  // Apparitions par genre de créature et d'objet du décor (déjà réduites aux continents par lireBase).
+  // Une apparition dont le genre est tiré au hasard (id 0) compte pour chacun de ses genres possibles.
+  function indexer(liste, entrees) {
+    const parGuid = new Map();
+    for (const e of entrees || []) {
+      if (!parGuid.has(e.guid)) parGuid.set(e.guid, []);
+      parGuid.get(e.guid).push(e.entry);
+    }
+    const index = new Map();
+    for (const s of liste) {
+      const genres = s.id ? [s.id] : parGuid.get(s.guid) || [];
+      for (const id of genres) {
+        if (!index.has(id)) index.set(id, []);
+        index.get(id).push({ map: s.map, x: s.position_x, y: s.position_y, guid: s.guid });
+      }
+    }
+    return index;
+  }
+  const spawnsCreature = indexer(base.creature, base.creature_spawn_entry);
+  const spawnsObjet = indexer(base.gameobject, base.gameobject_spawn_entry);
+
+  // Les créatures qui comptent pour une autre (KillCredit) : tuer l'une fait avancer l'objectif de l'autre.
+  const credits = new Map(); // cible -> [créatures]
+  const nomsCreature = new Map();
+  const butinCreature = new Map(); // numéro de butin -> [créatures]
+  for (const c of base.creature_template) {
+    nomsCreature.set(c.Entry, c.Name);
+    for (const k of [c.KillCredit1, c.KillCredit2]) {
+      if (k && k !== c.Entry) {
+        if (!credits.has(k)) credits.set(k, []);
+        credits.get(k).push(c.Entry);
+      }
+    }
+    if (c.LootId) {
+      if (!butinCreature.has(c.LootId)) butinCreature.set(c.LootId, []);
+      butinCreature.get(c.LootId).push(c.Entry);
+    }
+  }
+  const nomsObjet = new Map();
+  const butinObjet = new Map(); // numéro de butin -> [objets du décor]
+  for (const g of base.gameobject_template) {
+    nomsObjet.set(g.entry, g.name);
+    if (TYPES_GO_BUTIN.has(g.type) && g.data1 > 0) {
+      if (!butinObjet.has(g.data1)) butinObjet.set(g.data1, []);
+      butinObjet.get(g.data1).push(g.entry);
+    }
+  }
+
+  // Les objets demandés par les quêtes gardées, puis qui les fait tomber.
+  const fichesQuetes = new Map();
+  const objetsVoulus = new Set();
+  for (const q of base.quest_template) {
+    if (!quetesGardees.has(q.entry)) continue;
+    fichesQuetes.set(q.entry, q);
+    for (let i = 1; i <= 4; i++) if (q["ReqItemId" + i] > 0) objetsVoulus.add(q["ReqItemId" + i]);
+  }
+  // Rend Map(objet -> { quete: Set, autres: Set }) : les sources où l'objet ne tombe que pour une quête, et les autres.
+  function sourcesDe(table, parButin) {
+    const sources = new Map();
+    for (const r of table) {
+      if (!objetsVoulus.has(r.item) || r.mincountOrRef < 0) continue;
+      const chance = Math.abs(r.ChanceOrQuestChance);
+      // Taux 0 dans un groupe : chance égale entre les objets du groupe, donc gardé.
+      if (chance < CHANCE_MIN && !(chance === 0 && r.groupid > 0)) continue;
+      if (!sources.has(r.item)) sources.set(r.item, { quete: new Set(), autres: new Set() });
+      const s = sources.get(r.item);
+      for (const e of parButin.get(r.entry) || []) (r.ChanceOrQuestChance < 0 ? s.quete : s.autres).add(e);
+    }
+    return sources;
+  }
+  // Les sources retenues pour un objet : celles « pour une quête » s'il y en a, sinon les autres ; aucune s'il y en a trop.
+  function sourcesRetenues(s) {
+    if (!s) return { liste: [], commun: false };
+    const quete = s.quete.size > 0;
+    const ensemble = quete ? s.quete : s.autres;
+    if (ensemble.size > (quete ? SOURCES_MAX_QUETE : SOURCES_MAX)) return { liste: [], commun: true };
+    return { liste: Array.from(ensemble).sort((a, b) => a - b), commun: false };
+  }
+  const sourcesMonstres = sourcesDe(base.creature_loot_template, butinCreature);
+  const sourcesObjets = sourcesDe(base.gameobject_loot_template, butinObjet);
+
+  const objectifs = new Map();
+  for (const n of Array.from(quetesGardees).sort((a, b) => a - b)) {
+    const q = fichesQuetes.get(n);
+    if (!q) continue;
+    const liste = [];
+    // Monstres à tuer et objets du décor à utiliser (cases 1 à 4), puis objets à ramasser (cases 1 à 4).
+    for (let i = 1; i <= 4; i++) {
+      const id = q["ReqCreatureOrGOId" + i];
+      const besoin = q["ReqCreatureOrGOCount" + i] || 0;
+      if (id > 0) {
+        const monstres = Array.from(new Set([id, ...(credits.get(id) || [])])).sort((a, b) => a - b);
+        const app = [];
+        for (const m of monstres) app.push(...(spawnsCreature.get(m) || []));
+        liste.push({ genre: OBJ_TUER, besoin, positions: positionsGroupees(app), monstres });
+      } else if (id < 0) {
+        liste.push({ genre: OBJ_DECOR, besoin, positions: positionsGroupees(spawnsObjet.get(-id) || []), monstres: [] });
+      }
+    }
+    for (let i = 1; i <= 4; i++) {
+      const objet = q["ReqItemId" + i];
+      if (!(objet > 0)) continue;
+      const besoin = q["ReqItemCount" + i] || 0;
+      const sm = sourcesRetenues(sourcesMonstres.get(objet));
+      const monstres = sm.liste;
+      const decor = sourcesRetenues(sourcesObjets.get(objet)).liste;
+      if (sm.commun) stats.objetsCommuns++;
+      const app = [];
+      for (const m of monstres) app.push(...(spawnsCreature.get(m) || []));
+      for (const g of decor) app.push(...(spawnsObjet.get(g) || []));
+      liste.push({ genre: OBJ_OBJET, besoin, positions: positionsGroupees(app), monstres });
+    }
+    if (liste.length === 0) continue;
+    for (const o of liste) {
+      stats.objectifs++;
+      if (o.positions.length > 0) stats.avecPositions++;
+      else stats.sansPosition++;
+    }
+    objectifs.set(n, liste);
+  }
+
+  // Où rendre : PNJ (genre 1) et objets du décor (genre 2), au plus 3 points par continent comme les départs.
+  // Les apparitions liées à une fête ne servent que si le PNJ n'existe pas hors fête.
+  const guidsEvenement = { 1: new Set(), 2: new Set() };
+  for (const e of base.game_event_creature || []) if (e.event > 0) guidsEvenement[1].add(e.guid);
+  for (const e of base.game_event_gameobject || []) if (e.event > 0) guidsEvenement[2].add(e.guid);
+  const rendeurs = new Map(); // "genre:id" -> Set de quêtes
+  for (const [liste, genre] of [[base.creature_involvedrelation, 1], [base.gameobject_involvedrelation, 2]]) {
+    for (const r of liste) {
+      if (!quetesGardees.has(r.quest)) continue;
+      const cle = genre + ":" + r.id;
+      if (!rendeurs.has(cle)) rendeurs.set(cle, new Set());
+      rendeurs.get(cle).add(r.quest);
+    }
+  }
+  const fins = [];
+  const noms = new Map(); // numéro (négatif pour un objet du décor) -> nom anglais
+  const quetesAvecFin = new Set();
+  for (const [cle, quetes] of rendeurs) {
+    const [genre, id] = cle.split(":").map(Number);
+    const toutes = (genre === 1 ? spawnsCreature : spawnsObjet).get(id) || [];
+    const permanentes = toutes.filter((s) => !guidsEvenement[genre].has(s.guid));
+    const app = permanentes.length > 0 ? permanentes : toutes;
+    if (app.length === 0) continue;
+    const listeQuetes = Array.from(quetes).sort((a, b) => a - b);
+    const parCont = new Map();
+    for (const s of app) {
+      if (!parCont.has(s.map)) parCont.set(s.map, []);
+      parCont.get(s.map).push(s);
+    }
+    for (const [continent, pts] of parCont) {
+      for (const p of choisirPoints(pts)) {
+        fins.push({
+          continent, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, genre, id, quetes: listeQuetes,
+        });
+      }
+    }
+    const nom = genre === 1 ? nomsCreature.get(id) : nomsObjet.get(id);
+    if (nom) noms.set(genre === 1 ? id : -id, nom);
+    for (const n of listeQuetes) quetesAvecFin.add(n);
+  }
+  fins.sort((a, b) => a.continent - b.continent || a.x - b.x || a.y - b.y || a.genre - b.genre || a.id - b.id);
+  stats.fins = fins.length;
+  for (const n of quetesGardees) if (!quetesAvecFin.has(n)) stats.quetesSansFin++;
+  return { objectifs, fins, noms, stats };
 }
 
 // ---------------------------------------------------------------------------
@@ -506,7 +787,56 @@ function ecrireLua(sortie, nomSource, donnees) {
   }
   l.push("}");
   l.push("");
+  if (donnees.journal) ecrireJournal(l, donnees.journal);
   fs.writeFileSync(sortie, l.join("\n"), "utf8");
+}
+
+// Une grande table écrite en morceaux, chacun dans sa propre fonction : Lua 5.1 limite le nombre de constantes
+// d'une même fonction (environ 262 000), et ces tables en ont beaucoup.
+const LIGNES_PAR_MORCEAU = 400;
+function ecrireEnMorceaux(l, nomTable, lignes) {
+  l.push(nomTable + " = {}");
+  for (let i = 0; i < lignes.length; i += LIGNES_PAR_MORCEAU) {
+    l.push("do local t = (function() return {");
+    for (const ligne of lignes.slice(i, i + LIGNES_PAR_MORCEAU)) l.push(ligne);
+    l.push("} end)() for k, v in pairs(t) do " + nomTable + "[k] = v end end");
+  }
+}
+
+function ecrireJournal(l, journal) {
+  l.push("-- Les objectifs des quêtes, pour les icônes de la carte et la bulle des monstres.");
+  l.push("-- [numéro de quête] = { { genre, besoin, { continent, x, y, ... }, { monstres } }, ... }");
+  l.push("-- genre : 1 monstre à tuer, 2 objet à ramasser, 3 objet du décor à utiliser. besoin : le nombre demandé.");
+  l.push("-- Les positions sont des groupes d'apparitions (au plus " + GROUPES_MAX + " par continent, le plus gros d'abord).");
+  l.push("-- monstres : les créatures qui font avancer l'objectif (tuées, ou qui font tomber l'objet).");
+  l.push("-- Ordre : monstres et objets du décor (cases 1 à 4 de la base), puis objets à ramasser (cases 1 à 4).");
+  const lignes = [];
+  for (const [n, liste] of journal.objectifs) {
+    const objs = liste.map((o) => {
+      const champs = [o.genre, o.besoin];
+      if (o.positions.length > 0 || o.monstres.length > 0) champs.push("{" + o.positions.join(",") + "}");
+      if (o.monstres.length > 0) champs.push("{" + o.monstres.join(",") + "}");
+      return "{" + champs.join(",") + "}";
+    });
+    lignes.push("[" + n + "]={" + objs.join(",") + "},");
+  }
+  ecrireEnMorceaux(l, "ns.OBJECTIFS", lignes);
+  l.push("");
+  l.push("-- Où rendre une quête : { continent, x, y, genre, numéro, { numéros de quêtes } }");
+  l.push("-- genre : 1 PNJ, 2 objet du décor. numéro : celui du PNJ ou de l'objet dans la base.");
+  ecrireEnMorceaux(
+    l,
+    "ns.FINS",
+    journal.fins.map((f, i) =>
+      "[" + (i + 1) + "]={" + [f.continent, nombreLua(f.x), nombreLua(f.y), f.genre, f.id].join(",") + ",{" + f.quetes.join(",") + "}},"
+    )
+  );
+  l.push("");
+  l.push("-- Les noms anglais de ceux qui reprennent les quêtes : [numéro du PNJ] ou [-numéro de l'objet du décor].");
+  l.push("-- Le jeu est en français : l'addon préfère le nom appris en jeu en parlant au PNJ.");
+  const noms = Array.from(journal.noms.entries()).sort((a, b) => a[0] - b[0]);
+  ecrireEnMorceaux(l, "ns.NOMS_FINS", noms.map(([k, v]) => "[" + k + "]=" + chaineLua(v) + ","));
+  l.push("");
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +862,7 @@ async function principal() {
 
   const donnees = construire(base);
   fs.mkdirSync(path.dirname(sortie), { recursive: true });
+  const tailleAvant = fs.existsSync(sortie) ? fs.statSync(sortie).size : 0;
   ecrireLua(sortie, path.basename(source), donnees);
 
   const parContinent = { 0: 0, 1: 0 };
@@ -541,7 +872,11 @@ async function principal() {
   console.log("Quêtes : " + donnees.quetes.length);
   console.log("Points de départ : " + donnees.departs.length +
     " (Royaumes de l'Est " + parContinent[0] + ", Kalimdor " + parContinent[1] + ")");
-  console.log("Fichier : " + sortie + " (" + (taille / 1024).toFixed(0) + " Ko)");
+  const j = donnees.journal.stats;
+  console.log("Objectifs : " + j.objectifs + " (" + j.avecPositions + " avec des positions, " + j.sansPosition +
+    " sans ; objets trop communs écartés : " + j.objetsCommuns + ")");
+  console.log("Points où rendre : " + j.fins + " (quêtes sans endroit où rendre : " + j.quetesSansFin + ")");
+  console.log("Fichier : " + sortie + " (" + (taille / 1024).toFixed(0) + " Ko, avant : " + (tailleAvant / 1024).toFixed(0) + " Ko)");
 }
 
 if (require.main === module) {
