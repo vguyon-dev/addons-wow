@@ -205,6 +205,7 @@ ns.NOUVEAUTES = {
     "Sacs rangés : le carquois et les sacs de métier sont enfin compris. Leurs cases vides ne sont plus comptées comme des cases libres, chacun a sa propre case où déposer ce qui y va, et les flèches, le cuir ou les herbes qui traînent dans un sac ordinaire y sont rangés tout seuls (et par le bouton Ranger).",
     "Métiers auto : le mode pêche équipe tout seul la canne de tes sacs et remet ton arme à la fin. Sans canne, il te le dit.",
     "Les commandes changent : /metiers pour Métiers auto et /marchand pour Marchand auto. Le jeu gardait /mt et /ma pour lui (tank et assistant du groupe), elles ne marchaient donc pas.",
+    "Suivi des quêtes : une quête à temps limité (escorte, livraison) montre son compte à rebours sous le titre, orange sous 5 minutes et rouge sous 1 minute (option dans /sq).",
   } },
   { date = "2026-11-12", titre = "La fenêtre s'appelle « Mes addons »", lignes = {
     "La fenêtre commune des réglages s'appelle maintenant « Mes addons », comme la catégorie dans la liste des addons du jeu.",

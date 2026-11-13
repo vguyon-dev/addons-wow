@@ -35,6 +35,7 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [x] Confort : le scintillement forcé à 0 revient à 1 en moins de 3 secondes.
 - [x] Quêtes disponibles (pilote du banc) : 5 icônes d'objectif et 2 « ? » sur la carte de la Marche de l'Ouest ; bulles justes ; clic gauche sur un « ? » = balise GPS « Rendre : Aller voir Gryan Stoutmantle 56.3, 47.5 » ; option « ? » gris : un « ? » gris en plus, retiré en la coupant ; journal replié : mêmes comptes.
 - [x] Barres de vie : en combat, barre colorée et pourcentage sur le golem attaqué (45 %).
+- [ ] Suivi des quêtes 0.2.0 : prendre une quête à temps limité (escorte, livraison) et la suivre : « Temps restant : 4:32 » sous le titre, qui descend chaque seconde, orange sous 5 minutes, rouge sous 1 minute ; option « Le compte à rebours des quêtes chronométrées » dans /sq.
 - [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; un sac de métier avec de la place (la sacoche de dépeçage était pleine) ; banque avec un sac spécial.
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
 - [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).

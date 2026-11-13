@@ -121,6 +121,21 @@ verifie("distance : négative", nil, ns.texteDistance(-5))
 verifie("distance : texte", nil, ns.texteDistance("12"))
 verifie("distance : infinie", nil, ns.texteDistance(math.huge))
 
+-- Le compte à rebours.
+verifie("rebours : minutes et secondes", "4:32", ns.texteRebours(272))
+verifie("rebours : heures", "1:02:05", ns.texteRebours(3725))
+verifie("rebours : moins d'une minute", "0:09", ns.texteRebours(9))
+verifie("rebours : une fraction compte pour une seconde", "0:01", ns.texteRebours(0.4))
+verifie("rebours : à zéro", "temps écoulé", ns.texteRebours(0))
+verifie("rebours : dépassé", "temps écoulé", ns.texteRebours(-3))
+verifie("rebours : inconnu", nil, ns.texteRebours(nil))
+verifie("rebours : texte", nil, ns.texteRebours("12"))
+verifie("rebours : infini", nil, ns.texteRebours(math.huge))
+local function teinte(s) local r, g, b = ns.couleurRebours(s) return r .. "," .. g .. "," .. b end
+verifie("rebours : rouge sous 1 minute", "1,0.25,0.25", teinte(45))
+verifie("rebours : orange sous 5 minutes", "1,0.6,0.1", teinte(200))
+verifie("rebours : doré au-delà", "1,0.82,0", teinte(900))
+
 -- La couleur de difficulté.
 local function couleur(n, j, v) local r, g, b = ns.couleurDifficulte(n, j, v) return r .. "," .. g .. "," .. b end
 verifie("couleur : +5 rouge", "1,0.1,0.1", couleur(15, 10))
@@ -372,7 +387,8 @@ local function installer(avecAPI)
   _G.EN_INSTANCE = false
   for _, n in ipairs({ "C_QuestLog", "C_SuperTrack", "C_QuestInfoSystem", "GetQuestLogSpecialItemInfo",
     "GetQuestLogSpecialItemCooldown", "GetQuestLogCompletionText", "GetQuestLogQuestText", "QuestMapFrame_OpenToQuestDetails",
-    "GetProfessions", "GetProfessionInfo", "GetNumClasses", "GetClassInfo" }) do _G[n] = nil end
+    "GetProfessions", "GetProfessionInfo", "GetNumClasses", "GetClassInfo",
+    "GetTime", "GetQuestTimers", "GetQuestIndexForTimer" }) do _G[n] = nil end
   if not avecAPI then return end
 
   -- Le journal de quêtes simulé.
@@ -412,6 +428,15 @@ local function installer(avecAPI)
   J.super = 0
   J.selection = 0
   J.courts = { [105] = "Trouvez des épices" }
+  -- Les quêtes chronométrées : { { index dans le journal, heure de fin } } et le repli GetTimeAllowed.
+  J.horloge, J.chronos, J.alloue = 1000, {}, {}
+  _G.GetTime = function() return J.horloge end
+  _G.GetQuestTimers = function()
+    local t = {}
+    for i, c in ipairs(J.chronos) do t[i] = c.fin - J.horloge end
+    return unpack(t)
+  end
+  _G.GetQuestIndexForTimer = function(i) return J.chronos[i] and J.chronos[i].index end
   _G.JEU = J
   local function parId(id)
     for _, e in ipairs(J.journal) do if e.questID == id then return e end end
@@ -434,6 +459,7 @@ local function installer(avecAPI)
     IsWorldQuest = function(id) return id == 110 end,
     RemoveQuestWatch = function(id) appelsJeu.retire[#appelsJeu.retire + 1] = id end,
     GetSelectedQuest = function() return J.selection end,
+    GetTimeAllowed = function(id) local a = J.alloue[id] if a then return a[1], a[2] end end,
     SetSelectedQuest = function(id) J.selection = id end,
   }
   _G.C_SuperTrack = {
@@ -815,6 +841,37 @@ declencher("QUEST_LOG_UPDATE")
 avancer()
 verifie("quête finie, objet qui reste : proposé", true, SuiviQuetesObjet1._shown)
 JEU.finies[106] = nil
+
+-- Le compte à rebours d'une quête chronométrée (« Loups de la forêt » est à l'index 2 du journal).
+verifie("rebours : rien sans quête chronométrée", "", ligneDe(100).chrono._text)
+JEU.chronos = { { index = 2, fin = JEU.horloge + 272 } }
+declencher("QUEST_LOG_UPDATE")
+avancer()
+verifie("rebours : sous le titre", "Temps restant : 4:32", ligneDe(100).chrono._text)
+verifie("rebours : seulement sur la quête chronométrée", "", ligneDe(102).chrono._text)
+JEU.horloge = JEU.horloge + 220
+tictac()
+verifie("rebours : recompté chaque seconde", "Temps restant : 0:52", ligneDe(100).chrono._text)
+r.changer("uneLigne", true)
+avancer()
+verifie("rebours : gardé en une ligne par quête", "Temps restant : 0:52", ligneDe(100).chrono._text)
+r.changer("uneLigne", false)
+-- Repli : le temps alloué et le temps écoulé que donne C_QuestLog.GetTimeAllowed.
+JEU.alloue[102] = { 600, 100 }
+declencher("QUEST_LOG_UPDATE")
+avancer()
+verifie("rebours : repli sur GetTimeAllowed", "Temps restant : 8:20", ligneDe(102).chrono._text)
+JEU.horloge = JEU.horloge + 60
+tictac()
+verifie("rebours : à zéro", "Temps restant : temps écoulé", ligneDe(100).chrono._text)
+r.changer("rebours", false)
+avancer()
+verifie("réglage : sans compte à rebours", "", ligneDe(100).chrono._text)
+r.changer("rebours", true)
+JEU.chronos, JEU.alloue = {}, {}
+declencher("QUEST_LOG_UPDATE")
+avancer()
+verifie("rebours : parti avec la minuterie", "", ligneDe(100).chrono._text)
 
 -- Les distances sont relues toutes les 2 secondes.
 JEU.distances[103] = 7

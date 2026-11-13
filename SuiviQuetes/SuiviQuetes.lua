@@ -6,6 +6,8 @@
 --   Classe, Métiers, JcJ, Journalières et répétables.
 -- Une section vide n'est pas affichée. Chaque quête montre une pastille, son niveau et
 -- son titre (coloré selon la difficulté), la distance si le jeu la donne, puis ses objectifs.
+-- Une quête chronométrée (escorte, livraison en temps limité) montre son compte à rebours sous
+-- le titre, mis à jour chaque seconde, orange sous 5 minutes et rouge sous 1 minute.
 --
 --   Clic : choisir la quête (le GPS la suit alors)
 --   Survol : la description de la quête (l'addon n'ouvre jamais le journal du jeu, voir plus bas)
@@ -29,6 +31,7 @@ local DEFAUTS = {
   rendreEnHaut = true,       -- les quêtes finies dans une section « À rendre », tout en haut
   uneLigne = false,          -- une seule ligne par quête (sans les objectifs)
   distance = true,           -- la distance à droite du titre
+  rebours = true,            -- le compte à rebours des quêtes chronométrées
   cacherAutresZones = false, -- ne garder que les quêtes de la zone où tu es (donjons et quêtes à rendre restent)
   toutesLesQuetes = false,   -- toutes les quêtes du journal, pas seulement les suivies
   largeur = 300,
@@ -205,6 +208,24 @@ function ns.texteDistance(metres)
   local arrondi = math.floor(metres + 0.5)
   if arrondi < 1000 then return arrondi .. " m" end
   return (string.format("%.1f", metres / 1000):gsub("%.", ",")) .. " km"
+end
+
+-- Le compte à rebours d'une quête chronométrée : « 4:32 », « 1:02:05 », « temps écoulé » à zéro ;
+-- nil si on ne sait pas. Une fraction de seconde compte pour une seconde entière (0,4 s -> 0:01).
+function ns.texteRebours(secondes)
+  if type(secondes) ~= "number" or secondes ~= secondes or secondes == math.huge or secondes == -math.huge then return nil end
+  if secondes <= 0 then return "temps écoulé" end
+  local s = math.ceil(secondes)
+  local h, m, r = math.floor(s / 3600), math.floor((s % 3600) / 60), s % 60
+  if h > 0 then return string.format("%d:%02d:%02d", h, m, r) end
+  return string.format("%d:%02d", m, r)
+end
+
+-- Sa couleur : rouge sous 1 minute (et à zéro), orange sous 5 minutes, sinon jaune doré.
+function ns.couleurRebours(secondes)
+  if type(secondes) ~= "number" or secondes <= 60 then return 1, 0.25, 0.25 end
+  if secondes <= 300 then return 1, 0.6, 0.1 end
+  return 1, 0.82, 0
 end
 
 -- La couleur d'un titre selon la difficulté, comme le jeu (rouge, orange, jaune, vert, gris).
@@ -481,6 +502,30 @@ local function objetDeQuete(index, fini)
   return { lien = lien, icone = icone, numero = numero, index = index }
 end
 
+-- Les quêtes chronométrées : { [index dans le journal] = secondes restantes }. Le jeu les donne
+-- toutes d'un coup (GetQuestTimers, avec GetQuestIndexForTimer pour savoir à quelle quête va chaque
+-- minuterie) ; C_QuestLog.GetTimeAllowed sert de repli, quête par quête (voir tempsRestant).
+local function chronosDuJeu()
+  local t = {}
+  if type(GetQuestTimers) ~= "function" or type(GetQuestIndexForTimer) ~= "function" then return t end
+  local ok, liste = pcall(function() return { GetQuestTimers() } end)
+  if not ok or type(liste) ~= "table" then return t end
+  for i, v in ipairs(liste) do
+    local secondes = tonumber(v)
+    local index = sur(GetQuestIndexForTimer, i)
+    if secondes and type(index) == "number" then t[index] = secondes end
+  end
+  return t
+end
+
+local function tempsRestant(id, index, chronos)
+  if index and chronos[index] then return chronos[index] end
+  local total, ecoule = ql("GetTimeAllowed", id)
+  if type(total) == "number" and total > 0 and type(ecoule) == "number" then
+    return math.max(0, total - ecoule)
+  end
+end
+
 -- Une quête (info du journal + rubrique) devient une fiche pour le panneau.
 local function fiche(id, info, rubrique, zones, contexte)
   local tag = ql("GetQuestTagInfo", id)
@@ -527,6 +572,8 @@ end
 -- Les quêtes à montrer : les suivies (ou tout le journal), sans les cachées, tâches et quêtes mondiales.
 local function collecter(sansFiltre)
   local zones, contexte = nomsZone(), contexteGenres()
+  local chronos = db.rebours and chronosDuJeu() or {}
+  local maintenant = db.rebours and sur(GetTime)
   -- Le journal tel qu'il s'affiche : chaque quête avec la rubrique (l'en-tête) sous laquelle elle est rangée.
   local journal, ordre, rubrique = {}, {}, nil
   local nombre = ql("GetNumQuestLogEntries")
@@ -569,6 +616,11 @@ local function collecter(sansFiltre)
       local info = entree and entree.info
       if info and not (info.isHidden or info.isTask or info.isBounty or ql("IsWorldQuest", id) == true) then
         local q = fiche(id, info, entree.rubrique, zones, contexte)
+        if type(maintenant) == "number" then
+          -- L'heure de fin, pas le temps restant : le panneau recompte chaque seconde sans relire le journal.
+          local reste = tempsRestant(id, info.questLogIndex, chronos)
+          if reste then q.fin = maintenant + reste end
+        end
         if sansFiltre or ns.garderQuete(q, db.cacherAutresZones) then quetes[#quetes + 1] = q end
       end
     end
@@ -785,11 +837,13 @@ local function creerLigneQuete()
   b.dist:SetPoint("TOPRIGHT", b, "TOPRIGHT", -4, -5)
   b.dist:SetJustifyH("RIGHT")
   b.dist:SetWidth(54)
+  b.chrono = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.chrono:SetJustifyH("LEFT")
   b.obj = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   b.obj:SetJustifyH("LEFT")
   b.obj:SetJustifyV("TOP")
   b.obj:SetWordWrap(true)
-  for _, fs in ipairs({ b.pastille, b.titre, b.dist, b.obj }) do ombre(fs) end
+  for _, fs in ipairs({ b.pastille, b.titre, b.dist, b.chrono, b.obj }) do ombre(fs) end
   b:SetScript("OnClick", function(self, bouton)
     local id = self.numero
     if not id then return end
@@ -861,6 +915,19 @@ local function remplirLigneQuete(b, q, largeur, choisieId)
   b.dist:SetTextColor(0.7, 0.7, 0.7)
   b.titre:SetWidth(largeur - 22 - (texteDist and 58 or 6))
   local hauteur = 4 + (b.titre:GetStringHeight() or 13) + 4
+  -- Le compte à rebours, sous le titre (même en « une ligne par quête » : c'est ce qui presse le plus).
+  b.fin, b.finSignalee = q.fin, nil
+  if q.fin then
+    b.chrono:ClearAllPoints()
+    b.chrono:SetPoint("TOPLEFT", b, "TOPLEFT", 22, -(hauteur - 2))
+    b.chrono:SetWidth(largeur - 22 - 6)
+    ns.majChrono(b)
+    b.chrono:Show()
+    hauteur = hauteur + (b.chrono:GetStringHeight() or 12) + 2
+  else
+    b.chrono:SetText("")
+    b.chrono:Hide()
+  end
   local lignes = (not db.uneLigne) and ns.objectifsAffiches(q) or {}
   if #lignes > 0 then
     b.obj:ClearAllPoints()
@@ -878,6 +945,19 @@ local function remplirLigneQuete(b, q, largeur, choisieId)
   b.trait:SetShown(estChoisie)
   b:SetSize(largeur, hauteur)
   return hauteur
+end
+
+-- Le compte à rebours d'une ligne, recalculé depuis l'heure de fin.
+function ns.majChrono(b)
+  if not b.fin then return end
+  local reste = b.fin - (sur(GetTime) or b.fin)
+  b.chrono:SetText("Temps restant : " .. (ns.texteRebours(reste) or "?"))
+  b.chrono:SetTextColor(ns.couleurRebours(reste))
+  -- À zéro, le jeu fait échouer la quête : on relit le journal une fois pour suivre.
+  if reste <= 0 and not b.finSignalee then
+    b.finSignalee = true
+    if demander then demander() end
+  end
 end
 
 -- Dessine les sections (déjà triées) dans le panneau.
@@ -916,7 +996,7 @@ function redessiner()
     end
   end
   for i = nS + 1, #lignesSections do lignesSections[i]:Hide() end
-  for i = nQ + 1, #lignesQuetes do lignesQuetes[i].numero = nil; lignesQuetes[i]:Hide() end
+  for i = nQ + 1, #lignesQuetes do lignesQuetes[i].numero, lignesQuetes[i].fin = nil, nil; lignesQuetes[i]:Hide() end
   contenu:SetHeight(math.max(y, 1))
   titreEntete:SetText("Quêtes (" .. total .. ")")
   -- Hauteur : celle du contenu, plafonnée à 70 % de l'écran ; au-delà, la molette fait défiler.
@@ -1276,6 +1356,8 @@ ns.reglages = ns.creerReglages({
       aide = "Seulement le titre de chaque quête, sans ses objectifs : le panneau prend moins de place." },
     { cle = "distance", libelle = "La distance jusqu'à la quête",
       aide = "À droite du titre (« 140 m », « 2,6 km »), quand le jeu la donne. Le tri en tient compte : les plus proches d'abord." },
+    { cle = "rebours", libelle = "Le compte à rebours des quêtes chronométrées",
+      aide = "Sous le titre d'une quête à temps limité (escorte, livraison) : le temps qu'il reste, orange sous 5 minutes et rouge sous 1 minute." },
     { cle = "cacherAutresZones", libelle = "Cacher les quêtes des autres zones",
       aide = "Ne garde que les quêtes de la zone où tu es. Les quêtes de donjon et celles à rendre restent toujours visibles." },
     { cle = "toutesLesQuetes", libelle = "Toutes les quêtes du journal",
@@ -1362,6 +1444,14 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
     end
   end
   demander()
+end)
+
+-- Les comptes à rebours : chaque seconde, seulement le texte des lignes qui en ont un.
+C_Timer.NewTicker(1, function()
+  if not (db and db.actif and db.rebours and cadre:IsShown()) then return end
+  for _, b in ipairs(lignesQuetes) do
+    if b.fin and b.numero and b:IsShown() then ns.majChrono(b) end
+  end
 end)
 
 -- Les distances : relues toutes les 2 s, seulement si le panneau est affiché et l'option cochée.
