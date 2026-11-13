@@ -20,8 +20,9 @@ Une jonction du dossier du jeu vers ce dossier, comme pour les autres addons :
          Banc.voir("db", MetiersAutoDB)      -- une table, clé par clé
        end
 
-2. Dans le jeu : `/reload`. Le script tourne deux secondes après l'entrée en jeu, puis le banc recharge
-   l'interface tout seul pour que le jeu écrive le résultat sur le disque.
+2. Dans le jeu : `/reload`. Le script tourne deux secondes après l'entrée en jeu. Attendre sa fin, puis
+   taper `/reload` une seconde fois : c'est ce rechargement qui écrit le résultat sur le disque (le jeu
+   refuse qu'un addon recharge l'interface sans un geste du joueur, vu sur Forever le 13/11/2026).
 3. Lire `<jeu>\_forever_\WTF\Account\<compte>\SavedVariables\BancEssai.lua` : `lignes` contient tout ce que le
    script a noté et tout ce qui est passé dans la discussion (préfixe `chat>`), sans les couleurs.
 
