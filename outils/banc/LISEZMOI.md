@@ -62,3 +62,15 @@ s'arrête sans rien taper. Si le jeu n'est pas lancé, il le dit et ne fait rien
 
 C'est un programme extérieur qui envoie des touches au jeu : à réserver à de courts essais de nos addons,
 jamais pour jouer à la place du joueur.
+
+### Horloge commune et pièges (essai réel du 13/11/2026)
+
+- Le pilote écrit `Banc.top` (une heure du poste) dans le script : le script démarre à cette seconde, et les
+  touches aussi. Un `Banc.apres(8, ...)` et un `attendre:8` tombent donc au même instant.
+- Mesuré : 18 s pour un essai simple, 44 s pour une pêche avec deux appuis sur F.
+- Le jeu refuse `ReloadUI` à un addon : le banc ne recharge jamais seul, le second `/reload` vient du pilote.
+- Une fois une commande tapée dans la discussion, le jeu range les commandes des addons dans
+  `hash_SlashCmdList` et efface les `SLASH_...` : `Banc.commande` regarde aux deux endroits.
+- La structure `INPUT` de `SendInput` fait 40 octets en 64 bits : trop courte, Windows ignore toutes les
+  touches sans rien dire.
+- Sur l'écran des personnages, le pilote ne sait pas entrer en jeu : il faut être sur un personnage.

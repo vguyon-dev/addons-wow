@@ -1,3 +1,2 @@
--- Le script du moment : réécrit à chaque essai (voir outils/banc/LISEZMOI.md).
--- Changer Banc.id fait rejouer le script au prochain /reload.
+-- Le script du moment : réécrit par le pilote à chaque essai (voir outils/banc/LISEZMOI.md).
 Banc.id = "aucun"

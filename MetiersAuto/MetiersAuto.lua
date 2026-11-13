@@ -1145,13 +1145,26 @@ local function remettreArme()
   if not a then return end
   if InCombatLockdown() then armeEnAttente = true return end
   armeEnAttente = false
-  db.armeAvant = nil
   -- Plus de canne en main : tu as déjà changé d'arme toi-même, on ne touche à rien.
-  if not GetInventoryItemID or not estCanne(GetInventoryItemID("player", 16)) then return end
-  if a.main then equiperObjet(a.main, 16) end
-  if a.autre and C_Timer and C_Timer.After then
-    C_Timer.After(0.6, function() if not InCombatLockdown() then equiperObjet(a.autre, 17) end end)
+  if not GetInventoryItemID or not estCanne(GetInventoryItemID("player", 16)) then db.armeAvant = nil return end
+  -- Le jeu refuse de changer d'arme pendant un lancer (ligne à l'eau quand on quitte le mode, vu en jeu le
+  -- 13/11) : on réessaie chaque seconde, et on ne jette la note de l'arme qu'une fois la canne partie.
+  local essais = 0
+  local function essayer()
+    if not db or db.armeAvant ~= a or modePeche then return end
+    if InCombatLockdown() then armeEnAttente = true return end
+    if not estCanne(GetInventoryItemID("player", 16)) then
+      db.armeAvant = nil
+      if a.autre then equiperObjet(a.autre, 17) end
+      return
+    end
+    essais = essais + 1
+    if essais == 2 then ns.reglages.dire("ton arme reviendra quand la ligne sera remontée.") end
+    if essais > 40 then return end -- on garde la note : la fin du prochain combat ou le prochain chargement réessaiera
+    if a.main then equiperObjet(a.main, 16) else db.armeAvant = nil return end
+    if C_Timer and C_Timer.After then C_Timer.After(1, essayer) end
   end
+  essayer()
 end
 
 -- ----- le mode pêche

@@ -29,6 +29,8 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [x] Sacs rangés 0.15.0 (banc d'essai) : une pile de flèches sortie du carquois vers un sac ordinaire y retourne avec `/sr ranger` ; vue par catégories : « Cases libres 11 », une case « Petit carquois 6 », pied « 11 cases libres sur 32 (+ 6 dans Petit carquois) » (avant : 17 libres, et la case de dépôt tombait dans le carquois).
 - [x] Sacs rangés 0.16.0 (banc d'essai) : rangement automatique, une pile de flèches posée dans un sac ordinaire retourne au carquois en moins d'une seconde, message « 1 pile rangée dans tes sacs spéciaux ».
 - [x] Sacs rangés 0.16.1 (banc d'essai) : 25 flèches séparées vers un sac ordinaire complètent la pile de 150 du carquois (175), sans prendre une troisième case.
+- [x] Métiers auto 0.11.1 (pilote du banc) : quitter le mode pêche ligne à l'eau, le jeu refuse de changer d'arme pendant le lancer ; l'addon réessaie chaque seconde, dit « ton arme reviendra quand la ligne sera remontée », et l'arme revient (avant : la canne restait en main).
+- [x] Pilote `outils/banc/banc.ps1` : un essai complet en une commande (18 s pour un essai simple, pêche avec touches F en 44 s), frappe avec accents, aucune touche hors du jeu.
 - [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; un sac de métier avec de la place (la sacoche de dépeçage était pleine) ; banque avec un sac spécial.
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
 - [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).

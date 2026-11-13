@@ -41,6 +41,14 @@ function Banc.commande(ligne)
   local cmd, reste = tostring(ligne):match("^(/%S+)%s*(.*)$")
   if not cmd then return Banc.note("commande illisible :", ligne) end
   cmd = cmd:lower()
+  -- Dès qu'une commande a été tapée dans la discussion, le jeu range les commandes des addons dans cette
+  -- table et efface les SLASH_… (vu en jeu le 13/11) : on y regarde d'abord.
+  local range = type(hash_SlashCmdList) == "table" and hash_SlashCmdList[cmd:upper()]
+  if type(range) == "function" then
+    local ok, e = pcall(range, reste or "")
+    if not ok then Banc.note("ERREUR dans", ligne, ":", e) end
+    return ok
+  end
   for cle, f in pairs(SlashCmdList) do
     local i = 1
     while _G["SLASH_" .. cle .. i] do
@@ -69,11 +77,9 @@ function Banc.fin(sansRecharger)
   fini, ecoute = true, false
   BancEssaiDB = { id = Banc.id, quand = date("%Y-%m-%d %H:%M:%S"), interface = select(4, GetBuildInfo()),
     joueur = UnitName("player"), lignes = lignes }
-  if sansRecharger or Banc.sansRecharger then
-    print("|cff66ccffBanc d'essai|r : essai « " .. tostring(Banc.id) .. " » fini, " .. #lignes .. " lignes. /reload pour l'écrire.")
-  else
-    C_Timer.After(0.5, function() (C_UI and C_UI.Reload or ReloadUI)() end)
-  end
+  -- Le jeu interdit à un addon de recharger l'interface sans un geste du joueur : c'est le pilote
+  -- (ou toi) qui tape le second /reload.
+  print("|cff66ccffBanc d'essai|r : essai « " .. tostring(Banc.id) .. " » fini, " .. #lignes .. " lignes. /reload pour l'écrire.")
 end
 
 local cadre = CreateFrame("Frame")
@@ -91,7 +97,11 @@ cadre:SetScript("OnEvent", function(self)
       if ecoute then lignes[#lignes + 1] = "chat> " .. propre(message) end
     end)
   end
-  C_Timer.After(Banc.depart or 2, function()
+  -- Banc.top : l'heure (celle du poste) où le pilote commence à jouer ses touches. Le script part à ce
+  -- moment précis, pour que les délais du script et ceux des touches se lisent sur la même horloge.
+  local depart = Banc.depart or 2
+  if type(Banc.top) == "number" then depart = math.max(0.5, Banc.top - time()) end
+  C_Timer.After(depart, function()
     ecoute = true
     local ok, e = xpcall(Banc.script, function(m) return tostring(m) .. "\n" .. (debugstack and debugstack(2) or "") end)
     if not ok then Banc.note("ERREUR du script :", e) end

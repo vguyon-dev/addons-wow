@@ -3,7 +3,7 @@
 ## Notes: Pêche facilitée (une seule touche, fenêtre Pêche, ramassage, appâts) et double clic droit avec le son réglé, récolte d'une touche, repérage remis tout seul, liste de courses pour l'artisanat.
 ## Category: Mes addons
 ## Author: addons-wow
-## Version: 0.11.0
+## Version: 0.11.1
 ## IconTexture: Interface\Icons\Trade_Fishing
 ## SavedVariables: MetiersAutoDB
 ## AddonCompartmentFunc: MetiersAuto_OuvrirReglages

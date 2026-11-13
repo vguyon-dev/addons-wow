@@ -43,6 +43,7 @@ public static class BancFenetre {
     [FieldOffset(8)] public long remplissage1;
     [FieldOffset(16)] public long remplissage2;
     [FieldOffset(24)] public long remplissage3;
+    [FieldOffset(32)] public long remplissage4; // la structure INPUT fait 40 octets en 64 bits, sinon SendInput refuse tout
   }
   [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint n, INPUT[] entrees, int taille);
   static void Envoyer(ushort vk, ushort scan, uint drapeaux) {
@@ -204,13 +205,17 @@ function Attendre-Ecriture([string]$chemin, $avant, [double]$delai) {
 
 # ----- l'essai
 $erreursAvant = Compter-Erreurs $fichierErreurs
+# Le top : l'heure où les touches commencent. Le banc fait partir le script à cette même seconde.
+$top = [DateTimeOffset]::Now.ToUnixTimeSeconds() + [int][math]::Ceiling($Chargement) + 2
+$contenu = "Banc.top = $top`n" + $contenu
 [IO.File]::WriteAllText($cible, $contenu, (New-Object Text.UTF8Encoding $false))
 $debut = Get-Date
 
 $avant = if (Test-Path -LiteralPath $fichierErreurs) { (Get-Item -LiteralPath $fichierErreurs).LastWriteTimeUtc } else { $null }
 Taper "/reload"
 if (-not (Attendre-Ecriture $fichierErreurs $avant 20)) { throw "le jeu n'a pas rechargé (la commande /reload n'est pas partie)." }
-Start-Sleep -Seconds $Chargement
+$attente = $top - [DateTimeOffset]::Now.ToUnixTimeMilliseconds() / 1000.0
+if ($attente -gt 0) { Start-Sleep -Milliseconds ([int]($attente * 1000)) }
 
 $chrono = [Diagnostics.Stopwatch]::StartNew()
 foreach ($a in $actions) {
