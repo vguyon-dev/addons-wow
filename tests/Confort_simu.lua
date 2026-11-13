@@ -31,6 +31,10 @@ verifie("même joueur sans son royaume", true, ns.accepterDuGroupe("Emberiel", g
 verifie("un inconnu : refusé", false, ns.accepterDuGroupe("Gorlak", groupe, false))
 verifie("en combat : jamais", false, ns.accepterDuGroupe("Jack", groupe, true))
 verifie("personne : refusé", false, ns.accepterDuGroupe(nil, groupe, false))
+verifie("scintillement : préréglage graphique surveillé", true, ns.reglageSurveille("graphicsQuality"))
+verifie("scintillement : son propre réglage surveillé", true, ns.reglageSurveille("outlineModeShowLootEffectWhenDisabled"))
+verifie("scintillement : un autre réglage ne compte pas", false, ns.reglageSurveille("Sound_MasterVolume"))
+verifie("scintillement : pas un texte", false, ns.reglageSurveille(nil))
 
 if ok then print("Tout est bon.") end
 os.exit(ok and 0 or 1)

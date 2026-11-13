@@ -1,9 +1,9 @@
 ## Interface: 120105, 16001
 ## Title: Confort
-## Notes: Accepte invocations, résurrections et invitations de tes proches, refuse duels et chartes, petits réglages d'écran.
+## Notes: Accepte invocations, résurrections et invitations de tes proches, refuse duels et chartes, petits réglages d'écran, scintillement des objets de quête gardé (Forever).
 ## Category: Mes addons
 ## Author: addons-wow
-## Version: 0.3.2
+## Version: 0.4.0
 ## IconTexture: Interface\Icons\Spell_Nature_Sleep
 ## SavedVariables: ConfortDB
 ## AddonCompartmentFunc: Confort_OuvrirReglages

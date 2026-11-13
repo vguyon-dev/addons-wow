@@ -4,7 +4,8 @@
 --   en combat), les invitations de groupe de tes amis et de ta guilde.
 --   Refuser tout seul : les duels (sauf ceux de tes amis), les chartes.
 --   Écran : masquer les griffons de la barre d'action, masquer les dégâts
---   affichés sur ton personnage, éloigner la caméra au maximum.
+--   affichés sur ton personnage, éloigner la caméra au maximum, garder le
+--   scintillement des objets de quête à ramasser (Forever).
 -- Ce sont des réponses aux fenêtres du jeu, permises aux addons.
 -- ============================================================================
 
@@ -20,6 +21,7 @@ local DEFAUTS = {
   griffons = false,
   degatsSurMoi = false,
   camera = true,
+  scintillement = true, -- objets de quête à ramasser : garder leur scintillement (Forever)
   avant = {},        -- réglages du jeu d'avant, remis quand on décoche
   minimap = false,
   angleMinimap = 340,
@@ -45,6 +47,14 @@ function ns.accepterDuGroupe(qui, groupe, enCombat)
     if ns.memeJoueur(n, qui) then return true end
   end
   return false
+end
+
+-- Le scintillement des objets de quête à ramasser (Forever) tient à un réglage du jeu, que les préréglages
+-- graphiques remettent à zéro : on le repose quand l'un de ces réglages change.
+ns.CVAR_SCINTILLEMENT = "outlineModeShowLootEffectWhenDisabled"
+local SURVEILLES = { graphicsquality = true, raidgraphicsquality = true, [ns.CVAR_SCINTILLEMENT:lower()] = true }
+function ns.reglageSurveille(nom)
+  return type(nom) == "string" and SURVEILLES[nom:lower()] == true
 end
 
 if not CreateFrame then return end -- hors jeu : la suite ne sert qu'en jeu
@@ -138,7 +148,10 @@ end
 
 local function cvar(nom, valeur, actif)
   if not C_CVar or not C_CVar.GetCVar or InCombatLockdown() then return end
+  local ok, actuel = pcall(C_CVar.GetCVar, nom)
+  if not ok or actuel == nil then return end -- ce réglage n'existe pas sur cette version du jeu
   if actif then
+    if actuel == valeur then return end
     if db.avant[nom] == nil then db.avant[nom] = C_CVar.GetCVar(nom) end
     C_CVar.SetCVar(nom, valeur)
   elseif db.avant[nom] ~= nil then
@@ -162,6 +175,11 @@ local function appliquerEcran()
   local a = db.actif
   cvar("cameraDistanceMaxZoomFactor", "2.6", a and db.camera)
   cvar("enableFloatingCombatText", "0", a and db.degatsSurMoi)
+  local avait = db.avant[ns.CVAR_SCINTILLEMENT] ~= nil
+  cvar(ns.CVAR_SCINTILLEMENT, "1", a and db.scintillement)
+  if avait and db.avant[ns.CVAR_SCINTILLEMENT] == nil and not InCombatLockdown() then
+    ns.reglages.dire("scintillement des objets de quête coupé : il disparaît au prochain lancement du jeu (un /reload ne suffit pas).")
+  end
   if not InCombatLockdown() then griffons(a and db.griffons) end
 end
 
@@ -189,6 +207,8 @@ ns.reglages = ns.creerReglages({
     { cle = "degatsSurMoi", libelle = "Masquer les dégâts affichés sur ton personnage",
       aide = "Réglage du jeu, remis comme avant si tu décoches." },
     { cle = "camera", libelle = "Caméra plus loin", aide = "La distance maximale que le jeu permet. Remise comme avant si tu décoches." },
+    { cle = "scintillement", libelle = "Garder le scintillement des objets de quête",
+      aide = "Sur Forever : les objets de quête à ramasser brillent, même après un changement de qualité graphique (le jeu coupe ce réglage tout seul). Ton réglage de contour n'est pas touché. Si tu décoches, l'effet part au prochain lancement du jeu." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de la ligne dans l'icône commune « Mes addons »." },
@@ -201,9 +221,17 @@ local ecouteur = CreateFrame("Frame")
 for nom in pairs(evenements) do pcall(ecouteur.RegisterEvent, ecouteur, nom) end
 ecouteur:RegisterEvent("PLAYER_ENTERING_WORLD")
 ecouteur:RegisterEvent("PLAYER_REGEN_ENABLED")
+pcall(ecouteur.RegisterEvent, ecouteur, "CVAR_UPDATE")
 ecouteur:SetScript("OnEvent", function(_, evenement, ...)
   if not db then return end
   if evenement == "PLAYER_ENTERING_WORLD" or evenement == "PLAYER_REGEN_ENABLED" then appliquerEcran() return end
+  if evenement == "CVAR_UPDATE" then
+    -- Un préréglage graphique vient de changer : on repose le scintillement une seconde plus tard.
+    if db.actif and db.scintillement and ns.reglageSurveille((...)) and C_Timer and C_Timer.After then
+      C_Timer.After(1, function() if db and not InCombatLockdown() then appliquerEcran() end end)
+    end
+    return
+  end
   if not db.actif then return end
   local f = evenements[evenement]
   if f then pcall(f, ...) end
