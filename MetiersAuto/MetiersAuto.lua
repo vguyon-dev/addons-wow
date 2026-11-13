@@ -899,7 +899,7 @@ fermerPeche:SetScript("OnClick", function()
   end
 end)
 
--- Ouvre ou ferme la fenêtre à la main (bouton des réglages, commande /mt fenetre).
+-- Ouvre ou ferme la fenêtre à la main (bouton des réglages, commande /metiers fenetre).
 function MetiersAuto_FenetrePeche()
   if not db then return end
   montrerFenetrePeche(not fenetrePeche:IsShown())
@@ -1093,6 +1093,16 @@ local function racheterAppats()
   end
 end
 
+-- Faut-il prévenir qu'aucune canne n'est équipée ? Seulement là où le jeu en exige une (pas sur Retail,
+-- interface 100000 et plus). objet : ce qui est en main ; infos : la fonction du jeu qui décrit un objet.
+function ns.canneManque(interface, objet, infos)
+  if type(interface) ~= "number" or interface >= 100000 then return false end
+  if not objet then return true end
+  if type(infos) ~= "function" then return false end
+  local _, _, _, _, _, classe, sous = infos(objet)
+  return not (classe == 2 and sous == 20)
+end
+
 -- ----- le mode pêche
 
 local function changerModePeche(actif)
@@ -1111,6 +1121,16 @@ local function changerModePeche(actif)
     if db.pecheSon then sonPeche() end
     -- Addon Tenues (facultatif) : met la tenue Pêche avec le mode pêche.
     if Tenues_ModePeche then pcall(Tenues_ModePeche, true) end
+    -- Sans canne équipée, le jeu refuse le lancer sans toujours le dire à l'écran : on le dit nous-mêmes
+    -- (après une seconde et demie, le temps que la tenue Pêche soit mise).
+    if C_Timer and C_Timer.After then
+      C_Timer.After(1.5, function()
+        if modePeche and ns.canneManque(GetBuildInfo and select(4, GetBuildInfo()) or nil, GetInventoryItemID and GetInventoryItemID("player", 16),
+            (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant) then
+          ns.reglages.dire("|cffff4040aucune canne à pêche équipée|r : le jeu refuse de lancer la ligne. Équipe ta canne, ou enregistre une tenue « Pêche » avec /tenue.")
+        end
+      end)
+    end
     local touche = db.pecheTouche and texteCombo(db.touchePeche) or nil
     ns.reglages.dire("mode pêche |cff00ff00activé|r : double clic droit pour lancer, clic droit sur le bouchon pour ferrer"
       .. (touche and (", ou la touche |cff00ff00" .. touche .. "|r pour tout faire.") or "."))
@@ -1662,7 +1682,7 @@ ns.reglages = ns.creerReglages({
     aide:SetPoint("TOPLEFT", 20, y - 2)
     aide:SetWidth(380)
     aide:SetJustifyH("LEFT")
-    aide:SetText("Pour ajouter une recette : ouvre ton métier, tape /mt courses 5 (5 = le nombre à fabriquer), puis Maj+clic sur la recette.")
+    aide:SetText("Pour ajouter une recette : ouvre ton métier, tape /metiers courses 5 (5 = le nombre à fabriquer), puis Maj+clic sur la recette.")
     local hAide = aide.GetStringHeight and aide:GetStringHeight()
     y = y - 6 - math.max(type(hAide) == "number" and hAide or 0, 24)
     y, majListe = ns.creerListe(fenetre, y, {
@@ -1692,7 +1712,7 @@ ns.reglages = ns.creerReglages({
     end
     return y, maj
   end,
-  astuce = "Tout s'applique tout de suite, sans /reload. Le raccourci du mode pêche se choisit dans Échap > Options > Raccourcis ; la touche unique de pêche, dans l'onglet Outils. Commande : /mt.",
+  astuce = "Tout s'applique tout de suite, sans /reload. Le raccourci du mode pêche se choisit dans Échap > Options > Raccourcis ; la touche unique de pêche, dans l'onglet Outils. Commande : /metiers.",
   auChargement = function(d)
     db = d
     -- Un mode pêche coupé par une déconnexion : on remet le son d'avant, et les
@@ -1815,10 +1835,11 @@ ecouteur:SetScript("OnEvent", function(_, evenement, a1, a2, a3)
 end)
 
 -- ---------------------------------------------------------------------------
--- Commande /mt
+-- Commande /metiers
 -- ---------------------------------------------------------------------------
 
-SLASH_METIERSAUTO1 = "/mt"
+-- Pas « /mt » : le jeu garde /mt pour « tank principal » et passe avant nous (vu en jeu le 13/11).
+SLASH_METIERSAUTO1 = "/metiers"
 SLASH_METIERSAUTO2 = "/metiersauto"
 SlashCmdList.METIERSAUTO = function(texte)
   local cmd, reste = strtrim(texte or ""):match("^(%S*)%s*(.-)$")
@@ -1833,8 +1854,8 @@ SlashCmdList.METIERSAUTO = function(texte)
   elseif cmd == "touche" then
     if reste == "" then
       local k = texteCombo(db.touchePeche)
-      return r.dire(k and ("touche de pêche : " .. k .. ". /mt touche aucune : la retirer.")
-        or "aucune touche de pêche. Tape par exemple /mt touche F, ou utilise le bouton de l'onglet Outils.")
+      return r.dire(k and ("touche de pêche : " .. k .. ". /metiers touche aucune : la retirer.")
+        or "aucune touche de pêche. Tape par exemple /metiers touche F, ou utilise le bouton de l'onglet Outils.")
     end
     if reste:lower() == "aucune" then
       db.touchePeche = nil
@@ -1842,7 +1863,7 @@ SlashCmdList.METIERSAUTO = function(texte)
       return r.dire("touche de pêche retirée.")
     end
     local t = ns.toucheValide(reste)
-    if not t then return r.dire("touche non reconnue : tape par exemple /mt touche F ou /mt touche SHIFT-F.") end
+    if not t then return r.dire("touche non reconnue : tape par exemple /metiers touche F ou /metiers touche SHIFT-F.") end
     db.touchePeche = t
     r.appliquer()
     r.dire("touche de pêche : |cff00ff00" .. (texteCombo(t) or t) .. "|r. Elle sert en mode pêche, hors combat.")
@@ -1854,15 +1875,15 @@ SlashCmdList.METIERSAUTO = function(texte)
       if majPeche then majPeche() end
       return r.dire("session de pêche remise à zéro.")
     end
-    r.dire(string.format("session de pêche : %d lancers, %d prises, %d échappés, %s par heure, valeur de revente %s. /mt session vider : remettre à zéro.",
+    r.dire(string.format("session de pêche : %d lancers, %d prises, %d échappés, %s par heure, valeur de revente %s. /metiers session vider : remettre à zéro.",
       session.lancers, session.prises, session.echappes, ns.textePrisesParHeure(ns.prisesParHeure(session, GetTime())),
       ns.texteArgent(ns.valeurSession(session, prixVente))))
   elseif cmd == "appats" or cmd == "appâts" then
     local palier = ns.palierDeNombre(tonumber(reste))
     if reste == "" then
-      return r.dire("rachat d'appâts : " .. ns.texteRachat(db.rachatPalier):lower() .. ". /mt appats 0, 5, 10 ou 20.")
+      return r.dire("rachat d'appâts : " .. ns.texteRachat(db.rachatPalier):lower() .. ". /metiers appats 0, 5, 10 ou 20.")
     end
-    if not palier then return r.dire("choisis 0 (aucun), 5, 10 ou 20 : /mt appats 5.") end
+    if not palier then return r.dire("choisis 0 (aucun), 5, 10 ou 20 : /metiers appats 5.") end
     r.changer("rachatPalier", palier)
     r.dire("rachat d'appâts chez les marchands : " .. ns.texteRachat(palier):lower() .. ".")
   elseif cmd == "filons" then
@@ -1873,7 +1894,7 @@ SlashCmdList.METIERSAUTO = function(texte)
     local cartes = 0
     for _ in pairs(db.filons) do cartes = cartes + 1 end
     local carte = ici()
-    r.dire(string.format("%s, sur %d cartes. /mt filons oublier : vider cette carte.",
+    r.dire(string.format("%s, sur %d cartes. /metiers filons oublier : vider cette carte.",
       ns.texteFilons(carte and nbFilons(carte) or nil, totalFilons()), cartes))
   elseif cmd == "courses" then
     if reste:lower() == "vider" then
@@ -1882,7 +1903,7 @@ SlashCmdList.METIERSAUTO = function(texte)
     end
     local nombre, recette = ns.lireRecette(reste)
     if not recette then
-      return r.dire("ouvre ton métier, tape /mt courses 5 puis Maj+clic sur la recette.")
+      return r.dire("ouvre ton métier, tape /metiers courses 5 puis Maj+clic sur la recette.")
     end
     local liste, nom = composants(recette)
     if not liste then
@@ -1893,10 +1914,10 @@ SlashCmdList.METIERSAUTO = function(texte)
     r.appliquer()
     r.dire("ajouté à la liste de courses : " .. nombre .. " × " .. (nom or recette) .. ".")
   elseif not r.basculerOption(cmd) then
-    r.dire("/mt : réglages     /mt peche : mode pêche     /mt on, /mt off")
-    r.dire("/mt touche F : la touche unique de pêche (/mt touche aucune)     /mt fenetre : fenêtre Pêche")
-    r.dire("/mt session : bilan de la pêche (/mt session vider)     /mt appats 0, 5, 10 ou 20 : rachat d'appâts")
-    r.dire("/mt courses 5 <recette> : ajouter (Maj+clic sur la recette)     /mt courses vider")
-    r.dire("/mt filons : endroits de récolte connus     /mt filons oublier")
+    r.dire("/metiers : réglages     /metiers peche : mode pêche     /metiers on, /metiers off")
+    r.dire("/metiers touche F : la touche unique de pêche (/metiers touche aucune)     /metiers fenetre : fenêtre Pêche")
+    r.dire("/metiers session : bilan de la pêche (/metiers session vider)     /metiers appats 0, 5, 10 ou 20 : rachat d'appâts")
+    r.dire("/metiers courses 5 <recette> : ajouter (Maj+clic sur la recette)     /metiers courses vider")
+    r.dire("/metiers filons : endroits de récolte connus     /metiers filons oublier")
   end
 end

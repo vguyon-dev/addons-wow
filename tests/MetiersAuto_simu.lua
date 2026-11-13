@@ -129,7 +129,7 @@ end
 local function premier(nom)
   for _, s in ipairs(scripts) do if s.nom == nom then return s end end
 end
-SlashCmdList = SlashCmdList -- (la commande /mt est rangée là)
+SlashCmdList = SlashCmdList -- (la commande /metiers est rangée là)
 local charge = premier("OnEvent")
 verifie("un écouteur de chargement existe", true, charge ~= nil)
 essaie("chargement sans erreur", charge.f, charge.self, "ADDON_LOADED", "MetiersAuto")
@@ -152,8 +152,8 @@ db.positionPeche = { "LEFT", "LEFT", 5, 5 }
 verifie("bouton « Replacer les fenêtres »", true, cliquer("Replacer les fenêtres"))
 verifie("positions effacées", true, db.positionFleche == nil and db.positionCourses == nil and db.positionPeche == nil)
 verifie("bouton du mode pêche", true, (cliquer("Démarrer le mode pêche")))
-essaie("commande /mt filons sans erreur", SlashCmdList.METIERSAUTO, "filons")
-essaie("commande /mt filons oublier sans erreur", SlashCmdList.METIERSAUTO, "filons oublier")
+essaie("commande /metiers filons sans erreur", SlashCmdList.METIERSAUTO, "filons")
+essaie("commande /metiers filons oublier sans erreur", SlashCmdList.METIERSAUTO, "filons oublier")
 
 -- Minerai ou herbe, et la flèche selon les métiers du personnage
 verifie("butin de cuivre : minerai", "minerai", ns.genreDepuisButin({ { classe = 7, sousClasse = 7 } }))
@@ -408,11 +408,11 @@ db.interaction = false
 cvars.SoftTargetInteract = "1"
 
 -- La touche se choisit par commande.
-essaie("/mt touche sans erreur", SlashCmdList.METIERSAUTO, "touche F")
+essaie("/metiers touche sans erreur", SlashCmdList.METIERSAUTO, "touche F")
 verifie("touche de pêche retenue", "F", db.touchePeche)
-essaie("/mt touche sans argument", SlashCmdList.METIERSAUTO, "touche")
-verifie("/mt touche dit la touche", true, derniereSortie():find("touche de pêche : F", 1, true) ~= nil)
-essaie("/mt touche refuse une touche absurde", SlashCmdList.METIERSAUTO, "touche a;b")
+essaie("/metiers touche sans argument", SlashCmdList.METIERSAUTO, "touche")
+verifie("/metiers touche dit la touche", true, derniereSortie():find("touche de pêche : F", 1, true) ~= nil)
+essaie("/metiers touche refuse une touche absurde", SlashCmdList.METIERSAUTO, "touche a;b")
 verifie("touche absurde refusée, F gardée", "F", db.touchePeche)
 
 -- Mode coupé : rien n'est relié.
@@ -457,7 +457,7 @@ envoyer("LOOT_OPENED")
 verifie("ramassage : les trois emplacements pris, du dernier au premier", "3,2,1", table.concat(pris, ","))
 envoyer("LOOT_CLOSED")
 envoyer("UI_ERROR_MESSAGE", 50, ERR_FISH_ESCAPED)
-essaie("/mt session sans erreur", SlashCmdList.METIERSAUTO, "session")
+essaie("/metiers session sans erreur", SlashCmdList.METIERSAUTO, "session")
 verifie("session : 1 lancer, 1 prise (une seule fois), 1 échappé", true,
   derniereSortie():find("1 lancers, 1 prises, 1 échappés", 1, true) ~= nil)
 -- Ramassage coupé : on ne prend rien.
@@ -586,16 +586,25 @@ achats = {}
 GetProfessions = function() return nil end
 envoyer("MERCHANT_SHOW")
 verifie("rachat : pêche pas apprise, rien n'est acheté", 0, #achats)
-essaie("/mt appats sans erreur", SlashCmdList.METIERSAUTO, "appats 10")
-verifie("/mt appats 10 règle le palier 2", 2, db.rachatPalier)
-essaie("/mt appats 7 refusé", SlashCmdList.METIERSAUTO, "appats 7")
-verifie("/mt appats 7 : palier inchangé", 2, db.rachatPalier)
-essaie("/mt touche aucune", SlashCmdList.METIERSAUTO, "touche aucune")
+essaie("/metiers appats sans erreur", SlashCmdList.METIERSAUTO, "appats 10")
+verifie("/metiers appats 10 règle le palier 2", 2, db.rachatPalier)
+essaie("/metiers appats 7 refusé", SlashCmdList.METIERSAUTO, "appats 7")
+verifie("/metiers appats 7 : palier inchangé", 2, db.rachatPalier)
+essaie("/metiers touche aucune", SlashCmdList.METIERSAUTO, "touche aucune")
 verifie("touche retirée", nil, db.touchePeche)
-essaie("/mt fenetre sans erreur", SlashCmdList.METIERSAUTO, "fenetre")
-essaie("/mt session vider sans erreur", SlashCmdList.METIERSAUTO, "session vider")
-essaie("aide /mt sans erreur", SlashCmdList.METIERSAUTO, "aide")
+essaie("/metiers fenetre sans erreur", SlashCmdList.METIERSAUTO, "fenetre")
+essaie("/metiers session vider sans erreur", SlashCmdList.METIERSAUTO, "session vider")
+essaie("aide /metiers sans erreur", SlashCmdList.METIERSAUTO, "aide")
 print = printOrigine
+
+-- Canne à pêche absente : on ne prévient que là où le jeu en exige une.
+local function infosCanne() return 1, "", "", "", 1, 2, 20 end
+local function infosEpee() return 1, "", "", "", 1, 2, 7 end
+verifie("canne : Forever, une épée en main", true, ns.canneManque(16001, 248007, infosEpee))
+verifie("canne : Forever, rien en main", true, ns.canneManque(16001, nil, infosEpee))
+verifie("canne : Forever, une canne en main", false, ns.canneManque(16001, 6256, infosCanne))
+verifie("canne : Retail ne demande pas de canne", false, ns.canneManque(120105, 248007, infosEpee))
+verifie("canne : le jeu ne décrit pas les objets", false, ns.canneManque(16001, 248007, nil))
 
 if ok then print("Tout est bon.") end
 

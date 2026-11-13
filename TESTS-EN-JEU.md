@@ -9,18 +9,22 @@ Avant de commencer :
 - [ ] Désactiver Pawn, pour ne voir que notre avis sur les objets.
 - [ ] Vérifier que BugSack est actif sur Forever.
 
-## À vérifier : nouveautés du 13/11/2026 (écrites sans le jeu lancé)
+## Nouveautés du 13/11/2026 : vérifié en jeu le 13/11 (Forever, chasseur niveau 12, Marche de l'Ouest, essais pilotés par Claude)
 
-- [ ] Confort 0.4.0 : option « Garder le scintillement des objets de quête » (onglet Écran) : un objet de quête à ramasser brille ; changer la qualité graphique puis attendre une seconde : il brille toujours ; `/dump GetCVar("outlineModeShowLootEffectWhenDisabled")` rend 1. Décocher : message « au prochain lancement du jeu ».
-- [ ] Quêtes disponibles 0.4.0 : prendre une quête de monstres à tuer, ouvrir la carte de la zone : des crânes là où sont les monstres ; survol : « [niveau] Titre » puis « x/10 … » ; clic gauche = balise.
-- [ ] Quête d'objets à ramasser sur des monstres : des sacs sur la carte ; quête d'objet du décor : une main (doute : le jeu donne-t-il le type « object » ?).
-- [ ] Objectifs finis : les icônes partent, un « ? » jaune apparaît sur le PNJ (carte et minimap), bulle avec le nom, le titre et « (À rendre) ». Option « ? » gris pour les quêtes en cours.
-- [ ] Bulle d'un monstre d'objectif (survol et cible) : la quête et la progression s'ajoutent, sans doublon si le jeu l'écrit déjà ; rien en donjon ; aucune erreur en combat (BugSack).
-- [ ] Les textures des icônes d'objectif s'affichent (pas de carré vide) ; `/qd etat`, carte ouverte : ligne « journal » avec les comptes ; une zone repliée dans le journal du jeu ne cache pas ses quêtes.
-- [ ] Métiers auto 0.10.0 : `/mt touche F`, mode pêche avec une canne et un appât dans les sacs : 1er appui = pose l'appât (une seule fois), appui suivant = lance, au plouf = ferre. Hors mode pêche et en combat, F refait son action normale tout de suite.
-- [ ] Pêche : `/dump GetCVar("SoftTargetInteract")` pendant la pêche, puis après l'arrêt du mode, après un combat qui le coupe et après un `/reload` en pêchant : la valeur d'avant est revenue. Le lancement de sorts sur soi marche toujours.
-- [ ] Fenêtre Pêche : s'ouvre et se ferme avec le mode pêche, se déplace, garde sa place, croix ; compétence et barre, appât et temps restant (alerte sous la minute), bouton « Poser l'appât », lancers, prises, échappés, par heure, valeur, icônes des prises. Compétence lue même si l'en-tête des métiers est replié.
-- [ ] Pêche : ramassage direct des prises (une prise comptée une seule fois) sans changer le ramassage hors pêche ; rachat d'appâts à 0 = rien ; `/mt appats 5` chez un marchand d'appâts : rachète le meilleur appât permis, dit la quantité et le prix.
+Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde pour « tank principal » et « assistant principal » et passe avant les addons) : les commandes sont `/metiers` et `/marchand` (Métiers auto 0.10.1, Marchand auto 0.7.2). Icônes d'objectif agrandies, engrenage à la place de la main, illisible (Quêtes disponibles 0.4.1). Sans canne équipée, le jeu refusait le lancer sans rien afficher : Métiers auto le dit maintenant. Aucune erreur de nos addons dans BugGrabber.
+
+- [x] Confort 0.4.0 : `outlineModeShowLootEffectWhenDisabled` vaut 1 après le chargement.
+- [ ] Confort : changer la qualité graphique puis attendre une seconde (il doit rester à 1) ; décocher : message « au prochain lancement du jeu ».
+- [x] Quêtes disponibles : objectifs du journal sur la carte de la zone (sacs pour « Poignée d'avoine 0/8 »), survol « [niveau] Titre » puis « 0/8 … », « Clic gauche : balise » ; les textures existent (crâne, sac, engrenage).
+- [x] « ? » jaune sur la carte pour les quêtes à rendre, bulle avec le nom du PNJ, le titre et « (À rendre) » (Gryan Stoutmantle, Salma Saldean).
+- [ ] Quêtes disponibles : clic gauche = balise ; « ? » sur la minimap ; option « ? » gris ; bulle d'un monstre d'objectif (aucun monstre près du personnage) ; objectifs qui partent quand la quête est finie ; zone repliée dans le journal.
+- [x] Métiers auto : `/metiers touche F`, `/metiers peche` : la fenêtre Pêche s'ouvre (compétence 26/75 et barre, « Pas d'appât dans tes sacs », compteurs, « Appuie sur F pour lancer la ligne ») et se ferme avec le mode.
+- [x] Pêche : F lance la ligne (lancer compté, « Ligne à l'eau : appuie sur F au plouf pour ferrer »), F agit ensuite sur le bouchon ; 5 lancers, 1 échappé comptés. Hors mode pêche, F a repris son action d'origine.
+- [x] Pêche : `SoftTargetInteractRange` passe à 30 pendant la pêche et revient à 10 à l'arrêt du mode ; `SoftTargetInteract` et l'arc inchangés (3 et 2 chez toi).
+- [x] Pêche : sans canne équipée, message rouge « aucune canne à pêche équipée ».
+- [ ] Pêche : une vraie prise (l'outil n'entend pas le plouf : à faire avec ton oreille), ramassage direct, icônes des prises, valeur ; appât posé une seule fois ; F retiré au début d'un combat ; réglages remis après un combat et après un `/reload` en pêchant ; fenêtre déplacée qui garde sa place.
+- [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
+- [ ] À voir : un « 0 % » s'affiche sous l'icône du bouchon pendant la pêche (sans doute Barres de vie sur le bouchon).
 
 ## Vérifié en jeu le 12/11/2026 (Forever, druide niveau 3, essais pilotés par Claude)
 
@@ -289,7 +293,7 @@ Afficher les barres des ennemis avec V si elles sont cachées. Si Threat Plates 
 Même fond sombre, même bordure dorée et titre doré que la fenêtre de réglages (le jeu ne montre plus le cadre bleu-gris d'origine).
 
 - [ ] Carnet de session (`/carnet`) : fond sombre, titre doré, croix ; il garde sa place après un `/reload` et se déplace toujours.
-- [ ] Liste de courses de Métiers auto (`/mt courses 5 <recette>`) : fond sombre, titre doré, la croix la décoche dans les réglages, la place est gardée.
+- [ ] Liste de courses de Métiers auto (`/metiers courses 5 <recette>`) : fond sombre, titre doré, la croix la décoche dans les réglages, la place est gardée.
 - [x] Panneau de Livres de bibliothèque (`/livres`, Forever) : fond sombre, titre doré, croix, Échap le ferme.
 - [x] Panneau de Quêtes du groupe (`/qg`) : fond sombre, titre doré, croix, Échap le ferme.
 - [x] Rapport d'erreurs (`/re`) : fond sombre, titre doré, croix, Échap le ferme, le texte reste sélectionnable et copiable.

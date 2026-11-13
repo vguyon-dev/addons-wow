@@ -1327,11 +1327,11 @@ end
 -- ---------------------------------------------------------------------------
 
 local ICONE_RENDRE = "Interface\\GossipFrame\\ActiveQuestIcon" -- le « ? » jaune des quêtes à rendre
--- Les icônes des objectifs, par genre : un crâne (tuer), un sac (ramasser), une main (utiliser un objet du décor).
+-- Les icônes des objectifs, par genre : un crâne (tuer), un sac (ramasser), un engrenage (utiliser un objet du décor).
 local ICONES_OBJECTIF = {
   [1] = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
   [2] = "Interface\\GossipFrame\\VendorGossipIcon",
-  [3] = "Interface\\Cursor\\Interact",
+  [3] = "Interface\\Icons\\INV_Misc_Gear_01", -- un engrenage net (le curseur du jeu était illisible en petit)
 }
 local JOURNAL_MAX = 60 -- lignes du journal lues au plus (en-têtes compris : 25 quêtes au plus dans le jeu)
 
@@ -1587,7 +1587,7 @@ local function dessinerJournal(liste, carte, toile)
   local largeur, hauteur = toile:GetWidth(), toile:GetHeight()
   if type(largeur) ~= "number" or largeur <= 0 then return end
   local taille = taillePin()
-  local petite = math.max(10, math.floor(taille * 0.7 + 0.5))
+  local petite = math.max(14, taille) -- vu en jeu le 13/11 : à 70 % de la taille, les icônes étaient des points sombres
   local base = toile:GetFrameLevel()
   for i, e in ipairs(liste) do
     local p = prendreIconeJournal(i, toile)
@@ -1597,12 +1597,15 @@ local function dessinerJournal(liste, carte, toile)
       -- Au-dessus des « ! » (un « ? » et un « ! » au même PNJ : le « ? » se voit), en restant sous le plafond.
       p:SetFrameLevel(math.min(base + 7010, 9990))
       p.image:SetTexture(ICONE_RENDRE)
+      if p.image.SetTexCoord then p.image:SetTexCoord(0, 1, 0, 1) end
     else
       p:SetSize(petite, petite)
       -- Sous les « ! » : un objectif ne doit pas cacher une quête à prendre.
       p:SetFrameLevel(math.min(base + 6900, 9980))
       local premier = e.quetes[1]
       p.image:SetTexture(ICONES_OBJECTIF[premier and premier.genre] or ICONES_OBJECTIF[1])
+      local carre = premier and premier.genre == 3 -- une icône carrée du jeu : on rogne son bord
+      if p.image.SetTexCoord then p.image:SetTexCoord(carre and 0.08 or 0, carre and 0.92 or 1, carre and 0.08 or 0, carre and 0.92 or 1) end
     end
     p.image:SetDesaturated(e.grise and true or false)
     p:SetAlpha(e.grise and 0.6 or 1)
@@ -2246,7 +2249,7 @@ ns.reglages = ns.creerReglages({
       aide = "De petits « ! » sur la minimap pour les quêtes à prendre assez proches, avec les mêmes filtres que la carte, et les « ? » des quêtes à rendre. Survole-en un pour voir les quêtes. Pas de flèche au bord." },
     { titre = "Quêtes du journal" },
     { cle = "objectifsCarte", libelle = "Montrer les objectifs de mes quêtes sur la carte",
-      aide = "Une petite icône là où se fait chaque objectif pas encore fini des quêtes de ton journal : un crâne pour les monstres à tuer, un sac pour les objets à ramasser, une main pour un objet du décor à utiliser. Survole-la pour voir la quête et où tu en es (« 3/8 »). Seulement sur la carte d'une zone." },
+      aide = "Une petite icône là où se fait chaque objectif pas encore fini des quêtes de ton journal : un crâne pour les monstres à tuer, un sac pour les objets à ramasser, un engrenage pour un objet du décor à utiliser. Survole-la pour voir la quête et où tu en es (« 3/8 »). Seulement sur la carte d'une zone." },
     { cle = "rendre", libelle = "Un « ? » là où rendre une quête finie",
       aide = "Un « ? » jaune sur la carte et sur la minimap, à l'endroit du personnage ou de l'objet à qui rendre une quête de ton journal dont tous les objectifs sont faits. Clic gauche sur la carte : une balise." },
     { cle = "rendreGris", libelle = "Aussi un « ? » gris pour les quêtes pas finies", dependDe = "rendre",

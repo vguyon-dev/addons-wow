@@ -35,7 +35,7 @@ verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true
 verifie("toc : catégorie Mes addons", true, toc:find("## Category: Mes addons", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.4.0", true, toc:find("## Version: 0.4.0", 1, true) ~= nil)
+verifie("toc : version 0.4.1", true, toc:find("## Version: 0.4.1", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -2141,7 +2141,7 @@ do
   verifie("journal : l'icône d'un monstre à tuer", "Interface\\TargetingFrame\\UI-TargetingFrame-Skull", o.image._tex)
   verifie("journal : sous les « ! »", true, o._niveau < pinAvec(12)._niveau)
   verifie("journal : niveau de cadre borné", true, o._niveau <= 9990)
-  verifie("journal : plus petite qu'un « ! »", "14,14", o._w .. "," .. o._h)
+  verifie("journal : aussi grande qu'un « ! »", "20,20", o._w .. "," .. o._h)
   verifie("journal : la bulle de l'objectif", "[5] Les loups ;    3/10 Loups tués ; Clic gauche : balise", bulleDe(o))
   local px = {}
   for _, p in ipairs(iconesJournal("objectif")) do px[#px + 1] = string.format("%.3f", p._pt[4] / 1000) end

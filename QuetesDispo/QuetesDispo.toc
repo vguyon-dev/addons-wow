@@ -3,7 +3,7 @@
 ## Notes: Un « ! » jaune sur la carte du monde à chaque endroit où une quête est à prendre pour ton personnage (niveau, race, classe, quêtes à rendre avant, métier), pour ne plus fouiller chaque zone. Pour WoW Forever. Apprend les quêtes propres à Forever en parlant aux PNJ, et montre les « ! » proches sur la minimap. Pour les quêtes du journal : les objectifs sur la carte, un « ? » là où les rendre, et la progression dans la bulle des monstres. Données tirées de la base libre CMaNGOS classic-db.
 ## Category: Mes addons
 ## Author: addons-wow
-## Version: 0.4.0
+## Version: 0.4.1
 ## IconTexture: Interface\GossipFrame\AvailableQuestIcon
 ## SavedVariables: QuetesDispoDB
 ## AddonCompartmentFunc: QuetesDispo_OuvrirReglages

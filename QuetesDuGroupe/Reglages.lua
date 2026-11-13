@@ -195,13 +195,14 @@ end
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
   { date = "2026-11-13", titre = "Quêtes du journal sur la carte, pêche à une touche, objets de quête qui brillent", lignes = {
-    "Quêtes disponibles : les objectifs des quêtes de ton journal sont sur la carte (crâne : monstres à tuer, sac : objets à ramasser, main : objet à utiliser). Survole une icône pour voir où tu en es.",
+    "Quêtes disponibles : les objectifs des quêtes de ton journal sont sur la carte (crâne : monstres à tuer, sac : objets à ramasser, engrenage : objet à utiliser). Survole une icône pour voir où tu en es.",
     "Un « ? » jaune sur la carte et la minimap là où rendre une quête finie. En option, un « ? » gris pour les quêtes encore en cours.",
     "La bulle d'un monstre dit quelles quêtes de ton journal en ont besoin et où tu en es (« 3/8 »), sans répéter ce que le jeu écrit déjà. Tout se règle dans l'onglet « Quêtes du journal » de /qd.",
-    "Métiers auto : pêche à une touche. Choisis-la avec /mt touche F : en mode pêche, elle pose l'appât s'il en manque, lance la ligne, puis ferre le bouchon. Hors mode pêche et en combat, la touche reprend son rôle normal.",
+    "Métiers auto : pêche à une touche. Choisis-la avec /metiers touche F : en mode pêche, elle pose l'appât s'il en manque, lance la ligne, puis ferre le bouchon. Hors mode pêche et en combat, la touche reprend son rôle normal.",
     "Une fenêtre Pêche s'ouvre avec le mode pêche : compétence, appât et temps restant, lancers, prises, échappés, prises par heure, valeur de revente et liste des prises.",
-    "Les prises peuvent aller droit dans tes sacs. Le rachat d'appâts chez un marchand existe aussi, mais il est coupé au départ car il dépense ton or (/mt appats 5, 10 ou 20).",
+    "Les prises peuvent aller droit dans tes sacs. Le rachat d'appâts chez un marchand existe aussi, mais il est coupé au départ car il dépense ton or (/metiers appats 5, 10 ou 20).",
     "Confort : sur Forever, les objets de quête à ramasser gardent leur scintillement, même après un changement de qualité graphique (onglet Écran).",
+    "Les commandes changent : /metiers pour Métiers auto et /marchand pour Marchand auto. Le jeu gardait /mt et /ma pour lui (tank et assistant du groupe), elles ne marchaient donc pas.",
   } },
   { date = "2026-11-12", titre = "La fenêtre s'appelle « Mes addons »", lignes = {
     "La fenêtre commune des réglages s'appelle maintenant « Mes addons », comme la catégorie dans la liste des addons du jeu.",

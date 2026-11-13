@@ -57,12 +57,12 @@ Une seule icône (un engrenage) autour de la minimap pour tous les addons :
   /sq      Suivi des quêtes (panneau rangé par genre ; /sq genre pour voir ce que dit le jeu)
   /way     GPS (/way 45.2 67.8 Titre, ou Ctrl + clic droit sur la carte ; /gps pour les réglages)
   /qa      Quêtes auto (rend puis accepte, partage en groupe)
-  /ma      Marchand auto (vend les gris, répare, rachète ton stock)
+  /marchand Marchand auto (vend les gris, répare, rachète ton stock)
   /livres  Livres de bibliothèque (Forever) : panneau, /livres proche pour une balise
            Désactive l'addon « Library Books » de Taraezor pour ne pas avoir deux fois les épingles
   /ar      Alerte rare et coffres (coupée au départ : /ar on pour l'activer)
   /sr      Sacs rangés (ranger les sacs ; équipement en double, moins bon ou que tu ne peux pas porter)
-  /mt      Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
+  /metiers Métiers auto (pêche au double clic droit, récolte, flèche vers les filons, liste de courses)
            Astuce : récolte sur la molette (bouton « Choisir la touche », puis roule la molette)
   /br      Butin rapide (ramassage rapide, sacs pleins, bilan de farm)
   /qg      Quêtes du groupe (en groupe : les quêtes de chacun ; ancien nom EntreFreres,

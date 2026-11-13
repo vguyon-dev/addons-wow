@@ -6,7 +6,7 @@
 --  2. il répare ton équipement, avec la banque de guilde si tu le veux
 --     et si la guilde te le permet, sinon avec ton or ;
 --  3. il te dit ce que ça t'a rapporté et coûté.
--- Tout se règle dans une fenêtre (Reglages.lua) : icône de minimap, /ma, ou
+-- Tout se règle dans une fenêtre (Reglages.lua) : icône de minimap, /marchand, ou
 -- Échap > Options > AddOns. Maintenir Maj en ouvrant le marchand = pause.
 -- ============================================================================
 
@@ -432,7 +432,7 @@ ns.reglages = ns.creerReglages({
 })
 
 -- ---------------------------------------------------------------------------
--- Événements et commande /ma
+-- Événements et commande /marchand
 -- ---------------------------------------------------------------------------
 
 local ecouteur = CreateFrame("Frame")
@@ -449,7 +449,8 @@ ecouteur:SetScript("OnEvent", function(_, evenement)
   if db.acheter and next(db.stock) then C_Timer.After(0.5, function() if ouvert then acheterStock() end end) end
 end)
 
-SLASH_MARCHANDAUTO1 = "/ma"
+-- Pas « /ma » : le jeu garde /ma pour « assistant principal » et passe avant nous (vu en jeu le 13/11).
+SLASH_MARCHANDAUTO1 = "/marchand"
 SLASH_MARCHANDAUTO2 = "/marchandauto"
 SlashCmdList.MARCHANDAUTO = function(texte)
   local cmd, reste = strtrim(texte or ""):match("^(%S*)%s*(.-)$")
@@ -461,12 +462,12 @@ SlashCmdList.MARCHANDAUTO = function(texte)
     if (cmd == "on") ~= (db.actif and true or false) then r.basculer() end
   elseif cmd == "garder" then
     local id = tonumber(reste:match("item:(%d+)") or reste)
-    if not id then return r.dire("tape /ma garder puis Maj+clic sur l'objet gris.") end
+    if not id then return r.dire("tape /marchand garder puis Maj+clic sur l'objet gris.") end
     if db.gardes[id] then db.gardes[id] = nil else db.gardes[id] = reste end
     r.dire(reste .. (db.gardes[id] and " sera gardé." or " sera de nouveau vendu."))
     r.appliquer()
   elseif cmd == "stock" then
-    -- /ma stock 20 [objet] : en garder 20 ; /ma stock 0 [objet] : retirer ; /ma stock : la liste.
+    -- /marchand stock 20 [objet] : en garder 20 ; /marchand stock 0 [objet] : retirer ; /marchand stock : la liste.
     local qte = tonumber(reste:match("^(%d+)"))
     local id = tonumber(reste:match("item:(%d+)"))
     if not (qte and id) then
@@ -474,7 +475,7 @@ SlashCmdList.MARCHANDAUTO = function(texte)
         r.dire("stock voulu :")
         for _, v in pairs(db.stock) do r.dire(string.format("  %d × %s", v.qte, v.lien)) end
       end
-      return r.dire("tape /ma stock 20 puis Maj+clic sur l'objet (0 pour le retirer).")
+      return r.dire("tape /marchand stock 20 puis Maj+clic sur l'objet (0 pour le retirer).")
     end
     local lien = reste:match("|c.-|r") or ("objet " .. id)
     if qte == 0 then
@@ -486,8 +487,8 @@ SlashCmdList.MARCHANDAUTO = function(texte)
     end
     r.appliquer()
   elseif not r.basculerOption(cmd) then
-    r.dire("/ma : ouvrir les réglages     /ma on, /ma off : activer ou couper")
-    r.dire("/ma garder <objet> : ne jamais vendre ce gris (Maj+clic sur l'objet)")
-    r.dire("/ma stock 20 <objet> : en garder 20 dans tes sacs, racheté chez le marchand")
+    r.dire("/marchand : ouvrir les réglages     /marchand on, /marchand off : activer ou couper")
+    r.dire("/marchand garder <objet> : ne jamais vendre ce gris (Maj+clic sur l'objet)")
+    r.dire("/marchand stock 20 <objet> : en garder 20 dans tes sacs, racheté chez le marchand")
   end
 end
