@@ -1838,7 +1838,13 @@ end
 ecouteur:SetScript("OnEvent", function(_, evenement, a1, a2, a3)
   if not db then return end
   if evenement == "PLAYER_REGEN_DISABLED" then
-    appliquee = nil -- la touche vient d'être retirée par le cadre sécurisé
+    -- Le jeu autorise encore les liaisons à cet instant précis : on retire la touche nous-mêmes. Le cadre
+    -- sécurisé devait le faire, mais en jeu la touche restait sur le lancer pendant tout le combat (vu le 13/11).
+    if not InCombatLockdown() then
+      ClearOverrideBindings(proprio)
+      ClearOverrideBindings(lancer)
+    end
+    appliquee = nil
     if modePeche then changerModePeche(false) end
   elseif evenement == "PLAYER_REGEN_ENABLED" then
     -- Tout ce qui attendait la fin du combat.

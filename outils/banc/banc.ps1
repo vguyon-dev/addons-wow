@@ -73,7 +73,7 @@ public static class BancFenetre {
 "@
 
 # ----- les touches que l'on sait nommer
-$CODES = @{ "ENTREE" = 0x0D; "ENTER" = 0x0D; "ECHAP" = 0x1B; "ESC" = 0x1B; "ESPACE" = 0x20; "TAB" = 0x09 }
+$CODES = @{ "ENTREE" = 0x0D; "ENTER" = 0x0D; "ECHAP" = 0x1B; "ESC" = 0x1B; "ESPACE" = 0x20; "TAB" = 0x09; "GAUCHE" = 0x25; "HAUT" = 0x26; "DROITE" = 0x27; "BAS" = 0x28 }
 foreach ($c in 65..90) { $CODES[[string][char]$c] = $c }
 foreach ($c in 48..57) { $CODES[[string][char]$c] = $c }
 foreach ($n in 1..12) { $CODES["F$n"] = 0x6F + $n }

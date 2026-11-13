@@ -74,3 +74,9 @@ jamais pour jouer à la place du joueur.
 - La structure `INPUT` de `SendInput` fait 40 octets en 64 bits : trop courte, Windows ignore toutes les
   touches sans rien dire.
 - Sur l'écran des personnages, le pilote ne sait pas entrer en jeu : il faut être sur un personnage.
+- Se déplacer : `Q` et `DROITE` tournent (environ 3 radians par seconde), `Z` avance, `S` recule, `TAB` cible
+  l'ennemi le plus proche. Noter la position et le regard dans le script (`C_Map.GetPlayerMapPosition`,
+  `GetPlayerFacing`) pour savoir où l'on est : un arbre arrête le personnage sans rien dire.
+- Sur Forever, la vie d'une unité est une valeur que le jeu cache aux addons : `Banc.note` écrit `(secret)`.
+- Avancer vers des monstres déclenche un vrai combat : garder `cmd:/petattack` et `cmd:/startattack` sous la
+  main, et vérifier à l'écran que le combat est fini avant de laisser le personnage.

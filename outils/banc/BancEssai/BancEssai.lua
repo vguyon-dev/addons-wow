@@ -11,7 +11,11 @@ local lignes, ecoute, fini = {}, false, false
 
 local function texte(...)
   local t = {}
-  for i = 1, select("#", ...) do t[i] = tostring((select(i, ...))) end
+  for i = 1, select("#", ...) do
+    local v = (select(i, ...))
+    -- Une valeur que le jeu cache aux addons (la vie, par exemple) ne se transforme pas en texte.
+    if issecretvalue and issecretvalue(v) then t[i] = "(secret)" else t[i] = tostring(v) end
+  end
   return table.concat(t, " ")
 end
 local function propre(s)

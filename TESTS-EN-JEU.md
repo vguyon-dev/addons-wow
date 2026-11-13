@@ -17,20 +17,24 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [ ] Confort : changer la qualité graphique puis attendre une seconde (il doit rester à 1) ; décocher : message « au prochain lancement du jeu ».
 - [x] Quêtes disponibles : objectifs du journal sur la carte de la zone (sacs pour « Poignée d'avoine 0/8 »), survol « [niveau] Titre » puis « 0/8 … », « Clic gauche : balise » ; les textures existent (crâne, sac, engrenage).
 - [x] « ? » jaune sur la carte pour les quêtes à rendre, bulle avec le nom du PNJ, le titre et « (À rendre) » (Gryan Stoutmantle, Salma Saldean).
-- [ ] Quêtes disponibles : clic gauche = balise ; « ? » sur la minimap ; option « ? » gris ; bulle d'un monstre d'objectif (aucun monstre près du personnage) ; objectifs qui partent quand la quête est finie ; zone repliée dans le journal.
+- [ ] Quêtes disponibles : « ? » sur la minimap (le PNJ le plus proche est à 700 m) ; bulle d'un monstre d'objectif (aucune quête du journal ne demande de tuer un monstre : il faut en prendre une) ; objectifs qui partent quand la quête est finie.
 - [x] Métiers auto : `/metiers touche F`, `/metiers peche` : la fenêtre Pêche s'ouvre (compétence 26/75 et barre, « Pas d'appât dans tes sacs », compteurs, « Appuie sur F pour lancer la ligne ») et se ferme avec le mode.
 - [x] Pêche : F lance la ligne (lancer compté, « Ligne à l'eau : appuie sur F au plouf pour ferrer »), F agit ensuite sur le bouchon ; 5 lancers, 1 échappé comptés. Hors mode pêche, F a repris son action d'origine.
 - [x] Pêche : `SoftTargetInteractRange` passe à 30 pendant la pêche et revient à 10 à l'arrêt du mode ; `SoftTargetInteract` et l'arc inchangés (3 et 2 chez toi).
 - [x] Pêche : sans canne équipée, message rouge « aucune canne à pêche équipée ».
 - [x] Pêche : une vraie prise (en répétant les lancers : 6 lancers, 1 prise, 1 échappé) : ramassage direct, prise comptée une seule fois, compétence 26 puis 27, valeur de revente 2 pc, icône de la prise avec sa bulle (« Poisson-chat moustachu cru »).
 - [x] Pêche : `/reload` ligne à l'eau : `SoftTargetInteractRange` revenu à 10, F rendu à son rôle, rien de gardé dans la base.
-- [ ] Pêche : appât posé une seule fois (pas d'appât dans les sacs) ; F retiré au début d'un combat et réglages remis après (aucun monstre à portée) ; fenêtre déplacée qui garde sa place. Les compteurs repartent de zéro après un `/reload` : à garder ou non ?
+- [ ] Pêche : appât posé une seule fois (pas d'appât dans les sacs) ; fenêtre déplacée qui garde sa place. Les compteurs repartent de zéro après un `/reload` : à garder ou non ?
 - [x] Métiers auto 0.11.0 (banc d'essai) : `/metiers peche` équipe la canne des sacs (main 248007 puis 6256, message « canne à pêche équipée »), la sortie du mode remet l'arme d'avant, rien ne reste dans la base.
 - [x] Sacs rangés 0.15.0 (banc d'essai) : une pile de flèches sortie du carquois vers un sac ordinaire y retourne avec `/sr ranger` ; vue par catégories : « Cases libres 11 », une case « Petit carquois 6 », pied « 11 cases libres sur 32 (+ 6 dans Petit carquois) » (avant : 17 libres, et la case de dépôt tombait dans le carquois).
 - [x] Sacs rangés 0.16.0 (banc d'essai) : rangement automatique, une pile de flèches posée dans un sac ordinaire retourne au carquois en moins d'une seconde, message « 1 pile rangée dans tes sacs spéciaux ».
 - [x] Sacs rangés 0.16.1 (banc d'essai) : 25 flèches séparées vers un sac ordinaire complètent la pile de 150 du carquois (175), sans prendre une troisième case.
 - [x] Métiers auto 0.11.1 (pilote du banc) : quitter le mode pêche ligne à l'eau, le jeu refuse de changer d'arme pendant le lancer ; l'addon réessaie chaque seconde, dit « ton arme reviendra quand la ligne sera remontée », et l'arme revient (avant : la canne restait en main).
 - [x] Pilote `outils/banc/banc.ps1` : un essai complet en une commande (18 s pour un essai simple, pêche avec touches F en 44 s), frappe avec accents, aucune touche hors du jeu.
+- [x] Métiers auto 0.11.2 (pilote du banc, vrai combat contre un golem) : en mode pêche, le début du combat coupe le mode, remet l'arme, et F reprend son action d'origine pendant tout le combat (avant la correction : F restait sur le lancer de ligne jusqu'à la fin du combat) ; réglages du jeu inchangés après le combat.
+- [x] Confort : le scintillement forcé à 0 revient à 1 en moins de 3 secondes.
+- [x] Quêtes disponibles (pilote du banc) : 5 icônes d'objectif et 2 « ? » sur la carte de la Marche de l'Ouest ; bulles justes ; clic gauche sur un « ? » = balise GPS « Rendre : Aller voir Gryan Stoutmantle 56.3, 47.5 » ; option « ? » gris : un « ? » gris en plus, retiré en la coupant ; journal replié : mêmes comptes.
+- [x] Barres de vie : en combat, barre colorée et pourcentage sur le golem attaqué (45 %).
 - [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; un sac de métier avec de la place (la sacoche de dépeçage était pleine) ; banque avec un sac spécial.
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
 - [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).
