@@ -170,13 +170,15 @@ end
 
 -- Quoi déplacer pour remplir d'abord les sacs spéciaux : chaque objet rangé là libère une case ordinaire.
 --   objets : { { sac, case, id, nombre, famille } } (ceux des sacs ordinaires suffisent) ;
---   sacs : { [numéro] = { famille, libres = { cases vides } } }.
--- Rend { { deSac, deCase, versSac, versCase } }, les piles d'un même objet à la suite, les plus grosses d'abord.
+--   sacs : { [numéro] = { famille, libres = { cases vides }, piles = { { case, id, nombre, max } } } }.
+-- Rend { { deSac, deCase, versSac, versCase } }. D'abord ce qui complète une pile déjà dans un sac spécial
+-- (une case gagnée sans en prendre une), puis les cases vides, les piles d'un même objet à la suite.
 function ns.planSacsSpeciaux(objets, sacs)
   if type(sacs) ~= "table" then return {} end
   local numeros = {}
   for n, s in pairs(sacs) do
-    if type(s) == "table" and (s.famille or 0) ~= 0 and type(s.libres) == "table" and #s.libres > 0 then
+    if type(s) == "table" and (s.famille or 0) ~= 0 then
+      if type(s.libres) ~= "table" then s.libres = {} end
       numeros[#numeros + 1] = n
     end
   end
@@ -193,6 +195,21 @@ function ns.planSacsSpeciaux(objets, sacs)
     return a.case < b.case
   end)
   local plan, pris = {}, {}
+  for _, o in ipairs(candidats) do
+    for _, n in ipairs(numeros) do
+      local s = sacs[n]
+      if not pris[o] and ns.vaDansSac(o.famille, s.famille) then
+        for _, p in ipairs(type(s.piles) == "table" and s.piles or {}) do
+          if p.id == o.id and (p.max or 0) - (p.nombre or 0) >= (o.nombre or 1) then
+            pris[o] = true
+            p.nombre = (p.nombre or 0) + (o.nombre or 1)
+            plan[#plan + 1] = { deSac = o.sac, deCase = o.case, versSac = n, versCase = p.case }
+            break
+          end
+        end
+      end
+    end
+  end
   for _, n in ipairs(numeros) do
     local s, i = sacs[n], 1
     for _, o in ipairs(candidats) do
@@ -411,12 +428,18 @@ local function remplirSpeciaux()
   if type(familleDe) ~= "function" then return end
   local objets, sacs = {}, {}
   for sac = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4 do
-    local s = { famille = familleSac(sac), libres = {} }
+    local s = { famille = familleSac(sac), libres = {}, piles = {} }
     sacs[sac] = s
     for case = 1, nbCases(sac) do
       local info = C.GetContainerItemInfo(sac, case)
       if not info then
         s.libres[#s.libres + 1] = case
+      elseif s.famille ~= 0 then
+        -- Une pile pas pleine d'un sac spécial peut en avaler une autre.
+        local max = info.itemID and not info.isLocked and select(8, infoObjet(info.itemID))
+        if type(max) == "number" and max > (info.stackCount or 1) then
+          s.piles[#s.piles + 1] = { case = case, id = info.itemID, nombre = info.stackCount or 1, max = max }
+        end
       elseif s.famille == 0 and info.itemID and not info.isLocked and not refuses[info.itemID] then
         -- Un sac ou un carquois rangé dans un sac a lui aussi une « famille » : celle de ce qu'il contient.
         local classe = instant and select(6, instant(info.itemID))

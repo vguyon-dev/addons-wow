@@ -769,6 +769,17 @@ do
   verifie("sac spécial : rien à faire sans sac spécial", 0, #ns.planSacsSpeciaux(objets,
     { [0] = { famille = 0, libres = { 1 } }, [2] = { famille = 0, libres = {} }, [3] = { famille = 0, libres = {} } }))
   verifie("sac spécial : entrées illisibles", 0, #ns.planSacsSpeciaux(nil, nil))
+  -- Une pile pas pleine du carquois avale celle du sac ordinaire : une case gagnée sans en prendre une.
+  local plan2 = ns.planSacsSpeciaux(
+    { { sac = 2, case = 1, id = 2515, nombre = 25, famille = FLECHES }, { sac = 2, case = 2, id = 2515, nombre = 60, famille = FLECHES } },
+    { [1] = { famille = FLECHES, libres = { 3 }, piles = { { case = 2, id = 2515, nombre = 150, max = 200 } } },
+      [2] = { famille = 0, libres = {} } })
+  local t2 = {}
+  for _, m in ipairs(plan2) do t2[#t2 + 1] = m.deSac .. ":" .. m.deCase .. ">" .. m.versSac .. ":" .. m.versCase end
+  verifie("sac spécial : la petite pile complète celle du carquois, la grosse prend la case vide", "2:1>1:2 2:2>1:3", table.concat(t2, " "))
+  verifie("sac spécial : plein mais une pile à compléter", 1, #ns.planSacsSpeciaux(
+    { { sac = 2, case = 1, id = 2515, nombre = 25, famille = FLECHES } },
+    { [1] = { famille = FLECHES, libres = {}, piles = { { case = 2, id = 2515, nombre = 150, max = 200 } } }, [2] = { famille = 0, libres = {} } }))
   verifie("pied : sans sac spécial", "11 cases libres sur 32", ns.texteCasesLibres(11, 32, {}))
   verifie("pied : avec un carquois", "11 cases libres sur 32  (+ 6 dans Petit carquois)",
     ns.texteCasesLibres(11, 32, { { nom = "Petit carquois", libres = 6 }, { nom = "Sacoche", libres = 0 } }))
