@@ -17,7 +17,8 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [ ] Confort : changer la qualité graphique puis attendre une seconde (il doit rester à 1) ; décocher : message « au prochain lancement du jeu ».
 - [x] Quêtes disponibles : objectifs du journal sur la carte de la zone (sacs pour « Poignée d'avoine 0/8 »), survol « [niveau] Titre » puis « 0/8 … », « Clic gauche : balise » ; les textures existent (crâne, sac, engrenage).
 - [x] « ? » jaune sur la carte pour les quêtes à rendre, bulle avec le nom du PNJ, le titre et « (À rendre) » (Gryan Stoutmantle, Salma Saldean).
-- [ ] Quêtes disponibles : « ? » sur la minimap (le PNJ le plus proche est à 700 m) ; bulle d'un monstre d'objectif (aucune quête du journal ne demande de tuer un monstre : il faut en prendre une) ; objectifs qui partent quand la quête est finie.
+- [x] Quêtes disponibles, 14/11 (pilote du banc, chasseur niveau 14 en Marche de l'Ouest) : bulle d'une trappeuse défias = « La milice du peuple, Trappeur défias : 9/15 personnages tués » et « Masque en cuir rouge : 8/15 », écrits par le jeu et pas répétés par l'addon ; « ? » gris sur la minimap (option cochée le temps de l'essai, minimap à 233 m) vers Gryan Stoutmantle, qui suit le déplacement, `/qd etat` = « 1 « ! » et 1 « ? » ».
+- [ ] Quêtes disponibles : « ? » jaune sur la minimap près d'un PNJ à qui rendre une quête finie (les quêtes finies du personnage se rendent à Hurlevent, à Forgefer, et une quête propre à Forever que la base ne connaît pas) ; ligne ajoutée par l'addon quand le jeu n'écrit rien ; objectifs qui partent quand la quête est finie.
 - [x] Métiers auto : `/metiers touche F`, `/metiers peche` : la fenêtre Pêche s'ouvre (compétence 26/75 et barre, « Pas d'appât dans tes sacs », compteurs, « Appuie sur F pour lancer la ligne ») et se ferme avec le mode.
 - [x] Pêche : F lance la ligne (lancer compté, « Ligne à l'eau : appuie sur F au plouf pour ferrer »), F agit ensuite sur le bouchon ; 5 lancers, 1 échappé comptés. Hors mode pêche, F a repris son action d'origine.
 - [x] Pêche : `SoftTargetInteractRange` passe à 30 pendant la pêche et revient à 10 à l'arrêt du mode ; `SoftTargetInteract` et l'arc inchangés (3 et 2 chez toi).
@@ -37,7 +38,8 @@ Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde
 - [x] Barres de vie : en combat, barre colorée et pourcentage sur le golem attaqué (45 %).
 - [x] Suivi des quêtes 0.2.0 (banc, fausse minuterie de 75 s sur une quête suivie) : « Temps restant : 1:13 » sous le titre, 1:10 trois secondes plus tard, orange puis rouge sous 1 minute, aucune erreur. Sur Forever `GetQuestTimers` n existe pas : le temps vient de `C_QuestLog.GetTimeAllowed` (présente).
 - [ ] Suivi des quêtes 0.2.0, sur une vraie quête : prendre une quête à temps limité (escorte, livraison) et la suivre : « Temps restant : 4:32 » sous le titre, qui descend chaque seconde, orange sous 5 minutes, rouge sous 1 minute ; option « Le compte à rebours des quêtes chronométrées » dans /sq.
-- [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; un sac de métier avec de la place (la sacoche de dépeçage était pleine) ; banque avec un sac spécial.
+- [x] Sacs rangés, 14/11 (pilote du banc) : le couteau à dépecer sorti de la sacoche de dépeçage vers un sac ordinaire y revient tout seul en moins de 3 s, message « 1 pile rangée dans tes sacs spéciaux ».
+- [ ] Sacs rangés : déposer une flèche sur la case du carquois et un objet sur la case libre ; banque avec un sac spécial.
 - [ ] Pêche : rachat d'appâts à 0 = rien ; `/metiers appats 5` chez un marchand d'appâts.
 - [x] Barres de vie 0.5.1 : plus de « 0 % » sous le bouchon de pêche (ni sous un objet du décor visé).
 
