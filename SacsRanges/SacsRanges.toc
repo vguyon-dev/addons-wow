@@ -3,7 +3,7 @@
 ## Notes: Range les sacs (et la banque), signale l'équipement en double et celui moins bon que ce que tu portes.
 ## Category: Mes addons
 ## Author: addons-wow
-## Version: 0.16.1
+## Version: 0.17.0
 ## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## SavedVariables: SacsRangesDB
 ## AddonCompartmentFunc: SacsRanges_OuvrirReglages
@@ -11,4 +11,5 @@
 Reglages.lua
 SacsRanges.lua
 Conseils.lua
+Quetes.lua
 Vue.lua

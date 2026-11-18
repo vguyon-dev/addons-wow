@@ -203,7 +203,25 @@ verifie("code : aucune variable accentuée", false, accent)
 verifie("code : aucun tiret cadratin ni demi-cadratin", false,
   code:find("\226\128\148", 1, true) ~= nil or code:find("\226\128\147", 1, true) ~= nil)
 local toc = lire((arg[1]:gsub("ButinRapide%.lua$", "ButinRapide.toc")))
-verifie("toc : version 0.8.0", true, toc:find("## Version: 0.8.0", 1, true) ~= nil)
+verifie("toc : version 0.9.0", true, toc:find("## Version: 0.9.0", 1, true) ~= nil)
 
+
+-- Objets utiles aux quêtes : jamais vendus ni jetés (ns.queteQuiDemande).
+do
+  local journal = {
+    { titre = "Des bandages pour la milice", objectifs = { { texte = "Étoffe de lin : 3/10", type = "item" },
+      { texte = "Bandit tué : 1/5", type = "monster" } } },
+    { titre = "Dents de loup", objectifs = { { texte = "4/6 Dent cassée", type = "item" } } },
+  }
+  verifie("quête : l'étoffe sert", "Des bandages pour la milice", ns.queteQuiDemande("Étoffe de lin", journal))
+  verifie("quête : compte devant (Retail)", "Dents de loup", ns.queteQuiDemande("Dent cassée", journal))
+  verifie("quête : un monstre n'est pas un objet", nil, ns.queteQuiDemande("Bandit tué", journal))
+  verifie("quête : objet inconnu", nil, ns.queteQuiDemande("Feuillargent", journal))
+  verifie("quête : journal vide", nil, ns.queteQuiDemande("Étoffe de lin", nil))
+  verifie("quête : espace insécable avant « : »", "Insécable", ns.queteQuiDemande("Fiole",
+    { { titre = "Insécable", objectifs = { { texte = "Fiole\194\160: 1/2", type = "item" } } } }))
+  verifie("quête : pas un objet au nom plus long", nil, ns.queteQuiDemande("Peau de loup",
+    { { titre = "Peaux", objectifs = { { texte = "Peau de loup épaisse : 0/5", type = "item" } } } }))
+end
 io.write(ok and "Tout est bon.\n" or "Il reste des échecs.\n")
 os.exit(ok and 0 or 1)

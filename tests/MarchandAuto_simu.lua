@@ -118,4 +118,22 @@ verifie("vendue : pas d'entrée", false, ns.pieceVendue(nil, nil))
 verifie("bilan gris : aucun, pas de phrase", nil, ns.texteBilanGris(ns.resumeVente({ { genre = "equip", prix = 1, lien = "[A]" } }).gris, fo))
 verifie("bilan gris : deux gris", "2 objet(s) gris vendu(s) : 15 cuivre", ns.texteBilanGris(rv.gris, fo))
 verifie("bilan gris : pas de table", nil, ns.texteBilanGris(nil, fo))
+
+-- Objets utiles aux quêtes : jamais vendus ni jetés (ns.queteQuiDemande).
+do
+  local journal = {
+    { titre = "Des bandages pour la milice", objectifs = { { texte = "Étoffe de lin : 3/10", type = "item" },
+      { texte = "Bandit tué : 1/5", type = "monster" } } },
+    { titre = "Dents de loup", objectifs = { { texte = "4/6 Dent cassée", type = "item" } } },
+  }
+  verifie("quête : l'étoffe sert", "Des bandages pour la milice", ns.queteQuiDemande("Étoffe de lin", journal))
+  verifie("quête : compte devant (Retail)", "Dents de loup", ns.queteQuiDemande("Dent cassée", journal))
+  verifie("quête : un monstre n'est pas un objet", nil, ns.queteQuiDemande("Bandit tué", journal))
+  verifie("quête : objet inconnu", nil, ns.queteQuiDemande("Feuillargent", journal))
+  verifie("quête : journal vide", nil, ns.queteQuiDemande("Étoffe de lin", nil))
+  verifie("quête : espace insécable avant « : »", "Insécable", ns.queteQuiDemande("Fiole",
+    { { titre = "Insécable", objectifs = { { texte = "Fiole\194\160: 1/2", type = "item" } } } }))
+  verifie("quête : pas un objet au nom plus long", nil, ns.queteQuiDemande("Peau de loup",
+    { { titre = "Peaux", objectifs = { { texte = "Peau de loup épaisse : 0/5", type = "item" } } } }))
+end
 os.exit(ok and 0 or 1)

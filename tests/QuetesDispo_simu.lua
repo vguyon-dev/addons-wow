@@ -29,13 +29,13 @@ verifie("Reglages.lua identique dans QuetesAuto", true,
 local toc = lire((fichier:gsub("QuetesDispo%.lua$", "QuetesDispo.toc")))
 verifie("toc : Reglages.lua, Donnees.lua puis QuetesDispo.lua", true, toc:find("Reglages%.lua%s+Donnees%.lua%s+QuetesDispo%.lua") ~= nil)
 verifie("toc : sauvegarde déclarée", true, toc:find("## SavedVariables: QuetesDispoDB", 1, true) ~= nil)
-verifie("toc : seulement Forever (les données viennent de Classic)", true, toc:find("## Interface: 16001\n", 1, true) ~= nil)
+verifie("toc : seulement Forever (les données viennent de Classic)", true, toc:find("## Interface: 16001\r?\n") ~= nil) -- \r : copie de travail en CRLF sous Windows
 verifie("toc : fonction du compartiment d'addons", true, toc:find("## AddonCompartmentFunc: QuetesDispo_OuvrirReglages", 1, true) ~= nil)
 verifie("toc : licence GPL-3.0", true, toc:find("## X-License: GPL-3.0", 1, true) ~= nil)
 verifie("toc : catégorie Mes addons", true, toc:find("## Category: Mes addons", 1, true) ~= nil)
 verifie("toc : titre affiché", true, toc:find("## Title: Quêtes disponibles", 1, true) ~= nil)
 verifie("toc : icône d'un point d'exclamation de quête", true, toc:find("## IconTexture: Interface\\GossipFrame\\AvailableQuestIcon", 1, true) ~= nil)
-verifie("toc : version 0.4.1", true, toc:find("## Version: 0.4.1", 1, true) ~= nil)
+verifie("toc : version 0.5.0", true, toc:find("## Version: 0.5.0", 1, true) ~= nil)
 
 -- ============================================================================
 -- 1. La logique pure : on charge le fichier sans aucune fonction du jeu.
@@ -2546,4 +2546,28 @@ do
 end
 
 if ok then io.write("Tout est bon.\n") end
+
+-- Les quêtes à prendre qui demandent un objet (bulle des objets de Sacs rangés).
+do
+  -- Le ns de la partie 1 (logique pure), avec de petites données à la place des vraies, remises après.
+  local n2 = ns
+  local quetesAvant, objetsAvant = n2.QUETES, n2.OBJETS_QUETES
+  n2.QUETES = {
+    [1] = { 5, 1, 0, 0, 0, 0, 0, 0, 0, "Linen for the guards" },
+    [2] = { 30, 25, 0, 0, 0, 0, 0, 0, 0, "Far too high" },
+    [3] = { 4, 1, 0, 0, 0, 0, 0, 0, 0, "Already done" },
+    [4] = { 3, 1, 0, 0, 0, 0, 0, 0, 0, "Cloth for sails" },
+  }
+  n2.OBJETS_QUETES = { [2589] = { 1, 2, 3, 4 } }
+  local joueur = { niveau = 6, plageVerte = 8, rendues = function(n) return n == 3 end, enCours = function() return false end }
+  local l = n2.quetesPourObjet(2589, joueur, { tropHaut = true, ecartHaut = 4, basNiveau = true }, nil)
+  verifie("objet : deux quêtes à prendre (ni trop haute ni rendue)", 2, #l)
+  verifie("objet : la plus basse d'abord", 4, l[1] and l[1].numero)
+  verifie("objet : titre des données à défaut du jeu", "Linen for the guards", l[2] and l[2].titre)
+  verifie("objet : couleur de difficulté", true, type(l[1] and l[1].r) == "number")
+  verifie("objet : inconnu", 0, #n2.quetesPourObjet(1, joueur, {}, nil))
+  joueur.enCours = function(n) return n == 1 end
+  verifie("objet : une quête du journal n'est plus « à prendre »", 1, #n2.quetesPourObjet(2589, joueur, { basNiveau = true }, nil))
+  n2.QUETES, n2.OBJETS_QUETES = quetesAvant, objetsAvant
+end
 os.exit(ok and 0 or 1)

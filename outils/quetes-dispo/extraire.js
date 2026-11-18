@@ -630,6 +630,8 @@ function construireJournal(base, quetesGardees) {
   const sourcesObjets = sourcesDe(base.gameobject_loot_template, butinObjet);
 
   const objectifs = new Map();
+  // Objet demandé -> quêtes qui le demandent (bulle des objets : « demandé par une quête à prendre »).
+  const objetsQuetes = new Map();
   for (const n of Array.from(quetesGardees).sort((a, b) => a - b)) {
     const q = fichesQuetes.get(n);
     if (!q) continue;
@@ -651,6 +653,9 @@ function construireJournal(base, quetesGardees) {
       const objet = q["ReqItemId" + i];
       if (!(objet > 0)) continue;
       const besoin = q["ReqItemCount" + i] || 0;
+      if (!objetsQuetes.has(objet)) objetsQuetes.set(objet, []);
+      const qs = objetsQuetes.get(objet);
+      if (!qs.includes(n)) qs.push(n);
       const sm = sourcesRetenues(sourcesMonstres.get(objet));
       const monstres = sm.liste;
       const decor = sourcesRetenues(sourcesObjets.get(objet)).liste;
@@ -712,7 +717,8 @@ function construireJournal(base, quetesGardees) {
   fins.sort((a, b) => a.continent - b.continent || a.x - b.x || a.y - b.y || a.genre - b.genre || a.id - b.id);
   stats.fins = fins.length;
   for (const n of quetesGardees) if (!quetesAvecFin.has(n)) stats.quetesSansFin++;
-  return { objectifs, fins, noms, stats };
+  stats.objetsQuetes = objetsQuetes.size;
+  return { objectifs, fins, noms, objetsQuetes, stats };
 }
 
 // ---------------------------------------------------------------------------
@@ -837,6 +843,11 @@ function ecrireJournal(l, journal) {
   const noms = Array.from(journal.noms.entries()).sort((a, b) => a[0] - b[0]);
   ecrireEnMorceaux(l, "ns.NOMS_FINS", noms.map(([k, v]) => "[" + k + "]=" + chaineLua(v) + ","));
   l.push("");
+  l.push("-- Les objets demandés par les quêtes : [numéro de l'objet] = { numéros des quêtes qui le demandent }.");
+  l.push("-- Sert à la bulle d'un objet du sac : « demandé par une quête que tu peux prendre ».");
+  const objets = Array.from(journal.objetsQuetes.entries()).sort((a, b) => a[0] - b[0]);
+  ecrireEnMorceaux(l, "ns.OBJETS_QUETES", objets.map(([k, v]) => "[" + k + "]={" + v.join(",") + "},"));
+  l.push("");
 }
 
 // ---------------------------------------------------------------------------
@@ -875,6 +886,7 @@ async function principal() {
   const j = donnees.journal.stats;
   console.log("Objectifs : " + j.objectifs + " (" + j.avecPositions + " avec des positions, " + j.sansPosition +
     " sans ; objets trop communs écartés : " + j.objetsCommuns + ")");
+  console.log("Objets demandés par une quête : " + j.objetsQuetes);
   console.log("Points où rendre : " + j.fins + " (quêtes sans endroit où rendre : " + j.quetesSansFin + ")");
   console.log("Fichier : " + sortie + " (" + (taille / 1024).toFixed(0) + " Ko, avant : " + (tailleAvant / 1024).toFixed(0) + " Ko)");
 }

@@ -14,6 +14,7 @@ local reglagesLua = arg[1]:gsub("[^/]+$", "Reglages.lua")
 assert(loadfile(reglagesLua))("SacsRanges", ns)
 assert(loadfile(arg[1]))("SacsRanges", ns)
 assert(loadfile((arg[1]:gsub("[^/]+$", "Conseils.lua"))))("SacsRanges", ns)
+assert(loadfile((arg[1]:gsub("[^/]+$", "Quetes.lua"))))("SacsRanges", ns)
 assert(loadfile((arg[1]:gsub("[^/]+$", "Vue.lua"))))("SacsRanges", ns)
 
 local ok = true
@@ -783,5 +784,61 @@ do
   verifie("pied : sans sac spécial", "11 cases libres sur 32", ns.texteCasesLibres(11, 32, {}))
   verifie("pied : avec un carquois", "11 cases libres sur 32  (+ 6 dans Petit carquois)",
     ns.texteCasesLibres(11, 32, { { nom = "Petit carquois", libres = 6 }, { nom = "Sacoche", libres = 0 } }))
+end
+
+-- Objets utiles aux quêtes (Quetes.lua).
+do
+  -- lower() de Lua 5.1 ne touche pas aux lettres accentuées : le jeu donne les mêmes des deux côtés.
+  verifie("quêtes : nom sans compte (Forever)", ("Étoffe de lin"):lower(), ns.cleNomQuete("Étoffe de lin : 3/10"))
+  verifie("quêtes : compte devant (Retail)", ns.cleNomQuete("Étoffe de lin : 3/10"), ns.cleNomQuete("3/10 Étoffe de lin"))
+  verifie("quêtes : texte vide", nil, ns.cleNomQuete(" 0/5 "))
+  local journal = {
+    { id = 10, titre = "Des bandages pour la milice", objectifs = {
+      { texte = "Étoffe de lin : 3/10", type = "item", fait = 3, total = 10 },
+      { texte = "Bandit défias tué : 2/5", type = "monster", fait = 2, total = 5 } } },
+    { id = 11, titre = "Ragoût du fermier", objectifs = {
+      { texte = "Viande de sanglier coriace : 8/8", type = "item", fait = 8, total = 8, fini = true } } },
+    { id = 12, titre = "Toile pour les voiles", objectifs = {
+      { texte = "Étoffe de lin récupérée : 1/4", type = "item" } } },
+  }
+  local index = ns.indexObjetsJournal(journal)
+  local lin = ns.quetesJournalPour("Étoffe de lin", index)
+  verifie("quêtes : l'étoffe sert à la quête 10", 10, lin[1] and lin[1].id)
+  verifie("quêtes : nom exact d'abord, une seule quête", 1, #lin)
+  verifie("quêtes : compte lu", "3/10", lin[1] and (lin[1].fait .. "/" .. lin[1].total))
+  verifie("quêtes : un monstre n'est pas un objet", 0, #ns.quetesJournalPour("Bandit défias tué", index))
+  local viande = ns.quetesJournalPour("Viande de sanglier coriace", index)
+  verifie("quêtes : 8/8, fini", true, viande[1] and viande[1].fini)
+  verifie("quêtes : compte tiré du texte quand le jeu ne le donne pas", 4, ns.quetesJournalPour("Étoffe de lin récupérée", index)[1].total)
+  -- Nom exact seulement : un autre objet au nom plus long n'est pas confondu.
+  local index2 = ns.indexObjetsJournal({ journal[3], { id = 13, titre = "Peaux", objectifs = { { texte = "Peau de loup épaisse : 0/5", type = "item" } } } })
+  verifie("quêtes : « Peau de loup » n'est pas « Peau de loup épaisse »", 0, #ns.quetesJournalPour("Peau de loup", index2))
+  verifie("quêtes : « Étoffe de lin » n'est pas « … récupérée »", 0, #ns.quetesJournalPour("Étoffe de lin", index2))
+  verifie("quêtes : espace insécable avant « : »", 13, (ns.quetesJournalPour("Peau de loup épaisse",
+    ns.indexObjetsJournal({ { id = 13, titre = "Peaux", objectifs = { { texte = "Peau de loup épaisse\194\160: 0/5", type = "item" } } } }))[1] or {}).id)
+  verifie("quêtes : rien pour un objet inconnu", 0, #ns.quetesJournalPour("Feuillargent", index))
+
+  local prendre = { { titre = "Le forgeron a besoin de cuivre", niveau = 10, r = 1, g = 1, b = 0 } }
+  local l = ns.lignesBulleQuetes(lin, prendre, true, false)
+  verifie("bulle : une ligne journal + titre à prendre + une quête", 3, #l)
+  verifie("bulle : ligne du journal", "Quête : Des bandages pour la milice (3/10)", l[1] and l[1].texte)
+  verifie("bulle : quête à prendre avec son niveau", "  [10] Le forgeron a besoin de cuivre", l[3] and l[3].texte)
+  verifie("bulle : finie en vert", 1, ns.lignesBulleQuetes(viande, {}, true)[1].g)
+  local court = ns.lignesBulleQuetes(lin, prendre, false, false)
+  verifie("bulle résumée", "Sert à 2 quêtes (dont 1 à prendre)", court[1] and court[1].texte)
+  verifie("bulle résumée + Maj : le détail", 3, #ns.lignesBulleQuetes(lin, prendre, false, true))
+  verifie("bulle : rien à dire", 0, #ns.lignesBulleQuetes({}, {}, true))
+  local six = {}
+  for i = 1, 7 do six[i] = { titre = "Q" .. i, niveau = i } end
+  verifie("bulle : au plus 5 quêtes à prendre, puis « et 2 autres »", "  et 2 autres", ns.lignesBulleQuetes({}, six, true)[7].texte)
+
+  verifie("marque : compteur", "3/10", ns.marqueQuete(lin, {}, 1).texte)
+  verifie("marque : quêtes à prendre seulement", "+1", ns.marqueQuete({}, prendre, 1).texte)
+  verifie("marque : « ! » journal", "!", ns.marqueQuete(lin, prendre, 2).texte)
+  verifie("marque : « ? » à prendre", "?", ns.marqueQuete({}, prendre, 2).texte)
+  verifie("marque : bordure", true, ns.marqueQuete(lin, {}, 3).bord)
+  verifie("marque : toutes finies, compteur vert", 1, ns.marqueQuete(viande, {}, 1).g)
+  verifie("marque : rien", nil, ns.marqueQuete({}, {}, 1))
+  verifie("rangement : phrase", "sert à la quête « Des bandages pour la milice »", ns.texteRangementQuete(lin))
 end
 os.exit(ok and 0 or 1)

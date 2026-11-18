@@ -191,6 +191,76 @@ end
 
 local ouvert = false -- le marchand est-il encore ouvert ?
 
+-- ---------------------------------------------------------------------------
+-- Objets utiles aux quêtes : jamais vendus ni jetés.
+-- Une étoffe ou un objet divers demandé par une quête du journal n'a aucune marque
+-- du jeu. On compare son nom, exactement, aux objectifs « Nom : 3/10 » du journal.
+-- Avec Sacs rangés, on lui demande (même règle) ; sinon on lit le journal nous-mêmes.
+-- Code identique dans Marchand auto et Butin rapide.
+-- ---------------------------------------------------------------------------
+
+-- Le nom d'un objectif sans son compte, en minuscules (logique pure, testée hors jeu).
+function ns.cleObjectif(texte)
+  if type(texte) ~= "string" then return nil end
+  -- L'espace insécable (\194\160) du français, avant « : », compte comme un espace.
+  local nom = texte:gsub("\194\160", " "):gsub("%d+%s*/%s*%d+", "", 1)
+  nom = nom:gsub("^[%s%-:]+", ""):gsub("[%s:%.]+$", "")
+  if nom == "" then return nil end
+  return nom:lower()
+end
+
+-- La quête du journal qui demande l'objet « nom », ou nil. journal : { { titre, objectifs = { { texte, type } } } }.
+function ns.queteQuiDemande(nom, journal)
+  if type(nom) ~= "string" or nom == "" then return nil end
+  local cle = ns.cleObjectif(nom)
+  for _, q in ipairs(type(journal) == "table" and journal or {}) do
+    for _, o in ipairs(type(q.objectifs) == "table" and q.objectifs or {}) do
+      if (o.type == nil or o.type == "item") and ns.cleObjectif(o.texte) == cle then return q.titre or "?" end
+    end
+  end
+  return nil
+end
+
+-- Le journal du jeu, au format de ns.queteQuiDemande. Lu une fois par vente ou par recherche, pas par objet.
+function ns.journalDuJeu()
+  local ql, journal = C_QuestLog, {}
+  if type(ql) ~= "table" or type(ql.GetNumQuestLogEntries) ~= "function" or type(ql.GetInfo) ~= "function" then return journal end
+  local function lisible(v) if issecretvalue and issecretvalue(v) then return nil end return v end
+  local okN, n = pcall(ql.GetNumQuestLogEntries)
+  n = okN and tonumber((lisible(n))) or 0
+  for i = 1, math.min(n, 100) do
+    local ok, info = pcall(ql.GetInfo, i)
+    if ok and type(info) == "table" and not lisible(info.isHeader) then
+      local id = lisible(info.questID)
+      if type(id) == "number" and type(ql.GetQuestObjectives) == "function" then
+        local okO, brut = pcall(ql.GetQuestObjectives, id)
+        local objectifs = {}
+        for _, o in ipairs(okO and type(brut) == "table" and brut or {}) do
+          if type(o) == "table" then objectifs[#objectifs + 1] = { texte = lisible(o.text), type = lisible(o.type) } end
+        end
+        journal[#journal + 1] = { titre = lisible(info.title), objectifs = objectifs }
+      end
+    end
+  end
+  return journal
+end
+
+-- Le titre de la quête du journal qui demande cet objet (numéro), ou nil. journal : celui de ns.journalDuJeu,
+-- à passer quand on teste plusieurs objets d'affilée (sinon il est relu).
+ns.gardesQueteDits = {}
+function ns.sertAUneQuete(id, journal)
+  if not id then return nil end
+  if type(SacsRanges_ObjetSertQuete) == "function" then
+    local ok, titre = pcall(SacsRanges_ObjetSertQuete, id)
+    if ok then return titre end
+  end
+  local nom
+  if C_Item and C_Item.GetItemInfo then nom = C_Item.GetItemInfo(id) elseif GetItemInfo then nom = GetItemInfo(id) end
+  if type(nom) ~= "string" then return nil end
+  return ns.queteQuiDemande(nom, journal or ns.journalDuJeu())
+end
+
+
 local function compterObjet(id)
   local f = (C_Item and C_Item.GetItemCount) or GetItemCount
   return f and f(id) or 0
@@ -288,6 +358,19 @@ local function vendre()
     local prix = select(11, infoItem(e.lien)) or 0
     liste[#liste + 1] = { sac = e.sac, case = e.case, genre = "equip", lien = e.lien, id = e.id, qualite = e.qualite,
                           remboursable = e.remboursable, prix = prix * ((info and info.stackCount) or 1) }
+  end
+  -- Jamais un objet qui sert encore à une quête du journal (un gris demandé par une quête, c'est rare mais ça existe).
+  local journal = type(SacsRanges_ObjetSertQuete) ~= "function" and ns.journalDuJeu() or nil
+  for k = #liste, 1, -1 do
+    local titre = ns.sertAUneQuete(liste[k].id, journal)
+    if titre then
+      -- Dit une seule fois par session et par objet, pas à chaque marchand.
+      if not ns.gardesQueteDits[liste[k].id] then
+        ns.gardesQueteDits[liste[k].id] = true
+        ns.reglages.dire("garde " .. (liste[k].lien or "un objet") .. " : il sert à la quête « " .. titre .. " ».")
+      end
+      table.remove(liste, k)
+    end
   end
   if #liste == 0 then return end
   local i, vendus, attente = 0, {}, nil

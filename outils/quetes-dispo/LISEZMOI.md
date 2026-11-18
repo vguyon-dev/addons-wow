@@ -35,7 +35,9 @@ Les quêtes du journal (depuis la 0.4.0 de l'addon) : le fichier garde aussi
   pour un monstre à tuer ; pour un objet, les monstres qui le font tomber d'après
   creature_loot_template, et les coffres d'après gameobject_loot_template) ;
 - `ns.FINS` : où rendre chaque quête (creature_involvedrelation et gameobject_involvedrelation),
-  au plus 3 points par PNJ et par continent, et `ns.NOMS_FINS` : le nom anglais de ces PNJ et objets.
+  au plus 3 points par PNJ et par continent, et `ns.NOMS_FINS` : le nom anglais de ces PNJ et objets ;
+- `ns.OBJETS_QUETES` (depuis la 0.5.0) : pour chaque objet demandé par une quête gardée (ReqItemId 1 à 4),
+  la liste des quêtes qui le demandent ; sert à la bulle des objets de Sacs rangés (« demandé par une quête à prendre »).
 Règles : un taux de chute sous 1 % ne compte pas ; un objet que plus de 20 genres de monstres font
 tomber (50 s'il ne tombe que pour une quête, taux négatif) est jugé trop commun, sans icône ni ligne
 dans la bulle ; une apparition au genre tiré au hasard (creature_spawn_entry, gameobject_spawn_entry)

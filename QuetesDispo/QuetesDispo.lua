@@ -373,6 +373,32 @@ function ns.lignesQuetes(numeros, joueur, reglages, titreDe)
   return lignes
 end
 
+-- Les quêtes à prendre qui demandent l'objet « idObjet » (table ns.OBJETS_QUETES des données), pour la bulle
+-- des objets de Sacs rangés : { { numero, titre, niveau, r, g, b } }, triées par niveau puis par titre.
+-- Seulement les quêtes vraiment à prendre (ns.disponible) : ni rendues, ni en cours, ni « bientôt », ni d'une
+-- suite pas encore débloquée.
+function ns.quetesPourObjet(idObjet, joueur, reglages, titreDe)
+  local liste = type(ns.OBJETS_QUETES) == "table" and ns.OBJETS_QUETES[idObjet]
+  if type(liste) ~= "table" then return {} end
+  local res = {}
+  for _, n in ipairs(liste) do
+    local f = ns.fiche(n)
+    if f then
+      local ok, raison = ns.disponible(f, joueur, reglages)
+      if ok and raison == nil then
+        local titre = titreDe and titreDe(n) or ns.titreQuete(n, nil, f.titre)
+        local r, g, b = ns.couleurDifficulte(f.niveau, joueur and joueur.niveau, joueur and joueur.plageVerte)
+        res[#res + 1] = { numero = n, titre = titre, niveau = f.niveau, r = r, g = g, b = b }
+      end
+    end
+  end
+  table.sort(res, function(a, b)
+    if a.niveau ~= b.niveau then return a.niveau < b.niveau end
+    return tostring(a.titre) < tostring(b.titre)
+  end)
+  return res
+end
+
 -- Regroupe les points au même endroit (à 0,5 % de la carte près) en un seul « ! ».
 -- points : { { x = , y = , quetes = { numéros } } } ; rend { { x, y, quetes } } (positions moyennes,
 -- numéros sans doublon). tolerance : 0,005 par défaut (une carte de continent en prend plus).
@@ -2469,6 +2495,18 @@ local function commandeEtat()
   for _, x in ipairs(liste) do
     dire("  exclues, " .. (ns.NOMS_RAISONS[x.raison] or x.raison) .. " : " .. x.n)
   end
+end
+
+-- Pour Sacs rangés : les quêtes à prendre qui demandent cet objet (voir ns.quetesPourObjet). Le joueur est
+-- relu au plus toutes les 5 secondes : la bulle d'un objet se redessine sans arrêt tant que la souris reste dessus.
+function QuetesDispo_QuetesPourObjet(idObjet)
+  if not db or db.actif == false or type(idObjet) ~= "number" then return {} end
+  if type(ns.OBJETS_QUETES) ~= "table" or not ns.OBJETS_QUETES[idObjet] then return {} end
+  local t = maintenant()
+  if not ns.joueurObjets or t - (ns.joueurObjetsTemps or -10) > 5 then
+    ns.joueurObjets, ns.joueurObjetsTemps = construireJoueur(), t
+  end
+  return ns.quetesPourObjet(idObjet, ns.joueurObjets, db, function(n) return titreDe(n, true) end)
 end
 
 local function commande(texte)

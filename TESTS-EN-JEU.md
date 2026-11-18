@@ -9,6 +9,15 @@ Avant de commencer :
 - [ ] Désactiver Pawn, pour ne voir que notre avis sur les objets.
 - [ ] Vérifier que BugSack est actif sur Forever.
 
+## Objets utiles aux quêtes, 18/11/2026 (Sacs rangés 0.17.0, Quêtes disponibles 0.5.0, Marchand auto 0.8.0, Butin rapide 0.9.0)
+
+- [x] Banc d'essai (Forever, niveau 14) : les deux fonctions globales existent ; « Tripes de sanglier » et « Tonneau de Tonnebière » donnent chacun une quête à prendre, titre en français (« [11] Les boudins de Thelsamar », « [15] Régime sec ») ; la bulle du tonneau montre « Demandé par 1 quête à prendre : » puis la quête, en bleu ; aucune erreur BugGrabber.
+- [ ] Prendre une quête qui demande un objet ordinaire (étoffe, viande) : bulle « Quête : titre (3/10) » en jaune, verte quand le compte est atteint, et le compte qui monte au butin.
+- [ ] Sac par catégories : la marque en haut à droite de la case (« 3/10 », « +1 »), les formes 2 et 3 dans les réglages (onglet « Objets de quête »), et l'objet du journal rangé dans la section Quête, avec « Rangé ici : sert à la quête … » dans sa bulle.
+- [ ] Décocher « Une ligne par quête » : une seule ligne « Sert à … », le détail avec Maj enfoncée.
+- [ ] Sur Retail : la ligne du journal dans la bulle (sans Quêtes disponibles, pas de ligne bleue).
+- [ ] Chez un marchand avec un gris demandé par une quête : Marchand auto le garde et dit « garde … : il sert à la quête … ».
+
 ## Nouveautés du 13/11/2026 : vérifié en jeu le 13/11 (Forever, chasseur niveau 12, Marche de l'Ouest, essais pilotés par Claude)
 
 Corrigé pendant l'essai : `/mt` et `/ma` n'ont jamais marché (le jeu les garde pour « tank principal » et « assistant principal » et passe avant les addons) : les commandes sont `/metiers` et `/marchand` (Métiers auto 0.10.1, Marchand auto 0.7.2). Icônes d'objectif agrandies, engrenage à la place de la main, illisible (Quêtes disponibles 0.4.1). Sans canne équipée, le jeu refusait le lancer sans rien afficher : Métiers auto le dit maintenant. Aucune erreur de nos addons dans BugGrabber.

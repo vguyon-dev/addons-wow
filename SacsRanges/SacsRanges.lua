@@ -25,6 +25,12 @@ local DEFAUTS = {
   apparenceWow = false,    -- vue par catégories avec le cadre du jeu (sinon le nouveau visuel)
   conseils = true,         -- section « À équiper » et flèche verte dans la vue par catégories
   conseilsBulles = true,   -- « Mieux pour <spé> » dans toutes les bulles d'objets
+  quetesBulles = true,     -- dans la bulle d'un objet : les quêtes du journal qui le demandent (Quetes.lua)
+  quetesPrendre = true,    -- et les quêtes à prendre qui le demandent (avec Quêtes disponibles, sur Forever)
+  quetesDetail = true,     -- une ligne par quête (sinon un résumé, le détail avec Maj)
+  quetesMarque = true,     -- une marque sur la case dans le sac par catégories
+  quetesForme = 1,         -- forme de cette marque : 1 compteur « 3/10 », 2 « ! », 3 bordure
+  quetesSection = true,    -- l'objet va dans la section Quête tant qu'il sert à une quête du journal
   avisPawn = false,        -- prendre l'avis de Pawn s'il est installé (sinon notre propre calcul)
   minimap = false,         -- icône à part (sinon seulement l'icône commune)
   angleMinimap = 120,
@@ -693,6 +699,21 @@ ns.reglages = ns.creerReglages({
       aide = "Butin, récompenses de quête, marchand, sacs : une ligne verte « Mieux pour <ta spécialisation> » avec la raison et ce que l'objet remplace. Rien quand l'objet n'est pas mieux ou que tu ne peux pas le porter." },
     { cle = "avisPawn", libelle = "Prendre l'avis de Pawn s'il est installé",
       aide = "Décoché : l'addon juge seul (caractéristique principale de ta spécialisation, dégâts de l'arme, Endurance), sans Pawn." },
+    { titre = "Objets de quête" },
+    { cle = "quetesBulles", libelle = "Dire dans les bulles d'objets à quelle quête ils servent",
+      aide = "Une étoffe, une herbe ou un objet divers demandé par une quête de ton journal : une ligne jaune « Quête : titre (3/10) », verte quand il y en a assez. Partout : sacs, banque, butin, marchand." },
+    { cle = "quetesPrendre", libelle = "Aussi les quêtes que tu peux prendre (Forever)",
+      dispo = function() return type(QuetesDispo_QuetesPourObjet) == "function" end,
+      aide = "Une ligne bleue pour les quêtes pas encore prises qui demandent cet objet, filtrées comme les « ! » de la carte (niveau, race, classe, suites). Demande l'addon Quêtes disponibles, donc WoW Forever." },
+    { cle = "quetesDetail", libelle = "Une ligne par quête dans la bulle", dependDe = "quetesBulles",
+      aide = "Décoché : une seule ligne « Sert à 2 quêtes » ; tiens Maj enfoncée en survolant l'objet pour voir le détail." },
+    { cle = "quetesMarque", libelle = "Marque sur la case dans le sac par catégories", dependDe = "vueCategories",
+      aide = "En haut à droite de la case : jaune pour une quête du journal, bleue pour une quête seulement à prendre." },
+    { cle = "quetesForme", type = "nombre", libelle = "Forme de la marque (1 compteur, 2 « ! », 3 bordure)", min = 1, max = 3, pas = 1,
+      dependDe = "quetesMarque",
+      aide = "1 : le compte de la quête, « 3/10 » (« +2 » pour deux quêtes à prendre). 2 : un « ! » (« ? » pour une quête à prendre). 3 : une bordure lumineuse autour de la case." },
+    { cle = "quetesSection", libelle = "Ranger l'objet dans la section Quête tant qu'il sert", dependDe = "vueCategories",
+      aide = "Un objet demandé par une quête de ton journal quitte Composants ou Divers pour la section Quête, puis y retourne quand la quête est rendue. La bulle dit pour quelle quête." },
     { titre = "Icône" },
     { cle = "minimap", libelle = "Icône à part autour de la minimap",
       aide = "En plus de l'icône commune « Mes addons ». Clic droit : activer ou couper." },

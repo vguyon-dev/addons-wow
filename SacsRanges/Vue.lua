@@ -615,6 +615,9 @@ local function remplir(b, icone, nombre, verrou, qualite, lien)
   b.conseil, b.raison, b.moinsQue = nil, nil, nil
   b.fleche:Hide()
   b.moins:Hide()
+  -- La marque « sert à une quête » (Quetes.lua) : remise par ns.marquerCase après remplir.
+  if b.queteTexte then b.queteTexte:Hide() end
+  if b.queteBord then b.queteBord:Hide() end
 end
 
 -- Les lignes de la section « À équiper » : le nom de l'objet et la raison, à droite de la case.
@@ -697,6 +700,12 @@ local function lire(sacs, sansConseils)
         local estLivre = LivresBiblio_EstUnLivre and nom and LivresBiblio_EstUnLivre(nom) or false
         local categorie = ns.categorie(classe, qualite, infoQuete(numero, case), utilisable, sousClasse, idObjet,
           { livre = estLivre, lie = liaison == 1, artisanat = artisanat, estLie = estLie, raison = raison })
+        -- Option « ranger dans Quête tant qu'il sert » : un objet demandé par une quête du journal (Quetes.lua).
+        local raisonQuete
+        if categorie ~= "quete" and ns.db and ns.db.quetesSection and ns.quetesJournalObjet then
+          local okQ, l = pcall(ns.quetesJournalObjet, idObjet, nom)
+          if okQ and type(l) == "table" and #l > 0 then categorie, raisonQuete = "quete", ns.texteRangementQuete(l) end
+        end
         local conseil, moins
         if categorie == "equip" and not sansConseils and ns.db and ns.db.conseils ~= false and ns.conseil then
           local ok, c = pcall(ns.conseil, lien)
@@ -710,7 +719,7 @@ local function lire(sacs, sansConseils)
           sac = numero, case = case, id = idObjet, icone = icone, nombre = nombre, verrou = verrou, qualite = qualite,
           lien = lien, nom = nom or lien, categorie = categorie, conseil = conseil, moins = moins, remboursable = remboursable,
           extension = extension,
-          raison = ns.texteRangement(categorie, qualite, estLie, texteRaison),
+          raison = raisonQuete or ns.texteRangement(categorie, qualite, estLie, texteRaison),
         }
       elseif special then
         special.libres = special.libres + 1
@@ -821,6 +830,7 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
         b:SetPoint("TOPLEFT", contenu, "TOPLEFT", 0, -y)
       end
       remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
+      if ns.marquerCase then pcall(ns.marquerCase, b, o.id, o.nom) end
       b.conseil = o.conseil
       b.fleche:Show()
       b:SetAlpha(visible(o) and 1 or 0.2)
@@ -871,6 +881,7 @@ local function dessiner(v, sacs, avecConseils, titreTexte, avecArgent)
               b:SetPoint("TOPLEFT", contenu, "TOPLEFT", col * (TAILLE + ECART), -(y + ligne * (TAILLE + ECART)))
             end
             remplir(b, o.icone, o.nombre, o.verrou, o.qualite, o.lien)
+            if ns.marquerCase then pcall(ns.marquerCase, b, o.id, o.nom) end
             b.raison, b.moinsQue = o.raison, o.moins
             if o.moins then b.moins:Show() end
             b:SetAlpha(visible(o) and 1 or 0.2)
@@ -1365,7 +1376,12 @@ for _, e in ipairs({ "BAG_UPDATE_DELAYED", "ITEM_LOCK_CHANGED", "PLAYER_MONEY", 
   pcall(ecouteur.RegisterEvent, ecouteur, e)
 end
 local enAttente = false
-local function programmer()
+local programmer
+-- Pour Quetes.lua : un redessin léger (sans réappliquer l'apparence), seulement si une fenêtre est ouverte.
+function ns.vueRafraichir()
+  if fenetre:IsShown() or banque.fenetre:IsShown() then programmer() end
+end
+function programmer()
   -- Plusieurs événements d'affilée : une seule mise à jour.
   if enAttente then return end
   enAttente = true
