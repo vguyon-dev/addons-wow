@@ -7,13 +7,15 @@
 -- Une section vide n'est pas affichée. Chaque quête montre une pastille, son niveau et
 -- son titre (coloré selon la difficulté), la distance si le jeu la donne, puis ses objectifs.
 -- Une quête chronométrée (escorte, livraison en temps limité) montre son compte à rebours sous
--- le titre, mis à jour chaque seconde, orange sous 5 minutes et rouge sous 1 minute.
+-- le titre, mis à jour chaque seconde, orange sous 5 minutes et rouge sous 1 minute. Elle s'affiche
+-- aussi en grand en haut de l'écran (le bandeau, avec des sons), et sur l'en-tête de sa section repliée.
 --
 --   Clic : choisir la quête (le GPS la suit alors)
 --   Survol : la description de la quête (l'addon n'ouvre jamais le journal du jeu, voir plus bas)
 --   Maj + clic : ne plus suivre         Clic droit : menu (ranger la quête ailleurs…)
 --   /sq : les réglages    /sq genre : ce que le jeu dit de chaque quête suivie
 --   /sq centre : remet le panneau à sa place    /sq aide : la liste des commandes
+--   /sq essai : montre 10 secondes le bandeau des quêtes chronométrées (en haut de l'écran)
 --
 -- Le suivi du jeu est caché (option), sauf en combat (on n'y touche pas : il porte des
 -- boutons protégés) et dans une instance, où il porte les objectifs de scénario.
@@ -41,6 +43,22 @@ local DEFAUTS = {
   cacherSuiviJeu = true,     -- cacher le suivi des objectifs du jeu
   boutonsObjets = true,      -- les boutons des objets de quête
   minimap = false,
+  -- Le bandeau des quêtes chronométrées, en haut de l'écran.
+  bandeau = true,            -- le grand compte à rebours en haut de l'écran
+  bandeauSeuil = 0,          -- en minutes : 0 = toujours, sinon seulement sous ce temps
+  bandeauTaille = 100,       -- en %
+  bandeauHaut = 120,         -- distance au haut de l'écran, en pixels
+  bandeauDecalage = 0,       -- décalage à gauche (négatif) ou à droite, en pixels
+  bandeauObjectifs = true,   -- les objectifs qui restent sous le temps
+  bandeauFond = true,        -- une bande sombre derrière
+  bandeauClignote = true,    -- le temps clignote sous 1 minute
+  son = true,                -- les alertes sonores du bandeau
+  sonChoix = 1,              -- le son des alertes (voir ns.SONS_BANDEAU)
+  sonDebut = true,           -- un son quand une quête chronométrée commence
+  palier1 = 5,               -- en minutes : première alerte (0 = aucune)
+  palier2 = 1,               -- en minutes : seconde alerte (0 = aucune)
+  sonDecompte = true,        -- un petit tic chaque seconde pendant les 10 dernières
+  sonFin = true,             -- un son quand le temps est écoulé
   genres = {},               -- [numéro de quête] = genre choisi à la main
 }
 
@@ -228,6 +246,53 @@ function ns.couleurRebours(secondes)
   return 1, 0.82, 0
 end
 
+-- L'heure de fin la plus proche parmi les quêtes d'une section (nil si aucune n'est chronométrée) :
+-- une section repliée la montre sur son en-tête, pour ne jamais cacher un compte à rebours.
+function ns.finLaPlusProche(quetes)
+  local fin
+  for _, q in ipairs(type(quetes) == "table" and quetes or {}) do
+    if type(q.fin) == "number" and (not fin or q.fin < fin) then fin = q.fin end
+  end
+  return fin
+end
+
+-- Le bandeau en haut de l'écran (quêtes chronométrées) : les sons au choix. cle = nom dans SOUNDKIT
+-- (la table du jeu), id = le numéro de repli si le jeu ne connaît pas ce nom.
+ns.SONS_BANDEAU = {
+  { nom = "Alerte de raid", cle = "RAID_WARNING", id = 8959 },
+  { nom = "Appel « Prêt ? »", cle = "READY_CHECK", id = 8960 },
+  { nom = "Réveil", cle = "ALARM_CLOCK_WARNING_3", id = 12889 },
+  { nom = "Cor du champ de bataille", cle = "PVP_THROUGH_QUEUE", id = 8458 },
+  { nom = "Notification", cle = "UI_BNET_TOAST", id = 18019 },
+  { nom = "Quête échouée", cle = "IG_QUEST_FAILED", id = 847 },
+}
+
+-- Le son numéro n de la liste (borné : un réglage abîmé donne le premier ou le dernier).
+function ns.sonBandeau(n)
+  local l = ns.SONS_BANDEAU
+  n = math.floor(tonumber(n) or 1)
+  if n < 1 then n = 1 elseif n > #l then n = #l end
+  return l[n]
+end
+
+-- Le palier d'alerte franchi entre deux relevés du temps restant (en secondes), le plus pressant
+-- s'il y en a plusieurs ; nil sinon. Un palier à 0 ou négatif est coupé.
+function ns.palierFranchi(avant, apres, paliers)
+  if type(avant) ~= "number" or type(apres) ~= "number" then return nil end
+  local trouve
+  for _, p in ipairs(type(paliers) == "table" and paliers or {}) do
+    if type(p) == "number" and p > 0 and avant > p and apres <= p and (not trouve or p < trouve) then trouve = p end
+  end
+  return trouve
+end
+
+-- Le bandeau montre-t-il une quête ? seuil en minutes : 0 = toujours, sinon seulement sous ce temps.
+function ns.bandeauMontre(reste, seuilMinutes)
+  if type(reste) ~= "number" or reste ~= reste then return false end
+  if type(seuilMinutes) ~= "number" or seuilMinutes <= 0 then return true end
+  return reste <= seuilMinutes * 60
+end
+
 -- La couleur d'un titre selon la difficulté, comme le jeu (rouge, orange, jaune, vert, gris).
 -- plageVerte : combien de niveaux sous toi la quête reste verte (GetQuestGreenRange, 8 au besoin).
 function ns.couleurDifficulte(niveauQuete, niveauJoueur, plageVerte)
@@ -302,6 +367,17 @@ end
 local function nettoyer(t)
   t = tostring(t or ""):gsub("^%s+", ""):gsub("%s+$", "")
   return t
+end
+
+-- La ligne d'objectifs du bandeau : ceux qui restent à faire, sur une ligne ; quête finie : à rendre.
+function ns.texteObjectifsBandeau(objectifs, fini)
+  if fini then return "Objectifs remplis : à rendre avant la fin !" end
+  local t = {}
+  for _, o in ipairs(type(objectifs) == "table" and objectifs or {}) do
+    local texte = type(o) == "table" and nettoyer(o.text) or ""
+    if texte ~= "" and not o.finished then t[#t + 1] = texte end
+  end
+  return table.concat(t, "   ·   ")
 end
 
 -- Les lignes d'objectifs à afficher sous une quête : { { texte, fini } }.
@@ -947,6 +1023,15 @@ local function remplirLigneQuete(b, q, largeur, choisieId)
   return hauteur
 end
 
+-- Le nombre de quêtes d'un en-tête de section, précédé du temps restant quand elle est repliée.
+function ns.majChronoSection(ls)
+  if not ls.fin then ls.nombre:SetText(ls.compte or "") return end
+  local reste = ls.fin - (sur(GetTime) or ls.fin)
+  local r, g, b = ns.couleurRebours(reste)
+  ls.nombre:SetText(string.format("|cff%02x%02x%02x%s|r   %s", math.floor(r * 255), math.floor(g * 255), math.floor(b * 255),
+    ns.texteRebours(reste) or "?", tostring(ls.compte or "")))
+end
+
 -- Le compte à rebours d'une ligne, recalculé depuis l'heure de fin.
 function ns.majChrono(b)
   if not b.fin then return end
@@ -979,7 +1064,10 @@ function redessiner()
     ls:SetSize(largeur, HAUT_SECTION)
     ls.icone:SetTexture(replie and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up")
     ls.nom:SetText(s.nom)
-    ls.nombre:SetText(#s.quetes)
+    -- Repliée, une section qui contient une quête chronométrée montre le temps le plus court sur son en-tête.
+    ls.fin = (replie and db.rebours) and ns.finLaPlusProche(s.quetes) or nil
+    ls.compte = #s.quetes
+    ns.majChronoSection(ls)
     ls:Show()
     y = y + HAUT_SECTION
     total = total + #s.quetes
@@ -1276,6 +1364,11 @@ end
 
 local function rafraichir()
   if not db or not perso then return end
+  -- Le bandeau des quêtes chronométrées vit à part : il se lit même quand le panneau est caché.
+  if ns.lireChronos then
+    if db.actif and db.bandeau then pcall(ns.lireChronos) end
+    pcall(ns.majBandeau)
+  end
   -- Dans une instance, le suivi du jeu revient (scénarios) : on s'efface, sauf si on ne l'a pas caché.
   local masque = (not db.actif) or (db.cacherSuiviJeu and dansInstance())
   if masque then
@@ -1377,8 +1470,53 @@ ns.reglages = ns.creerReglages({
       aide = "Le suivi du jeu est caché quand ce panneau est là. Il revient dans une instance (il y porte les objectifs de scénario) et quand l'addon est coupé. En combat, on n'y touche pas : il est remis à la fin du combat." },
     { cle = "boutonsObjets", libelle = "Les boutons des objets de quête",
       aide = "Les quêtes qui demandent un objet à utiliser ont un bouton dans une colonne à gauche du panneau. C'est toi qui cliques : l'addon ne joue pas à ta place." },
+    { titre = "Bandeau" },
+    { cle = "bandeau", libelle = "Grand compte à rebours en haut de l'écran",
+      aide = "Une quête à faire et à rendre en temps limité s'affiche en grand en haut de l'écran : son titre, le temps qui reste et ce qu'il reste à faire. Il est là même quand le panneau est caché (en donjon). Le bouton « Essayer le bandeau », en bas, le montre 10 secondes." },
+    { cle = "bandeauSeuil", type = "nombre", libelle = "Afficher le bandeau", min = 0, max = 30, pas = 1, dependDe = "bandeau",
+      format = function(v) if v <= 0 then return "toujours" end return "sous " .. v .. " min" end,
+      aide = "« toujours » : dès que la quête commence. Sinon, le bandeau n'apparaît que lorsqu'il reste moins que ce temps." },
+    { cle = "bandeauTaille", type = "nombre", libelle = "Taille du bandeau", min = 50, max = 250, pas = 10, dependDe = "bandeau",
+      format = function(v) return v .. " %" end,
+      aide = "Agrandit ou réduit tout le bandeau (le temps, le titre et les objectifs)." },
+    { cle = "bandeauHaut", type = "nombre", libelle = "Hauteur du bandeau", min = 0, max = 800, pas = 10, dependDe = "bandeau",
+      format = function(v) return v .. " px du haut" end,
+      aide = "La distance entre le haut de l'écran et le bandeau. Plus le nombre est grand, plus il descend." },
+    { cle = "bandeauDecalage", type = "nombre", libelle = "Position à gauche ou à droite", min = -900, max = 900, pas = 10, dependDe = "bandeau",
+      format = function(v) if v == 0 then return "au centre" elseif v < 0 then return -v .. " px à gauche" end return v .. " px à droite" end,
+      aide = "0 : au milieu de l'écran. En dessous, il part vers la gauche ; au-dessus, vers la droite." },
+    { cle = "bandeauObjectifs", libelle = "Les objectifs sous le temps", dependDe = "bandeau",
+      aide = "Une ligne avec ce qu'il reste à faire (« Busard des montagnes : 0/6 »). Quand tout est fait : « à rendre avant la fin ! », en vert." },
+    { cle = "bandeauFond", libelle = "Bande sombre derrière", dependDe = "bandeau",
+      aide = "Une bande sombre et transparente derrière le texte, pour le lire sur un décor clair." },
+    { cle = "bandeauClignote", libelle = "Faire clignoter le temps quand ça presse", dependDe = "bandeau",
+      aide = "Le temps clignote sous 1 minute, et 3 secondes après chaque alerte." },
+    { titre = "Son" },
+    { cle = "son", libelle = "Alertes sonores du bandeau",
+      aide = "Des sons pour ne pas rater la fin d'une quête à temps limité. Ils passent par le volume général du jeu : tu les entends même si les effets sonores sont coupés." },
+    { cle = "sonChoix", type = "nombre", libelle = "Son des alertes", min = 1, max = #ns.SONS_BANDEAU, pas = 1, dependDe = "son",
+      format = function(v) return ns.sonBandeau(v).nom end,
+      aide = "Le son joué au début et à chaque palier. Le bouton « Écouter le son », en bas, le fait entendre." },
+    { cle = "sonDebut", libelle = "Un son quand une quête chronométrée commence", dependDe = "son",
+      aide = "Dès que tu prends une quête à temps limité (pas à la connexion ni après un /reload, pour une quête déjà en cours)." },
+    { cle = "palier1", type = "nombre", libelle = "Première alerte", min = 0, max = 30, pas = 1, dependDe = "son",
+      format = function(v) if v <= 0 then return "aucune" end return "à " .. v .. " min de la fin" end,
+      aide = "Un son quand il ne reste plus que ce temps. 0 : pas d'alerte." },
+    { cle = "palier2", type = "nombre", libelle = "Seconde alerte", min = 0, max = 10, pas = 1, dependDe = "son",
+      format = function(v) if v <= 0 then return "aucune" end return "à " .. v .. " min de la fin" end,
+      aide = "Un second son, plus près de la fin. 0 : pas d'alerte." },
+    { cle = "sonDecompte", libelle = "Un tic chaque seconde à la fin", dependDe = "son",
+      aide = "Un petit tic à chacune des 10 dernières secondes." },
+    { cle = "sonFin", libelle = "Un son quand le temps est écoulé", dependDe = "son",
+      aide = "Le son de quête échouée du jeu, à zéro." },
   },
   boutons = {
+    { texte = "Essayer le bandeau", aide = "Montre le bandeau 10 secondes avec une fausse quête, pour régler sa taille et sa place. L'alerte d'une minute tombe au bout de 5 secondes.", action = function()
+      ns.essayerBandeau()
+    end },
+    { texte = "Écouter le son", aide = "Joue le son choisi pour les alertes.", action = function()
+      if ns.jouerSonBandeau then ns.jouerSonBandeau("alerte") end
+    end },
     { texte = "Remettre à sa place", aide = "Remet le panneau à son emplacement d'origine, sous la minimap.", action = function()
       remettreEnPlace()
     end },
@@ -1396,11 +1534,14 @@ ns.reglages = ns.creerReglages({
     perso.replie = type(perso.replie) == "table" and perso.replie or {}
     placerPanneau()
     allurePanneau()
+    if ns.placerBandeau then ns.placerBandeau() end
   end,
   surChangement = function()
     if not db then return end
     placerPanneau()
     allurePanneau()
+    if ns.placerBandeau then ns.placerBandeau() end
+    if ns.majBandeau then pcall(ns.majBandeau) end
     appliquerSuiviJeu()
     rafraichirSur()
   end,
@@ -1452,11 +1593,245 @@ C_Timer.NewTicker(1, function()
   for _, b in ipairs(lignesQuetes) do
     if b.fin and b.numero and b:IsShown() then ns.majChrono(b) end
   end
+  for _, ls in ipairs(lignesSections) do
+    if ls.fin and ls:IsShown() then ns.majChronoSection(ls) end
+  end
 end)
 
 -- Les distances : relues toutes les 2 s, seulement si le panneau est affiché et l'option cochée.
 C_Timer.NewTicker(2, function()
   if db and db.actif and db.distance and cadre:IsShown() then rafraichirSur() end
+end)
+
+-- ---------------------------------------------------------------------------
+-- Le bandeau des quêtes chronométrées, en haut de l'écran
+-- ---------------------------------------------------------------------------
+-- Une quête à faire et à rendre en temps limité : son titre, un grand compte à rebours et ce qui
+-- reste à faire, au milieu en haut de l'écran, même quand le panneau est caché (en instance).
+-- Des sons : au début, aux paliers choisis (5 et 1 minute au départ), un tic les 10 dernières
+-- secondes, et à la fin. Le bandeau ne prend jamais la souris : il ne gêne ni les clics ni la caméra.
+-- Il se règle dans l'onglet « Bandeau » de /sq (taille, position, son, paliers, bouton d'essai).
+
+local MAX_BANDEAU = 3
+local POLICE = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+local bandeau = CreateFrame("Frame", "SuiviQuetesBandeau", UIParent)
+bandeau:SetSize(640, 90)
+if bandeau.SetFrameStrata then bandeau:SetFrameStrata("HIGH") end
+if bandeau.EnableMouse then bandeau:EnableMouse(false) end
+bandeau:Hide()
+local fondBandeau = bandeau:CreateTexture(nil, "BACKGROUND")
+fondBandeau:SetAllPoints()
+fondBandeau:SetColorTexture(0, 0, 0, 0.5)
+
+local function texteBandeau(parent, taille, modele)
+  local fs = parent:CreateFontString(nil, "OVERLAY", modele)
+  local fichier = fs.GetFont and fs:GetFont()
+  fs:SetFont(fichier or POLICE, taille, "OUTLINE")
+  if fs.SetShadowOffset then fs:SetShadowOffset(2, -2) end
+  if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 1) end
+  if fs.SetJustifyH then fs:SetJustifyH("CENTER") end
+  return fs
+end
+
+local blocsBandeau = {}
+local function blocBandeau(i)
+  if blocsBandeau[i] then return blocsBandeau[i] end
+  local b = CreateFrame("Frame", nil, bandeau)
+  b:SetSize(640, 90)
+  b.titre = texteBandeau(b, 20, "GameFontNormalLarge")
+  b.titre:SetPoint("TOP", b, "TOP", 0, -6)
+  b.temps = texteBandeau(b, 46, "GameFontNormalHuge")
+  b.temps:SetPoint("TOP", b.titre, "BOTTOM", 0, -2)
+  b.obj = texteBandeau(b, 15, "GameFontHighlight")
+  b.obj:SetPoint("TOP", b.temps, "BOTTOM", 0, -2)
+  if b.obj.SetWidth then b.obj:SetWidth(620) end
+  blocsBandeau[i] = b
+  return b
+end
+
+local chronosBandeau = {}  -- les quêtes chronométrées lues dans le journal (avec leur heure de fin)
+local etatsBandeau = {}    -- [numéro de quête] = { dernier = temps restant au relevé précédent, finDite }
+local essaiBandeau         -- la fausse quête du bouton « Essayer le bandeau »
+local chargeA              -- l'heure du chargement : pas de son « début » pour une quête déjà en cours
+local dernierSon = -10
+
+-- Toutes les quêtes chronométrées du journal, suivies ou non : les minuteries du jeu, puis le repli
+-- GetTimeAllowed sur le journal et sur les quêtes suivies (une zone repliée n'est pas dans le journal lu).
+local function lireChronos()
+  local liste, vues, anciennes = {}, {}, {}
+  local maintenant = sur(GetTime)
+  if type(maintenant) ~= "number" then chronosBandeau = liste return end
+  for _, e in ipairs(chronosBandeau) do anciennes[e.numero] = e.fin end
+  local function ajouter(id, index, reste)
+    if vues[id] or type(reste) ~= "number" then return end
+    vues[id] = true
+    -- Temps écoulé : le jeu peut rester à zéro un moment ; on garde l'heure de fin déjà connue, pour
+    -- que « temps écoulé » s'efface au bout de quelques secondes au lieu de rester affiché.
+    local fin = maintenant + reste
+    if reste <= 0 and anciennes[id] then fin = anciennes[id] end
+    local info = index and ql("GetInfo", index)
+    local objectifs = ql("GetQuestObjectives", id)
+    liste[#liste + 1] = {
+      numero = id, titre = type(info) == "table" and type(info.title) == "string" and info.title or "?",
+      fin = fin, fini = ql("IsComplete", id) == true,
+      objectifs = type(objectifs) == "table" and objectifs or {},
+    }
+  end
+  for index, reste in pairs(chronosDuJeu()) do
+    local info = ql("GetInfo", index)
+    if type(info) == "table" and info.questID then ajouter(info.questID, index, reste) end
+  end
+  local candidats = {}
+  local nombre = ql("GetNumQuestLogEntries")
+  for i = 1, type(nombre) == "number" and nombre or 0 do
+    local info = ql("GetInfo", i)
+    if type(info) == "table" and not info.isHeader and info.questID then candidats[#candidats + 1] = { info.questID, i } end
+  end
+  local suivies = ql("GetNumQuestWatches")
+  for i = 1, type(suivies) == "number" and suivies or 0 do
+    local id = ql("GetQuestIDForQuestWatchIndex", i)
+    if type(id) == "number" then candidats[#candidats + 1] = { id, ql("GetLogIndexForQuestID", id) } end
+  end
+  for _, c in ipairs(candidats) do
+    if not vues[c[1]] then ajouter(c[1], c[2], tempsRestant(c[1], nil, {})) end
+  end
+  table.sort(liste, function(a, b) return a.fin < b.fin end)
+  chronosBandeau = liste
+end
+ns.lireChronos = lireChronos
+
+local function jouerSon(genre)
+  if not (db and db.son) or type(PlaySound) ~= "function" then return end
+  local maintenant = sur(GetTime) or 0
+  if genre ~= "tic" and maintenant - dernierSon < 1.5 then return end -- pas deux alertes l'une sur l'autre
+  local id
+  if genre == "tic" then
+    id = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856
+  elseif genre == "fin" then
+    id = SOUNDKIT and SOUNDKIT.IG_QUEST_FAILED or 847
+  else
+    local s = ns.sonBandeau(db.sonChoix)
+    id = SOUNDKIT and SOUNDKIT[s.cle] or s.id
+  end
+  if genre ~= "tic" then dernierSon = maintenant end
+  -- Canal « Master » : l'alerte s'entend même quand les effets sonores du jeu sont coupés.
+  pcall(PlaySound, id, "Master")
+end
+ns.jouerSonBandeau = jouerSon
+
+local function paliersBandeau()
+  return { (tonumber(db.palier1) or 0) * 60, (tonumber(db.palier2) or 0) * 60 }
+end
+
+-- Un relevé : les sons (début, paliers, tic, fin), puis le dessin. Appelé 5 fois par seconde.
+local pulsation = false
+function ns.majBandeau()
+  if not db then return end
+  local maintenant = sur(GetTime) or 0
+  local liste = {}
+  if db.actif and db.bandeau then for _, e in ipairs(chronosBandeau) do liste[#liste + 1] = e end end
+  if essaiBandeau then
+    if maintenant > essaiBandeau.jusqua then essaiBandeau = nil else table.insert(liste, 1, essaiBandeau) end
+  end
+  local presents, n, hauteur = {}, 0, 0
+  pulsation = false
+  for _, e in ipairs(liste) do
+    local reste = e.fin - maintenant
+    presents[e.numero] = true
+    local st = etatsBandeau[e.numero]
+    if not st then
+      st = { dernier = reste }
+      etatsBandeau[e.numero] = st
+      -- Une quête qui commence (pas une quête déjà en cours au chargement ou après un /reload).
+      if db.sonDebut and reste > 10 and chargeA and maintenant - chargeA > 8 and not e.essai then jouerSon("alerte") end
+    else
+      if ns.palierFranchi(st.dernier, reste, paliersBandeau()) then
+        jouerSon("alerte")
+        st.flash = maintenant
+      end
+      if db.sonDecompte and reste > 0 and reste <= 10 and math.ceil(reste) < math.ceil(st.dernier) then jouerSon("tic") end
+      if reste <= 0 and not st.finDite then
+        st.finDite = true
+        if db.sonFin then jouerSon("fin") end
+      end
+      st.dernier = reste
+    end
+    -- « temps écoulé » reste affiché 6 secondes, le temps que le jeu fasse échouer la quête.
+    if n < MAX_BANDEAU and reste > -6 and ns.bandeauMontre(reste, db.bandeauSeuil) then
+      n = n + 1
+      local b = blocBandeau(n)
+      b:ClearAllPoints()
+      b:SetPoint("TOP", bandeau, "TOP", 0, -hauteur)
+      b.titre:SetText(e.titre)
+      b.temps:SetText(ns.texteRebours(reste) or "?")
+      b.temps:SetTextColor(ns.couleurRebours(reste))
+      local obj = db.bandeauObjectifs and ns.texteObjectifsBandeau(e.objectifs, e.fini) or ""
+      b.obj:SetText(obj)
+      if e.fini then b.obj:SetTextColor(0.3, 1, 0.3) else b.obj:SetTextColor(1, 1, 1) end
+      local h = 6 + 24 + 50 + (obj ~= "" and 22 or 0) + 6
+      b:SetHeight(h)
+      b.urgent = reste <= 60 or (st.flash and maintenant - st.flash < 3)
+      if not b.urgent and b.temps.SetAlpha then b.temps:SetAlpha(1) end
+      pulsation = pulsation or b.urgent
+      b:Show()
+      hauteur = hauteur + h
+    end
+  end
+  for i = n + 1, #blocsBandeau do blocsBandeau[i]:Hide() end
+  for numero in pairs(etatsBandeau) do if not presents[numero] then etatsBandeau[numero] = nil end end
+  if n == 0 then bandeau:Hide() return end
+  bandeau:SetHeight(hauteur)
+  fondBandeau:SetShown(db.bandeauFond and true or false)
+  bandeau:Show()
+end
+
+-- La place et la taille du bandeau, d'après les réglages.
+local function placerBandeau()
+  if not db then return end
+  -- Les décalages d'un cadre s'entendent à sa propre échelle : on les divise par elle, pour que la
+  -- hauteur réglée reste la même quelle que soit la taille du bandeau.
+  local echelle = math.max(0.3, (tonumber(db.bandeauTaille) or 100) / 100)
+  bandeau:SetScale(echelle)
+  bandeau:ClearAllPoints()
+  bandeau:SetPoint("TOP", UIParent, "TOP", (tonumber(db.bandeauDecalage) or 0) / echelle,
+    -(tonumber(db.bandeauHaut) or 120) / echelle)
+end
+ns.placerBandeau = placerBandeau
+
+-- « Essayer le bandeau » : une fausse quête de 65 secondes, montrée 10 secondes ; le palier d'une
+-- minute tombe au bout de 5 secondes, avec son son et le clignotement.
+function ns.essayerBandeau()
+  local maintenant = sur(GetTime) or 0
+  etatsBandeau.essai = nil
+  essaiBandeau = {
+    numero = "essai", essai = true, titre = "Essai : une livraison urgente", fin = maintenant + 65,
+    jusqua = maintenant + 10, objectifs = { { text = "Colis livré : 0/1", finished = false } },
+  }
+  placerBandeau()
+  jouerSon("alerte")
+  ns.majBandeau()
+end
+
+-- Le clignotement (sous 1 minute, et 3 secondes après chaque palier) : seulement le temps, en douceur.
+bandeau:SetScript("OnUpdate", function()
+  if not pulsation or not (db and db.bandeauClignote) then return end
+  local t = sur(GetTime) or 0
+  local a = 0.45 + 0.55 * math.abs(math.sin(t * 4))
+  for _, b in ipairs(blocsBandeau) do
+    if b.urgent and b:IsShown() and b.temps.SetAlpha then b.temps:SetAlpha(a) end
+  end
+end)
+
+local tours = 0
+C_Timer.NewTicker(0.2, function()
+  if not db then return end
+  if not chargeA then chargeA = sur(GetTime) end
+  tours = tours + 1
+  -- Relire le journal toutes les 5 secondes (les événements du journal le font aussi, voir rafraichir).
+  if tours % 25 == 0 and db.actif and db.bandeau then pcall(lireChronos) end
+  if #chronosBandeau == 0 and not essaiBandeau and not bandeau:IsShown() then return end
+  local ok, erreur = pcall(ns.majBandeau)
+  if not ok then ns.derniereErreur = tostring(erreur) end
 end)
 
 -- ---------------------------------------------------------------------------
@@ -1511,6 +1886,8 @@ local function commande(texte)
     ns.reglages.ouvrir()
   elseif c == "genre" or c == "genres" then
     commandeGenre()
+  elseif c == "essai" or c == "bandeau" then
+    ns.essayerBandeau()
   elseif c == "centre" then
     if db then
       if enCombat() then dire("le panneau ne peut pas être déplacé en combat.") return end
@@ -1522,6 +1899,7 @@ local function commande(texte)
   elseif c == "aide" or c == "help" or c == "?" then
     dire("/sq : les réglages     /sq genre : ce que le jeu dit de chaque quête suivie")
     dire("/sq centre : remet le panneau à sa place     /sq on, /sq off : activer ou couper")
+    dire("/sq essai : montre le bandeau des quêtes chronométrées 10 secondes (pour régler sa taille et sa place)")
   elseif not ns.reglages.basculerOption(c) then
     dire("commande inconnue. /sq aide donne la liste.")
   end

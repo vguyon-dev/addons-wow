@@ -136,6 +136,27 @@ verifie("rebours : rouge sous 1 minute", "1,0.25,0.25", teinte(45))
 verifie("rebours : orange sous 5 minutes", "1,0.6,0.1", teinte(200))
 verifie("rebours : doré au-delà", "1,0.82,0", teinte(900))
 
+-- Le bandeau : sons, paliers, seuil d'affichage, objectifs.
+verifie("section : fin la plus proche", 50, ns.finLaPlusProche({ { fin = 90 }, {}, { fin = 50 } }))
+verifie("section : aucune chronométrée", nil, ns.finLaPlusProche({ {}, {} }))
+verifie("bandeau : son 1", "Alerte de raid", ns.sonBandeau(1).nom)
+verifie("bandeau : son trop grand borné", ns.SONS_BANDEAU[#ns.SONS_BANDEAU].nom, ns.sonBandeau(99).nom)
+verifie("bandeau : son abîmé", "Alerte de raid", ns.sonBandeau("x").nom)
+verifie("bandeau : palier de 5 min franchi", 300, ns.palierFranchi(301, 299.8, { 300, 60 }))
+verifie("bandeau : pile sur le palier", 60, ns.palierFranchi(60.2, 60, { 300, 60 }))
+verifie("bandeau : pas de palier franchi", nil, ns.palierFranchi(250, 249, { 300, 60 }))
+verifie("bandeau : deux paliers d'un coup, le plus pressant", 60, ns.palierFranchi(400, 30, { 300, 60 }))
+verifie("bandeau : palier coupé (0)", nil, ns.palierFranchi(5, -1, { 0 }))
+verifie("bandeau : relevé inconnu", nil, ns.palierFranchi(nil, 10, { 60 }))
+verifie("bandeau : seuil 0, toujours", true, ns.bandeauMontre(5000, 0))
+verifie("bandeau : sous le seuil", true, ns.bandeauMontre(170, 3))
+verifie("bandeau : au-dessus du seuil", false, ns.bandeauMontre(190, 3))
+verifie("bandeau : temps inconnu", false, ns.bandeauMontre(nil, 0))
+verifie("bandeau : objectifs restants", "Busard : 0/6   ·   Tête : 0/1", ns.texteObjectifsBandeau({
+  { text = " Busard : 0/6 ", finished = false }, { text = "Clé : 1/1", finished = true }, { text = "Tête : 0/1" } }))
+verifie("bandeau : quête finie", "Objectifs remplis : à rendre avant la fin !", ns.texteObjectifsBandeau({}, true))
+verifie("bandeau : sans objectifs", "", ns.texteObjectifsBandeau(nil))
+
 -- La couleur de difficulté.
 local function couleur(n, j, v) local r, g, b = ns.couleurDifficulte(n, j, v) return r .. "," .. g .. "," .. b end
 verifie("couleur : +5 rouge", "1,0.1,0.1", couleur(15, 10))
@@ -872,6 +893,123 @@ JEU.chronos, JEU.alloue = {}, {}
 declencher("QUEST_LOG_UPDATE")
 avancer()
 verifie("rebours : parti avec la minuterie", "", ligneDe(100).chrono._text)
+
+-- Le bandeau en haut de l'écran.
+local sons = {}
+_G.PlaySound = function(id, canal) sons[#sons + 1] = tostring(id) .. "/" .. tostring(canal) end
+local function tictacs(n) for _ = 1, n do tictac() end end
+local B = SuiviQuetesBandeau
+verifie("bandeau : caché sans quête chronométrée", false, B._shown)
+-- Une quête qui commence plus de 8 s après le chargement : son de début.
+JEU.horloge = JEU.horloge + 20
+tictac()
+JEU.objectifs[111] = { { text = "Busard des montagnes : 0/6", finished = false } }
+JEU.chronos = { { index = 5, fin = JEU.horloge + 821 } }  -- « Sans genre » : 13:41
+declencher("QUEST_LOG_UPDATE")
+avancer()
+tictac()
+local function premierBloc()
+  for _, f in ipairs(toutes) do
+    if f._parent == B and rawget(f, "temps") and f._shown then return f end
+  end
+end
+verifie("bandeau : montré", true, B._shown)
+verifie("bandeau : le temps en grand", "13:41", premierBloc().temps._text)
+verifie("bandeau : le titre", "Sans genre", premierBloc().titre._text)
+verifie("bandeau : les objectifs", "Busard des montagnes : 0/6", premierBloc().obj._text)
+verifie("bandeau : son de début (raid, Master)", "8959/Master", sons[1])
+verifie("bandeau : placé à 120 px du haut", -120, B._pt[5])
+-- Un palier : 5 min.
+sons = {}
+JEU.horloge = JEU.horloge + 520  -- il reste 301 s
+tictac()
+verifie("bandeau : pas de son avant le palier", 0, #sons)
+JEU.horloge = JEU.horloge + 1
+tictac()
+verifie("bandeau : son au palier de 5 min", "8959/Master", sons[1])
+verifie("bandeau : orange sous 5 min", "1,0.6,0.1", table.concat(premierBloc().temps._couleur, ","))
+-- Changer le son.
+sons = {}
+r.changer("sonChoix", 3)
+JEU.horloge = JEU.horloge + 241  -- il reste 59 s : palier d'1 min
+tictac()
+verifie("bandeau : palier d'1 min, son choisi (réveil)", "12889/Master", sons[1])
+-- Les dix dernières secondes : un tic par seconde.
+sons = {}
+JEU.horloge = JEU.horloge + 49.5 -- 9,5 s
+tictac()
+JEU.horloge = JEU.horloge + 1
+tictac()
+verifie("bandeau : tic dans les 10 dernières secondes", "856/Master", sons[#sons])
+-- La fin.
+sons = {}
+JEU.horloge = JEU.horloge + 9
+tictac()
+verifie("bandeau : son de fin (quête échouée)", "847/Master", sons[#sons])
+verifie("bandeau : temps écoulé affiché", "temps écoulé", premierBloc().temps._text)
+JEU.horloge = JEU.horloge + 7
+declencher("QUEST_LOG_UPDATE")
+avancer()
+tictac()
+verifie("bandeau : effacé quelques secondes après la fin", false, B._shown)
+-- Une quête finie à rendre dans le temps, et le seuil d'affichage.
+JEU.chronos = { { index = 5, fin = JEU.horloge + 900 } }
+JEU.finies[111] = true
+declencher("QUEST_LOG_UPDATE")
+avancer()
+tictac()
+verifie("bandeau : quête finie, à rendre", "Objectifs remplis : à rendre avant la fin !", premierBloc().obj._text)
+r.changer("bandeauSeuil", 10)
+tictac()
+verifie("bandeau : 15 min > seuil de 10 min : caché", false, B._shown)
+r.changer("bandeauSeuil", 0)
+tictac()
+verifie("bandeau : seuil « toujours » : montré", true, B._shown)
+-- Une section repliée garde le temps sur son en-tête (« À rendre » : la quête est finie).
+local function enteteDe(genre)
+  for _, f in ipairs(toutes) do if rawget(f, "genre") == genre and f.nombre and f._shown then return f end end
+end
+local repliA = enteteDe("aRendre")
+repliA._scripts.OnClick(repliA)
+verifie("section repliée : le temps sur l'en-tête", true, enteteDe("aRendre").nombre._text:find("15:00", 1, true) ~= nil)
+JEU.horloge = JEU.horloge + 2
+tictac()
+verifie("section repliée : recompté chaque seconde", true, enteteDe("aRendre").nombre._text:find("14:58", 1, true) ~= nil)
+repliA._scripts.OnClick(repliA)
+verifie("section dépliée : le nombre seul", "2", enteteDe("aRendre").nombre._text)
+-- Même quand le panneau est caché (instance).
+_G.EN_INSTANCE = true
+declencher("ZONE_CHANGED_NEW_AREA")
+avancer()
+tictac()
+verifie("bandeau : panneau caché en instance", false, SuiviQuetesCadre._shown)
+verifie("bandeau : toujours là en instance", true, B._shown)
+_G.EN_INSTANCE = false
+-- Taille et position : la hauteur réglée ne bouge pas avec la taille.
+r.changer("bandeauTaille", 200)
+verifie("bandeau : échelle 200 %", 2, B._scale)
+verifie("bandeau : hauteur divisée par l'échelle", -60, B._pt[5])
+r.changer("bandeauDecalage", -300)
+verifie("bandeau : décalé à gauche", -150, B._pt[4])
+r.changer("bandeauTaille", 100)
+r.changer("bandeauDecalage", 0)
+-- Sans le son.
+sons = {}
+r.changer("son", false)
+JEU.horloge = JEU.horloge + 600
+tictac()
+verifie("bandeau : son coupé, palier muet", 0, #sons)
+r.changer("son", true)
+-- L'option coupée.
+r.changer("bandeau", false)
+tictac()
+verifie("bandeau : option coupée, caché", false, B._shown)
+r.changer("bandeau", true)
+JEU.chronos, JEU.finies[111], JEU.objectifs[111] = {}, nil, nil
+declencher("QUEST_LOG_UPDATE")
+avancer()
+tictacs(2)
+verifie("bandeau : parti avec la quête", false, B._shown)
 
 -- Les distances sont relues toutes les 2 secondes.
 JEU.distances[103] = 7

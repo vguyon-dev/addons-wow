@@ -194,6 +194,12 @@ end
 -- Pour annoncer quelque chose de nouveau, ajouter une entrée EN TÊTE avec la date du jour
 -- (une date plus récente que toutes les autres, sinon rien n'est annoncé).
 ns.NOUVEAUTES = {
+  { date = "2026-11-22", titre = "Quêtes à temps limité : un grand compte à rebours en haut de l'écran", lignes = {
+    "Suivi des quêtes : une quête à faire et à rendre en temps limité s'affiche en grand en haut de l'écran, avec son titre, le temps qui reste et ce qu'il reste à faire. Il reste là même si sa section est repliée ou si le panneau est caché (en donjon).",
+    "Des sons : au début de la quête, à 5 minutes puis à 1 minute de la fin, un tic à chacune des 10 dernières secondes et à la fin. Sous 1 minute, le temps clignote.",
+    "Tout se règle dans les onglets « Bandeau » et « Son » de /sq : taille, hauteur, position, afficher toujours ou seulement à la fin, le son (6 au choix), les paliers. /sq essai montre le bandeau 10 secondes.",
+    "Une section repliée qui contient une quête chronométrée montre le temps restant sur son en-tête.",
+  } },
   { date = "2026-11-13", titre = "Quêtes du journal sur la carte, pêche à une touche, objets de quête qui brillent", lignes = {
     "Quêtes disponibles : les objectifs des quêtes de ton journal sont sur la carte (crâne : monstres à tuer, sac : objets à ramasser, engrenage : objet à utiliser). Survole une icône pour voir où tu en es.",
     "Un « ? » jaune sur la carte et la minimap là où rendre une quête finie. En option, un « ? » gris pour les quêtes encore en cours.",
